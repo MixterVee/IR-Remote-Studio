@@ -1,45 +1,68 @@
 # IR Remote Studio
 
-Open-source IR remote learning and management for **Windows** and **Android**.
+**Portable IR remote learning and management for Windows, with Android planned.**
 
-Build a personal library of infrared-controlled devices, assign **custom button labels**, capture commands with compatible learners, and export reusable remote layouts.
+Create devices, use custom labels for every button, capture commands from a Logitech Harmony 350, compare repeated recordings, and export **`.irplus`** remotes for your Android phone.
 
-> **Project status: early development.** This repository is being established for a cross-platform application. The items below describe goals, not a released implementation.
+> **Status:** Windows v0.1.0 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
 
-## Project goals
+## Download Windows beta
 
-- Create, rename, organize and back up multiple devices and their button maps.
-- Give every command a custom button label (e.g. `SET`, `Alarm SET`, `Timer ST/SP`).
-- Capture infrared timings (carrier frequency plus mark/space durations) from compatible learning hardware.
-- Validate repeated captures and flag empty or repeat-only frames.
-- Preserve the original raw captures, alongside decoded protocols where supported.
-- Import and export [irplus](https://irplus-remote.github.io/) (`.irplus`) remote layouts.
-- Export Pronto Hex and machine-readable JSON, with other formats added where tested.
-- On Android, transmit commands through a device's **built-in IR emitter**, where supported.
-- On Windows, support Logitech Harmony learning where independently verified, starting with the Harmony 350; explore compatible USB learners.
-- Investigate Android USB-C learning dongles, including hardware-specific Ocrustar models.
+1. Open [Actions → Windows executable](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
+2. Open the latest successful workflow run.
+3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.0-Windows-x64**.
+4. Extract the ZIP and run `IR-Remote-Studio.exe` on Windows 11 x64.
+5. Read `WINDOWS-SETUP.txt` for the Harmony prerequisites.
 
-## Proof of concept
+The one-file `.exe` includes the Python UI and capture worker. Python is **not** required on the target PC. The Harmony capture integration **does require** an existing compatible Concordance `libconcord-6.dll` installation and 32-bit Windows PowerShell, both used by the earlier successful prototype.
 
-The initial experiments used a **Logitech Harmony 350** connected to a Windows PC to capture a **Xflyee model 099** wall-clock remote's `SET` command. The signal was converted into an `.irplus` remote and successfully retransmitted from a **OnePlus 15** to operate the clock. This validates the general workflow but does **not** establish universal Harmony/USB compatibility.
+## Features in Windows v0.1
 
-## Planned structure
+- Unlimited devices, custom button labels, button ordering, rename/delete.
+- Capture Harmony 350 IR commands in an isolated helper process (no firmware/configuration writes).
+- Reject incomplete NEC repeat-only signals, validate carrier and mark/space durations.
+- Decode standard and extended NEC when supported; show address, command and bytes.
+- Save multiple captures for each button and identify matching NEC frames.
+- Import previous Harmony capture JSON and existing PRONTO_HEX `.irplus` devices.
+- Export whole devices to `.irplus` with optional NEC repeat frames.
+- Autosave human-readable library JSON; make a manual library backup.
+- Logs for native USB operations.
 
-| Area | Purpose |
-| --- | --- |
-| Windows desktop | Device library, learning workflows, capture verification and exports |
-| Android | Personal remote library, editing, import/export and IR transmission |
-| Shared format | Device/button definitions with lossless raw timing capture data |
-| Hardware integrations | Hardware-specific capture backends, kept separate from the user interface |
+### Quick start
 
-## Safety and compatibility
+1. Run the app; choose **+ Add** under **Devices**, enter a name such as `Kitchen Clock`, manufacturer `Xflyee`, model `099`.
+2. Choose **+ Add** under **Buttons** and type your own label, such as `SET`, `Alarm`, `HR`, `MIN`.
+3. Click **Check Harmony 350**, then select a button, click **Capture selected button** and press its original remote button.
+4. Repeat the capture twice for comparison. A `2/2` count means the samples agree at the decoded NEC command level.
+5. Select **Export .irplus**, then import the file into `irplus` on Android.
 
-Learning receiver support must be validated **by exact hardware version**, not merely by a seller's claim that a dongle supports IR. The Harmony integration must not rewrite the remote's configuration or firmware during normal capture operations. Raw carrier and timing data should remain available even when a protocol decoder cannot identify a command.
+**Previously verified SET command:** `06 AB 01 FE` (extended NEC, address `0xAB06`, command `0x01`). See `examples/` for two matching captures, one repeat-only sample and the known-working `.irplus` remote. The OnePlus 15 transmitted the SET command successfully in prior testing.
 
-## License
+## Build locally
 
-A license has not been selected yet. Do not assume a particular open-source license until a `LICENSE` file is added.
+- Windows 11 x64; Python 3.12 or later with Tkinter.
+- Run: `python run.py`
+- Tests: `python -m unittest discover -s tests -v`
+- Build EXE: `python -m pip install pyinstaller==6.16.0` followed by:
+  `pyinstaller --noconfirm --onefile --windowed --name IR-Remote-Studio --add-data "irstudio/Xflyee_IR_Worker.ps1;." run.py`
 
-## Development
+GitHub Actions builds and uploads the executable on every push to `main`.
 
-Implementation, build instructions and first installable releases will be added as the project is developed.
+## Hardware and safety
+
+The Harmony learning interface is based on libconcord and invokes the helper in a **separate 32-bit Windows PowerShell process** (the earlier x86 prototype worked with that DLL). Different Harmony models and USB ports may behave differently. Never run Concordance and this app simultaneously. Ensure a normal working USB connection before learning.
+
+New raw formats are preserved in the local library even when a protocol decoder does not recognize them. Repeat-only NEC captures are rejected rather than falsely marked valid. Other protocols are marked raw/unidentified until verified.
+
+The project does not ship Logitech firmware or Concordance DLLs. The existing installed native library is used only on the user's machine.
+
+## Roadmap
+
+- More learning hardware and protocol decoders, editing capture selection and raw timing inspection.
+- Dedicated Android app to import/organize/edit/transmit remotes with a built-in IR emitter.
+- Test USB-C dongle learning on Android (device model/protocol must be verified).
+- Additional export formats and configurable remote-grid layouts.
+
+## Licensing
+
+License decision pending. Code is publicly readable, but reuse permission has not been granted by a LICENSE file yet.

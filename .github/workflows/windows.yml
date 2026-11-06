@@ -1,0 +1,33 @@
+name: Windows executable
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+      - name: Run IR protocol tests
+        run: python -m unittest discover -s tests -v
+      - name: Install PyInstaller
+        run: python -m pip install pyinstaller==6.16.0
+      - name: Package portable Windows app
+        run: pyinstaller --noconfirm --clean --onefile --windowed --name IR-Remote-Studio --add-data "irstudio/Xflyee_IR_Worker.ps1;." run.py
+      - name: Include Windows setup information
+        shell: pwsh
+        run: |
+          Copy-Item WINDOWS-SETUP.txt dist/WINDOWS-SETUP.txt
+      - name: Upload downloadable Windows application
+        uses: actions/upload-artifact@v4
+        with:
+          name: IR-Remote-Studio-v0.1.0-Windows-x64
+          path: |
+            dist/IR-Remote-Studio.exe
+            dist/WINDOWS-SETUP.txt
+          retention-days: 90

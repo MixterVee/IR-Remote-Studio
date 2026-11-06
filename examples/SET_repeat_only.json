@@ -1,0 +1,13 @@
+{
+    "device":  "Xflyee wall clock",
+    "key":  "SET",
+    "recorded_at":  "2026-11-06T15:51:50.4121084-05:00",
+    "carrier_hz":  38115,
+    "timings_us":  [
+                       8999,
+                       2273,
+                       565,
+                       523723
+                   ],
+    "pronto_hex":  "0000 006D 0002 0000 0157 0057 0016 4DFA"
+}
