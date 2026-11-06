@@ -8,7 +8,7 @@ import sys
 import threading
 import tkinter as tk
 from pathlib import Path
-from tkinter import filedialog, messagebox, simpledialog, ttk
+from tkinter import filedialog, font as tkfont, messagebox, simpledialog, ttk
 
 from irstudio import __version__
 from irstudio import core
@@ -37,7 +37,9 @@ class Studio(tk.Tk):
         style = ttk.Style()
         if "vista" in style.theme_names():
             style.theme_use("vista")
-        self.option_add("*Font", "Segoe UI 10")
+        # The unquoted Tcl font string "Segoe UI 10" misparses UI as the size.
+        # Setting the named font instead also applies to menus and Tk widgets.
+        tkfont.nametofont("TkDefaultFont").configure(family="Segoe UI", size=10)
         menu = tk.Menu(self)
         file_menu = tk.Menu(menu, tearoff=0)
         file_menu.add_command(label="Import capture JSON...", command=self.import_capture)
@@ -51,7 +53,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.1.0\n\nHarmony 350 capture uses the installed Concordance libconcord DLL through a separate x86 PowerShell process.\n\nCapture reads IR only; it does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.1.1\n\nHarmony 350 capture uses the installed Concordance libconcord DLL through a separate x86 PowerShell process.\n\nCapture reads IR only; it does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 

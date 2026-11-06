@@ -26,8 +26,18 @@ jobs:
       - name: Upload downloadable Windows application
         uses: actions/upload-artifact@v4
         with:
-          name: IR-Remote-Studio-v0.1.0-Windows-x64
+          name: IR-Remote-Studio-v0.1.1-Windows-x64
           path: |
             dist/IR-Remote-Studio.exe
             dist/WINDOWS-SETUP.txt
           retention-days: 90
+
+  linux-ui-smoke:
+    name: Check GUI startup with virtual display
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Tk and virtual display
+        run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb
+      - name: Exercise startup and UI regression test
+        run: xvfb-run -a /usr/bin/python3 -m unittest discover -s tests -v

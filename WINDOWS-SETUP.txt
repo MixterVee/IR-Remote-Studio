@@ -1,4 +1,4 @@
-IR Remote Studio v0.1.0 - Windows 11 x64
+IR Remote Studio v0.1.1 - Windows 11 x64
 ========================================
 
 1. Extract the ZIP artifact from GitHub Actions onto your Windows computer.

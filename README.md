@@ -4,13 +4,13 @@
 
 Create devices, use custom labels for every button, capture commands from a Logitech Harmony 350, compare repeated recordings, and export **`.irplus`** remotes for your Android phone.
 
-> **Status:** Windows v0.1.0 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
+> **Status:** Windows v0.1.1 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
 
 ## Download Windows beta
 
 1. Open [Actions → Windows executable](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
 2. Open the latest successful workflow run.
-3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.0-Windows-x64**.
+3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.1-Windows-x64**.
 4. Extract the ZIP and run `IR-Remote-Studio.exe` on Windows 11 x64.
 5. Read `WINDOWS-SETUP.txt` for the Harmony prerequisites.
 
