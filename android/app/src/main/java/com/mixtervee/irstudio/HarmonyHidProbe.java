@@ -58,7 +58,7 @@ public final class HarmonyHidProbe {
             byte[] descriptor = new byte[1024];
             int length = connection.controlTransfer(
                     UsbConstants.USB_DIR_IN | UsbConstants.USB_TYPE_STANDARD
-                            | UsbConstants.USB_RECIP_INTERFACE,
+                            | 0x01 /* USB recipient: interface */,
                     0x06, 0x2200, targetInterface.getId(),
                     descriptor, descriptor.length, 1500);
             log.append("HID report descriptor request: ");
