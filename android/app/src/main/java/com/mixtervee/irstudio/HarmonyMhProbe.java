@@ -36,13 +36,13 @@ public final class HarmonyMhProbe {
             return "No valid MH reply bytes received.";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append("MH reply received: ").append(length).append(" bytes\\n");
-        sb.append("MH reply complete hex (").append(length).append(" bytes):\\n");
+        sb.append("MH reply received: ").append(length).append(" bytes\n");
+        sb.append("MH reply complete hex (").append(length).append(" bytes):\n");
         for (int i = 0; i < length; i++) {
-            if (i > 0) sb.append((i % 16 == 0) ? '\\n' : ' ');
+            if (i > 0) sb.append((i % 16 == 0) ? '\n' : ' ');
             sb.append(String.format(Locale.ROOT, "%02X", bytes[i] & 0xFF));
         }
-        sb.append('\\n');
+        sb.append('\n');
         int first = bytes[0] & 0xFF;
         int second = length > 1 ? bytes[1] & 0xFF : -1;
         int third = length > 2 ? bytes[2] & 0xFF : -1;
@@ -50,15 +50,15 @@ public final class HarmonyMhProbe {
                 && first == 0xFF && second == 0xFF
                 && third == 0x81 && (bytes[4] & 0xFF) == 0x81;
         sb.append("Report size: ").append(length == 64 ? "64/64" : "unexpected")
-                .append("\\n");
+                .append("\n");
         sb.append("Observed FF FF 81 ?? 81 prefix: ")
-                .append(observedHeader ? "YES" : "NO").append("\\n");
+                .append(observedHeader ? "YES" : "NO").append("\n");
         int lastNonZero = -1;
         for (int i = 0; i < length; i++) if (bytes[i] != 0) lastNonZero = i;
         sb.append("Last non-zero byte offset: ").append(lastNonZero)
-                .append("\\n");
+                .append("\n");
         sb.append("Interpretation: USB response confirmed; MH message meaning ")
-                .append("and IR-learning readiness NOT established.\\n");
+                .append("and IR-learning readiness NOT established.\n");
         return sb.toString();
     }
 
