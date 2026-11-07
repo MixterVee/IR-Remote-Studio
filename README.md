@@ -4,13 +4,13 @@
 
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for your Android phone.
 
-> **Status:** Windows v0.1.3 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
+> **Status:** Windows v0.1.4 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
 
 ## Download Windows beta
 
 1. Open [Actions → Windows executable](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
 2. Open the latest successful workflow run.
-3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.3-Windows-x64**.
+3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.4-Windows-x64**.
 4. Extract the ZIP and run `IR-Remote-Studio.exe` on Windows 11 x64.
 5. Read `WINDOWS-SETUP.txt` for the Harmony prerequisites.
 
@@ -25,7 +25,9 @@ The one-file `.exe` includes the Python UI and capture worker. Python is **not**
 - Save multiple captures for each button and identify matching NEC frames.
 - Import previous Harmony capture JSON and existing PRONTO_HEX `.irplus` devices.
 - Export whole devices to `.irplus` with optional NEC repeat frames.
-- Autosave human-readable library JSON; make a manual library backup.
+- Autosave human-readable library JSON; make a manual library backup and restore with an automatic pre-restore safety copy.
+- Inspect all captures for a button and choose the specific sample to export.
+- Edit per-button widths and preview the 12-column grid used by .irplus (2, 3, 4, 6, or 12 column buttons).
 - Logs for native USB operations.
 
 ### Quick start
@@ -36,7 +38,7 @@ The one-file `.exe` includes the Python UI and capture worker. Python is **not**
 4. Repeat the capture twice for comparison. A `2/2` count means the samples agree at the decoded NEC command level.
 5. Select **Export .irplus**, then import the file into `irplus` on Android.
 
-**Previously verified SET command:** `06 AB 01 FE` (extended NEC, address `0xAB06`, command `0x01`). See `examples/` for two matching captures, one repeat-only sample and the known-working `.irplus` remote. The OnePlus 15 transmitted the SET command successfully in prior testing.
+**Previously verified SET command:** `06 AB 01 FE` (extended NEC, address `0xAB06`, command `0x01`). See `examples/` for two matching captures, one repeat-only sample and the known-working `.irplus` remote. The compatible Android phone transmitted the SET command successfully in prior testing.
 
 ## Build locally
 
@@ -90,6 +92,19 @@ uses Concordance's detected model name rather than guessing from USB identifiers
 
 **Important:** 'Documented working' describes Concordance's own compatibility
 table, not an end-to-end hardware test for every model in IR Remote Studio.
-Only the Harmony 350 has been directly verified in this project's Xflyee testing.
+Harmony 300 and 350 have both been directly verified by device owners in end-to-end capture and playback testing.
 A compatible learning remote is only used to *receive* IR codes; normal capture
 does not rewrite its configuration or firmware.
+
+## Windows v0.1.4 improvements
+
+- **Remote layout editor:** choose a button, set its width, and preview how it fits on a 12-column irplus grid. The saved width is used in .irplus exports and preserved when compatible files are imported.
+- **Capture history:** review all stored recordings of a button, choose the sample used for export or delete a bad sample. Existing automatic best-match selection is retained.
+- **Library recovery:** File → Back up library saves a JSON copy; File → Restore library backup validates the input and creates a timestamped safety backup of the current library before replacing it. Backups live under Documents/IR Remote Studio/Backups.
+- **USB troubleshooting:** connection errors now remind users to check Harmony batteries, USB cable, and port.
+- **Neutral labels:** exports refer to a compatible phone rather than a specific device model.
+- **Window resizing:** capture controls stay accessible in the lower panel.
+
+**Hardware verified in field testing:** Harmony 300 and Harmony 350 both completed USB connection, IR learning, .irplus export and playback from a compatible phone. Other documented-compatible models are not individually hardware verified.
+
+**Planned, not yet delivered:** Android app, additional protocol decoders, multi-button drag/drop layout, a formal tagged release, and license selection.

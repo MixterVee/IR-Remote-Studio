@@ -20,7 +20,7 @@ def new_device(name: str, manufacturer: str = "", model: str = "") -> dict:
     if not name:
         raise ValueError("Device name cannot be empty.")
     return {"id": str(uuid.uuid4()), "name": name, "manufacturer": manufacturer.strip(),
-            "model": model.strip(), "buttons": []}
+            "model": model.strip(), "columns": 12, "buttons": []}
 
 
 def new_button(label: str) -> dict:
@@ -28,7 +28,7 @@ def new_button(label: str) -> dict:
     if not label:
         raise ValueError("Button label cannot be empty.")
     return {"id": str(uuid.uuid4()), "label": label, "captures": [], "selected": 0,
-            "pronto_hex": ""}
+            "pronto_hex": "", "span": 6}
 
 
 def default_library() -> dict:
@@ -40,6 +40,29 @@ def validate_library(lib: dict) -> dict:
         raise ValueError("Unsupported library format. Expected schema 1.")
     if not isinstance(lib.get("devices"), list):
         raise ValueError("Library is missing the device list.")
+    ids = set()
+    for device in lib["devices"]:
+        if not isinstance(device, dict) or not all(k in device for k in ("id", "name", "buttons")):
+            raise ValueError("Invalid device in library.")
+        if not isinstance(device["id"], str) or not isinstance(device["name"], str) or not isinstance(device["buttons"], list):
+            raise ValueError("Invalid device fields in library.")
+        if device["id"] in ids:
+            raise ValueError("Duplicate device ID in library.")
+        ids.add(device["id"])
+        button_ids = set()
+        for button in device["buttons"]:
+            if not isinstance(button, dict) or not all(k in button for k in ("id", "label", "captures")):
+                raise ValueError("Invalid button in library.")
+            if not isinstance(button["id"], str) or not isinstance(button["label"], str) or not isinstance(button["captures"], list):
+                raise ValueError("Invalid button fields in library.")
+            if button["id"] in button_ids:
+                raise ValueError("Duplicate button ID in library.")
+            button_ids.add(button["id"])
+            if not 1 <= int(button.get("span", 6)) <= 12:
+                raise ValueError("Invalid button layout width.")
+            for capture in button["captures"]:
+                if not isinstance(capture, dict) or not isinstance(capture.get("timings_us"), list) or not isinstance(capture.get("carrier_hz"), int):
+                    raise ValueError("Invalid IR capture in library.")
     return lib
 
 
@@ -64,6 +87,17 @@ def save_library(path: Path, library: dict) -> None:
     finally:
         if os.path.exists(tmp):
             os.remove(tmp)
+
+
+def button_span(button: dict) -> int:
+    """Return a legal 12-column irplus grid span, accepting legacy libraries."""
+    try:
+        span = int(button.get("span", 6))
+    except (TypeError, ValueError):
+        raise ValueError("Button width must be a number.")
+    if not 1 <= span <= 12:
+        raise ValueError("Button width must be 1 through 12 columns.")
+    return span
 
 
 def good_carrier(carrier: int) -> bool:
@@ -143,7 +177,7 @@ def signature_of_capture(capture: dict) -> str:
     return "raw:" + ",".join(str(int(round(x/110))) for x in t[:end])
 
 
-def make_capture(carrier: int, timings: list[int], source: str = "Harmony 350") -> dict:
+def make_capture(carrier: int, timings: list[int], source: str = "Harmony IR learner") -> dict:
     rating = assess_capture(carrier, timings)
     if not rating["valid"]:
         raise ValueError(rating["reason"])
@@ -257,7 +291,7 @@ def export_irplus(device: dict, path: Path, repeats: int = 0) -> int:
         if not button.get("captures") and not button.get("pronto_hex"):
             continue
         code = pronto_for_button(button, repeats)
-        ET.SubElement(el, "button", {"label": button["label"], "span": "6"}).text = code
+        ET.SubElement(el, "button", {"label": button["label"], "span": str(button_span(button))}).text = code
         exported += 1
     if not exported:
         raise ValueError("No buttons with IR commands to export")
@@ -281,6 +315,8 @@ def import_irplus(path: Path) -> list[dict]:
                 continue
             button = new_button(b.get("label", "Button"))
             button["pronto_hex"] = validate_pronto(b.text or "")
+            button["span"] = int(b.get("span", "6"))
+            button_span(button)
             device["buttons"].append(button)
         if device["buttons"]:
             devices.append(device)
