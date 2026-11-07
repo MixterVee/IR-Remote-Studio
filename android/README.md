@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.4-alpha
+# IR Remote Studio for Android — v0.1.5-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -40,8 +40,8 @@ or are authorized to operate.
 
 The Android app and Windows app both use the same `.irplus` interchange
 format; Android does not yet read Windows library.json files directly.
-\n## Import fix in v0.1.4-alpha\n\nAndroid's XML parser does not support every JAXP configuration option used\nby Java desktop. The initial alpha enabled XML settings that could abort\nbefore reading valid Windows .irplus files. The importer now uses bounded XML\ninput and rejects DTD/entity declarations, while tolerating missing optional\nJAXP features. Failures now show the full reason in a visible dialog.\n\nUpdate by installing the new debug APK over the original; existing local\nremote data remains stored under the same application ID.\n
-## Harmony USB lab — v0.1.4-alpha
+\n## Import fix in v0.1.5-alpha\n\nAndroid's XML parser does not support every JAXP configuration option used\nby Java desktop. The initial alpha enabled XML settings that could abort\nbefore reading valid Windows .irplus files. The importer now uses bounded XML\ninput and rejects DTD/entity declarations, while tolerating missing optional\nJAXP features. Failures now show the full reason in a visible dialog.\n\nUpdate by installing the new debug APK over the original; existing local\nremote data remains stored under the same application ID.\n
+## Harmony USB lab — v0.1.5-alpha
 
 This is a **read-only discovery prototype**, not IR capture.
 
@@ -68,7 +68,7 @@ Harmony USB IR learning on Android and a Concordance-independent Windows
 learning backend are **equal** priorities. Cosmetic editing and new remotes
 are deferred until the hardware experiments are validated.
 
-## USB permission layout fix (v0.1.4-alpha)
+## USB permission layout fix (v0.1.5-alpha)
 
 The detection report now scrolls inside a height-limited panel; **Grant Harmony
 USB access** is always above that panel when Android detects an eligible
@@ -79,7 +79,7 @@ Detect Harmony USB again and check that permission is Granted and opening
 the device for descriptor inspection succeeds. This remains read-only:
 no HID report transmission or IR capture is attempted in this version.
 
-## Read-only HID claim and descriptor test (v0.1.4-alpha)
+## Read-only HID claim and descriptor test (v0.1.5-alpha)
 
 After attaching the Harmony and granting USB permission, **Detect Harmony USB**
 shows **Test HID interface (read-only)** for VID:PID 046D:C124.
@@ -93,3 +93,25 @@ system HID driver may own the interface; it does not attempt to override it.
 
 Copy the results and provide them to the developer. HID interface access
 alone does not mean IR learning has been implemented.
+
+## Harmony version query (v0.1.5-alpha)
+
+Following successful HID interface/descriptor testing, v0.1.5 adds an
+optional **Read Harmony identity (0x10)** button.
+
+It confirms before sending one 64-byte **GET_VERSION** USB output report,
+reads a 64-byte response via the HID input endpoint, then releases the HID
+interface. This is a **read-only protocol request** (although it necessarily
+transmits a USB OUT packet). The command does not alter the firmware, flash
+memory, configuration, or stored remote programs.
+
+The request and its expected version response are documented by Concordance
+upstream in `libconcord/protocol.h` and `libconcord/remote.cpp`. The Android
+code uses the published hardware protocol, not copied Concordance source code.
+
+The button is shown only when VID:PID is **046D:C124**, Android permission is
+granted, and the HID endpoints match the expected 64-byte form.
+
+If it succeeds, copy the **Harmony identity result** and share it with the
+developer. If it fails, the report gives the exact stage. The test remains
+separate from IR learning; it does not capture commands.

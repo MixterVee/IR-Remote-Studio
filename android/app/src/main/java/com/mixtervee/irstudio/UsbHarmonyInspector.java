@@ -202,6 +202,55 @@ public final class UsbHarmonyInspector {
             });
         }
 
+        // The only Harmony-specific request allowed by this experimental
+        // build is GET_VERSION (0x10). It reads identity and never accesses
+        // flash, changes setup, resets the remote, or starts IR learning.
+        if (accessibleHarmony != null) {
+            final UsbDevice identityTarget = accessibleHarmony;
+            Button identity = new Button(context);
+            identity.setAllCaps(false);
+            identity.setText("Read Harmony identity (0x10)");
+            body.addView(identity, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 52)));
+            identity.setOnClickListener(v -> {
+                new AlertDialog.Builder(context)
+                    .setTitle("Read Harmony identity")
+                    .setMessage("This sends one documented GET_VERSION (0x10) USB "
+                         + "HID request to your connected Harmony and waits for "
+                         + "its reply. It does not write device settings, update "
+                         + "firmware, reset the remote, or start IR learning. "
+                         + "Continue?")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Read identity", (d, w) -> {
+                        identity.setEnabled(false);
+                        identity.setText("Reading Harmony identity...");
+                        new Thread(() -> {
+                            String result = HarmonyIdentityProbe.read(manager, identityTarget);
+                            context.runOnUiThread(() -> {
+                                if (context.isFinishing() || context.isDestroyed()) return;
+                                dialog.dismiss();
+                                new AlertDialog.Builder(context)
+                                    .setTitle("Harmony identity result")
+                                    .setMessage(result)
+                                    .setPositiveButton("Close", (d1, w1) -> {})
+                                    .setNeutralButton("Copy result", (d1, w1) -> {
+                                        ClipboardManager clipboard = (ClipboardManager)
+                                                context.getSystemService(
+                                                    Context.CLIPBOARD_SERVICE);
+                                        if (clipboard != null) {
+                                            clipboard.setPrimaryClip(ClipData.newPlainText(
+                                                "Harmony identity report", result));
+                                            Toast.makeText(context,
+                                                "Identity result copied",
+                                                Toast.LENGTH_SHORT).show();
+                                        }
+                                    }).show();
+                            });
+                        }, "HarmonyIdentityReadOnly").start();
+                    }).show();
+            });
+        }
+
         ScrollView scroll = new ScrollView(context);
         scroll.setFillViewport(false);
         TextView contents = new TextView(context);

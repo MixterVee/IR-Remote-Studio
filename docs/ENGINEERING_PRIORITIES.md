@@ -74,3 +74,12 @@ capture backend.
 - [Concordance upstream](https://github.com/jaymzh/concordance)
 - [Android USB Host guide](https://developer.android.com/develop/connectivity/usb/host)
 - [HIDAPI project](https://github.com/libusb/hidapi)
+
+### A3a: Read-only Harmony identity handshake on Android (v0.1.5-alpha)
+
+After successful USB-HID report-descriptor retrieval on a physical
+Harmony 300/350, implement an *opt-in* GET_VERSION 0x10 request (one 64-byte
+interrupt OUT packet, then 64-byte interrupt IN response), interpreted as
+version-data response 0x2x. No other Harmony command is transmitted, and no
+flash/settings/firmware operations are permitted. This experiment is a step
+toward A3 and is not yet IR capture.
