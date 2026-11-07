@@ -156,6 +156,52 @@ public final class UsbHarmonyInspector {
             });
         }
 
+        // Explicit, user-initiated, read-only GET_DESCRIPTOR check.
+        UsbDevice accessibleHarmony = null;
+        if (manager != null) {
+            for (UsbDevice dev : manager.getDeviceList().values()) {
+                if (HarmonyUsbIds.isHarmony300Or350(dev.getVendorId(), dev.getProductId())
+                        && manager.hasPermission(dev)) {
+                    accessibleHarmony = dev;
+                    break;
+                }
+            }
+        }
+        if (accessibleHarmony != null) {
+            final UsbDevice target = accessibleHarmony;
+            Button probe = new Button(context);
+            probe.setAllCaps(false);
+            probe.setText("Test HID interface (read-only)");
+            body.addView(probe, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 52)));
+            probe.setOnClickListener(v -> {
+                probe.setEnabled(false);
+                probe.setText("Inspecting HID interface...");
+                new Thread(() -> {
+                    String result = HarmonyHidProbe.inspect(manager, target);
+                    context.runOnUiThread(() -> {
+                        if (context.isFinishing() || context.isDestroyed()) return;
+                        dialog.dismiss();
+                        AlertDialog diag = new AlertDialog.Builder(context)
+                                .setTitle("Harmony HID interface results")
+                                .setMessage(result)
+                                .setPositiveButton("Close", (d, w) -> {})
+                                .setNeutralButton("Copy results", (d, w) -> {
+                                    ClipboardManager clipboard = (ClipboardManager)
+                                            context.getSystemService(Context.CLIPBOARD_SERVICE);
+                                    if (clipboard != null) {
+                                        clipboard.setPrimaryClip(ClipData.newPlainText(
+                                                "Harmony HID results", result));
+                                        Toast.makeText(context, "HID report copied",
+                                                Toast.LENGTH_SHORT).show();
+                                    }
+                                }).create();
+                        diag.show();
+                    });
+                }, "HarmonyHidReadOnlyProbe").start();
+            });
+        }
+
         ScrollView scroll = new ScrollView(context);
         scroll.setFillViewport(false);
         TextView contents = new TextView(context);
