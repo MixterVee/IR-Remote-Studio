@@ -44,5 +44,49 @@ class UIStartupTests(unittest.TestCase):
             raise
 
 
+class PhonePreviewSmokeTests(unittest.TestCase):
+    def test_editor_renders_both_modes_and_saves_layout(self):
+        if sys.platform != "win32" and not os.environ.get("DISPLAY"):
+            self.skipTest("Graphical display required")
+        import tkinter as tk
+        from irstudio.layout_preview import LayoutDialog
+        root = tk.Tk()
+        root.withdraw()
+        device = core.new_device("Generic Clock")
+        one = core.new_button("SET")
+        one["pronto_hex"] = "0000 006D 0002 0000 0157 0057 0016 4DFA"
+        two = core.new_button("Volume +")
+        two["pronto_hex"] = one["pronto_hex"]
+        device["buttons"].extend([one, two])
+        saved = []
+        try:
+            dlg = LayoutDialog(root, device, lambda: saved.append(True))
+            try:
+                dlg.update_idletasks()
+                self.assertEqual(dlg.mode.get(), "Phone")
+                self.assertEqual(dlg._rows()[0][0]["label"], "SET")
+                self.assertTrue(dlg.canvas.find_all(), "Phone preview should draw")
+                dlg.mode.set("Grid")
+                dlg._render()
+                self.assertTrue(dlg.canvas.find_all(), "Grid preview should draw")
+                dlg.mode.set("Phone")
+                dlg.theme.set("Light")
+                dlg.screen_size.set("Large")
+                dlg.text_size.set("Large")
+                dlg.tree.selection_set(one["id"])
+                dlg._select()
+                dlg.chosen_span.set("12")
+                dlg._apply_width()
+                self.assertEqual(dlg.working[one["id"]], 12)
+                dlg._save()
+                self.assertEqual(one["span"], 12)
+                self.assertEqual(saved, [True])
+            finally:
+                if dlg.winfo_exists():
+                    dlg.destroy()
+        finally:
+            root.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()
