@@ -2,15 +2,15 @@
 
 **Portable IR remote learning and management for Windows, with Android planned.**
 
-Create devices, use custom labels for every button, capture commands from a Logitech Harmony 300 or 350, compare repeated recordings, and export **`.irplus`** remotes for your Android phone.
+Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for your Android phone.
 
-> **Status:** Windows v0.1.2 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
+> **Status:** Windows v0.1.3 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
 
 ## Download Windows beta
 
 1. Open [Actions → Windows executable](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
 2. Open the latest successful workflow run.
-3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.2-Windows-x64**.
+3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.3-Windows-x64**.
 4. Extract the ZIP and run `IR-Remote-Studio.exe` on Windows 11 x64.
 5. Read `WINDOWS-SETUP.txt` for the Harmony prerequisites.
 
@@ -19,7 +19,7 @@ The one-file `.exe` includes the Python UI and capture worker. Python is **not**
 ## Features in Windows v0.1
 
 - Unlimited devices, custom button labels, button ordering, rename/delete.
-- Capture Harmony 300/350 IR commands in an isolated helper process (no firmware/configuration writes).
+- Capture IR commands with documented-compatible Harmony remotes in an isolated helper process (no firmware/configuration writes).
 - Reject incomplete NEC repeat-only signals, validate carrier and mark/space durations.
 - Decode standard and extended NEC when supported; show address, command and bytes.
 - Save multiple captures for each button and identify matching NEC frames.
@@ -32,7 +32,7 @@ The one-file `.exe` includes the Python UI and capture worker. Python is **not**
 
 1. Run the app; choose **+ Add** under **Devices**, enter a name such as `Kitchen Clock`, manufacturer `Xflyee`, model `099`.
 2. Choose **+ Add** under **Buttons** and type your own label, such as `SET`, `Alarm`, `HR`, `MIN`.
-3. Click **Check Harmony 300/350**, then select a button, click **Capture selected button** and press its original remote button.
+3. Click **Check Harmony IR learner**, then select a button, click **Capture selected button** and press its original remote button.
 4. Repeat the capture twice for comparison. A `2/2` count means the samples agree at the decoded NEC command level.
 5. Select **Export .irplus**, then import the file into `irplus` on Android.
 
@@ -66,3 +66,30 @@ The project does not ship Logitech firmware or Concordance DLLs. The existing in
 ## Licensing
 
 License decision pending. Code is publicly readable, but reuse permission has not been granted by a LICENSE file yet.
+
+## Harmony IR-learning compatibility
+
+IR Remote Studio uses the IR-learning API in an existing local installation of
+[Concordance](https://github.com/jaymzh/concordance). Models are **recognized by exact
+model name** to avoid initiating an unsupported capture on a device that cannot learn IR.
+
+**Documented by Concordance as working:** Harmony 200/200i, 300/300i, 350,
+515, 520, 522, 525, 550, 552, 555, 600/600i, 628, 650/650i, 655,
+659, 665, 670, 675, 676, 680, 688, 720, 745, 748, 768, 785,
+880/880 Pro, 882, 885, 900, One, and Link/Link (EMEA).
+
+**Experimental:** Harmony 700/700i (Concordance says *believed working*).
+Capture twice and compare the signals before trusting an export.
+
+**Not enabled:** Harmony 800 prototype; 890/895; 1000/1100 and Xbox models;
+Touch, Ultimate, Ultimate One, 950 and Hub-based models. Their learning function is
+either documented as unsupported or not verified by this backend.
+
+The compatibility registry lives in `irstudio/harmony_models.json`. The application
+uses Concordance's detected model name rather than guessing from USB identifiers.
+
+**Important:** 'Documented working' describes Concordance's own compatibility
+table, not an end-to-end hardware test for every model in IR Remote Studio.
+Only the Harmony 350 has been directly verified in this project's Xflyee testing.
+A compatible learning remote is only used to *receive* IR codes; normal capture
+does not rewrite its configuration or firmware.

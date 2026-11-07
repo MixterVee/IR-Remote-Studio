@@ -13,6 +13,7 @@ $answer = [ordered]@{
     stage = 'starting'
     message = ''
     model = ''
+    compatibility = ''
     carrier_hz = 0
     timings_us = @()
 }
@@ -82,11 +83,19 @@ public static class HarmonyNative {
     $model = [Runtime.InteropServices.Marshal]::PtrToStringAnsi($modelPointer)
     $answer.model = $model
     Log-Step "Connected to model: $model"
-    # Harmony 300 and 350 share the same Logitech USB device family.
-    # Other models require separate validation.
-    if ($model -notmatch '(?i)\bHarmony\s*(?:300|350)\b') {
-        throw "Connected to '$model'. This build supports Harmony 300 and Harmony 350."
+    # A reviewed allowlist is safer than accepting every model recognized by Concordance:
+    # e.g. Harmony 890 and 1100 identify successfully but cannot learn IR.
+    $catalogPath = Join-Path $PSScriptRoot 'harmony_models.json'
+    if (-not (Test-Path -LiteralPath $catalogPath)) {
+        throw 'Harmony model compatibility list is missing from the application.'
     }
+    $catalog = Get-Content -LiteralPath $catalogPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    if (($model -notin @($catalog.working)) -and ($model -notin @($catalog.experimental))) {
+        throw "Connected to '$model', but this model is not enabled for IR learning. Consult the supported-model list."
+    }
+    $answer.compatibility = if ($model -in @($catalog.experimental)) { 'experimental' } else { 'documented' }
+    Log-Step "IR-learning compatibility: $($answer.compatibility)"
+
 
     if ($Mode -eq 'Capture') {
         $answer.stage = 'learn_from_remote'
