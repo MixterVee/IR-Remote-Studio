@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.TRANSMIT_IR"/>
+    <!-- Keep the app installable on phones without IR, for import and editing. -->
+    <uses-feature android:name="android.hardware.consumerir" android:required="false"/>
+    <application
+        android:allowBackup="true"
+        android:label="@string/app_name"
+        android:icon="@drawable/ir_remote_studio"
+        android:roundIcon="@drawable/ir_remote_studio"
+        android:theme="@style/IRStudioTheme"
+        android:supportsRtl="true">
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
