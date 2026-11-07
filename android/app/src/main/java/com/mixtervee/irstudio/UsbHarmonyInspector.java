@@ -81,7 +81,9 @@ public final class UsbHarmonyInspector {
             if (permission) {
                 // Open + read local descriptors only; no claimInterface, controlTransfer,
                 // bulkTransfer, HID report writes, or device configuration changes.
-                try (UsbDeviceConnection conn = manager.openDevice(dev)) {
+                UsbDeviceConnection conn = null;
+                try {
+                    conn = manager.openDevice(dev);
                     if (conn == null) {
                         sb.append("Open for descriptor inspection: failed\n");
                     } else {
@@ -93,6 +95,8 @@ public final class UsbHarmonyInspector {
                 } catch (RuntimeException ex) {
                     sb.append("Read-only open failed: ")
                             .append(ex.getClass().getSimpleName()).append("\n");
+                } finally {
+                    if (conn != null) conn.close();
                 }
             }
         }
