@@ -14,6 +14,12 @@ import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+import android.view.Gravity;
+import android.view.ViewGroup;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
@@ -123,23 +129,69 @@ public final class UsbHarmonyInspector {
                 }
             }
         }
-        AlertDialog.Builder dialog = new AlertDialog.Builder(context)
+        // A normal AlertDialog with three horizontal action buttons can extend
+        // beneath Android's navigation area with large display/font settings.
+        // Put the permission action ABOVE a bounded scrollable report instead.
+        LinearLayout body = new LinearLayout(context);
+        body.setOrientation(LinearLayout.VERTICAL);
+        int padding = dp(context, 14);
+        body.setPadding(padding, dp(context, 4), padding, dp(context, 4));
+
+        AlertDialog dialog = new AlertDialog.Builder(context)
                 .setTitle("Harmony USB detection")
-                .setMessage(text)
+                .setView(body)
                 .setPositiveButton("Close", (d, w) -> {})
-                .setNeutralButton("Copy report", (d, w) -> {
-                    ClipboardManager clipboard = (ClipboardManager)
-                            context.getSystemService(Context.CLIPBOARD_SERVICE);
-                    if (clipboard != null) {
-                        clipboard.setPrimaryClip(ClipData.newPlainText("Harmony USB report", copyText));
-                        Toast.makeText(context, "USB report copied", Toast.LENGTH_SHORT).show();
-                    }
-                });
+                .create();
+
         if (request != null) {
-            UsbDevice selected = request;
-            dialog.setNegativeButton("Request USB access", (d, w) -> requestPermission(context, manager, selected));
+            UsbDevice target = request;
+            Button grant = new Button(context);
+            grant.setAllCaps(false);
+            grant.setText("Grant Harmony USB access");
+            body.addView(grant, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 52)));
+            grant.setOnClickListener(v -> {
+                dialog.dismiss();
+                requestPermission(context, manager, target);
+            });
         }
+
+        ScrollView scroll = new ScrollView(context);
+        scroll.setFillViewport(false);
+        TextView contents = new TextView(context);
+        contents.setText(copyText);
+        contents.setTextSize(13);
+        contents.setTextIsSelectable(true);
+        contents.setGravity(Gravity.TOP | Gravity.START);
+        contents.setPadding(dp(context, 6), dp(context, 8),
+                dp(context, 6), dp(context, 8));
+        scroll.addView(contents);
+        int maxReportHeight = Math.min(dp(context, 370),
+                (int) (context.getResources().getDisplayMetrics().heightPixels * 0.42));
+        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, maxReportHeight);
+        scrollParams.topMargin = dp(context, 6);
+        body.addView(scroll, scrollParams);
+
+        Button copy = new Button(context);
+        copy.setAllCaps(false);
+        copy.setText("Copy full USB report");
+        body.addView(copy, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 48)));
+        copy.setOnClickListener(v -> {
+            ClipboardManager clipboard = (ClipboardManager)
+                    context.getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(ClipData.newPlainText(
+                        "Harmony USB report", copyText));
+                Toast.makeText(context, "Full USB report copied", Toast.LENGTH_SHORT).show();
+            }
+        });
         dialog.show();
+    }
+
+    private static int dp(Context context, int dp) {
+        return Math.round(context.getResources().getDisplayMetrics().density * dp);
     }
 
     private static void requestPermission(Activity context, UsbManager manager, UsbDevice device) {
