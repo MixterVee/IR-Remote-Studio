@@ -7,8 +7,8 @@ licensed under the project's MIT License.
 
 IR Remote Studio supports IR capture through the **Concordance** project and
 its `libconcord-6.dll` native library. Concordance is an independently distributed
-third-party project, advertised as licensed under the GNU General Public License,
-version 2 (GPLv2). See its project licensing terms and source at:
+third-party project, advertised as licensed under the GNU General Public License (the current upstream GitHub LICENSE is GPLv3;
+older SourceForge metadata describes GPLv2). See its project licensing terms and source at:
 
 - https://github.com/jaymzh/concordance
 - https://sourceforge.net/projects/concordance/
