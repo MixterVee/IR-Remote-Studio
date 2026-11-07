@@ -83,3 +83,14 @@ interrupt OUT packet, then 64-byte interrupt IN response), interpreted as
 version-data response 0x2x. No other Harmony command is transmitted, and no
 flash/settings/firmware operations are permitted. This experiment is a step
 toward A3 and is not yet IR capture.
+
+### A3b: Correct protocol for Harmony 300 (v0.1.6-alpha)
+
+Physical test of 046D:C124 confirmed successful Android permission, HID claim,
+interrupt endpoints and report descriptor. The v0.1.5 GET_VERSION query timed
+out because the upstream Concordance implementation identifies C124 as
+**CRemoteMH**, using a different command family. Replace the faulty
+legacy query with an opt-in, bounded **MH session-initialization handshake**
+(first stage only). Stop and report any unexpected response. The validated
+next milestone is reading the MH protocol sysinfo response after initialization;
+IR capture remains unimplemented.

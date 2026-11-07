@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.5-alpha
+# IR Remote Studio for Android — v0.1.6-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -115,3 +115,29 @@ granted, and the HID endpoints match the expected 64-byte form.
 If it succeeds, copy the **Harmony identity result** and share it with the
 developer. If it fails, the report gives the exact stage. The test remains
 separate from IR learning; it does not capture commands.
+
+## MH protocol correction — v0.1.6-alpha
+
+**Important correction:** `046D:C124` (Harmony 300) is classified by
+Concordance as **CRemoteMH**, not the legacy **CRemote** family. The earlier
+v0.1.5 `GET_VERSION (0x10)` query was therefore the wrong protocol and timed
+out. Do not interpret that timeout as a USB hardware failure.
+
+The old "Read Harmony identity (0x10)" action has been **removed**. The
+replacement is **Test Harmony MH handshake**, a first-stage experiment that
+performs only the documented MH session initialization and reads its initial
+acknowledgement. It is **not** yet the full `/sys/sysinfo` identity retrieval,
+nor is it IR learning.
+
+With the remote attached and USB access granted, choose **Detect Harmony USB**,
+then **Test Harmony MH handshake**, confirm, and copy the result. The diagnostic
+queues its initial IN read before the final initialization request and performs
+bounded USB interrupt transfers (no forced interface takeover). On timeouts or
+disconnects it closes and releases the USB device.
+
+The handshake changes only the transient USB session state. No flash memory,
+firmware, configuration, IR-learning commands, or reset packets are issued.
+
+Reference: Concordance `libconcord/libconcord.cpp` (`is_mh_pid` and
+`init_concord`) and `libconcord/remote_mh.cpp` (`CRemoteMH::GetIdentity`).
+The new code is independently written using published protocol facts.

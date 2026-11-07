@@ -1,0 +1,222 @@
+package com.mixtervee.irstudio;
+
+import android.hardware.usb.UsbConstants;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbDeviceConnection;
+import android.hardware.usb.UsbEndpoint;
+import android.hardware.usb.UsbInterface;
+import android.hardware.usb.UsbManager;
+import android.hardware.usb.UsbRequest;
+import android.os.SystemClock;
+
+import java.nio.ByteBuffer;
+import java.util.Locale;
+import java.util.concurrent.TimeoutException;
+
+/**
+ * Experimental Harmony 300 (C124) MH session handshake.
+ *
+ * Sends only the documented MH session-start packets. No IR capture,
+ * firmware/flash operations, configuration, resets, or other requests.
+ * This test establishes whether Android can exchange the first MH response.
+ */
+public final class HarmonyMhProbe {
+    private HarmonyMhProbe() {}
+
+    private static final byte[] MH_START = {
+            (byte) 0xFF, 0x00, 0x00, 0x01, 0x01
+    };
+    private static final byte[] MH_INITIAL_REQUEST = {
+            (byte) 0xFF, (byte) 0xFF, 0x01, 0x01, 0x01, 0x66
+    };
+
+    static String responseSummary(byte[] bytes, int length) {
+        if (bytes == null || length <= 0 || length > bytes.length) {
+            return "No valid MH acknowledgement bytes received.";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append("MH reply received: ").append(length).append(" bytes").append('\n');
+        sb.append("First ").append(Math.min(length, 24)).append(" bytes (hex): ");
+        for (int i = 0; i < Math.min(length, 24); i++) {
+            if (i > 0) sb.append(' ');
+            sb.append(String.format(Locale.ROOT, "%02X", bytes[i] & 0xFF));
+        }
+        sb.append('\n').append("Protocol reply requires further validation before IR learning.");
+        return sb.toString();
+    }
+
+    private static ByteBuffer report(byte[] prefix) {
+        ByteBuffer buffer = ByteBuffer.allocateDirect(64);
+        buffer.put(prefix);
+        while (buffer.position() < 64) buffer.put((byte) 0);
+        buffer.flip();
+        return buffer;
+    }
+
+    private static boolean writeAndWait(UsbDeviceConnection conn,
+                                        UsbEndpoint endpoint, byte[] prefix,
+                                        StringBuilder log, String label) {
+        UsbRequest out = new UsbRequest();
+        try {
+            if (!out.initialize(conn, endpoint)) {
+                log.append(label).append(": unable to initialize USB OUT").append('\n');
+                return false;
+            }
+            ByteBuffer payload = report(prefix);
+            if (!out.queue(payload)) {
+                log.append(label).append(": unable to queue USB OUT").append('\n');
+                return false;
+            }
+            UsbRequest completed = conn.requestWait(2000);
+            int sent = payload.position();
+            if (completed != out || sent != 64) {
+                log.append(label).append(": incomplete USB OUT (")
+                        .append(sent).append("/64 bytes)").append('\n');
+                return false;
+            }
+            return true;
+        } catch (TimeoutException error) {
+            log.append(label).append(": USB OUT timed out").append('\n');
+            return false;
+        } finally {
+            out.cancel();
+            out.close();
+        }
+    }
+
+    private static void exchangeFinal(UsbDeviceConnection conn, UsbEndpoint in,
+                                      UsbEndpoint out, StringBuilder log)
+            throws TimeoutException {
+        UsbRequest reader = new UsbRequest();
+        UsbRequest writer = new UsbRequest();
+        try {
+            if (!reader.initialize(conn, in) || !writer.initialize(conn, out)) {
+                log.append("Could not initialize HID IN/OUT transfers").append('\n');
+                return;
+            }
+            ByteBuffer response = ByteBuffer.allocateDirect(64);
+            ByteBuffer command = report(MH_INITIAL_REQUEST);
+            // Queue IN first so a quick acknowledgement cannot be missed.
+            if (!reader.queue(response)) {
+                log.append("Failed to queue interrupt IN request").append('\n');
+                return;
+            }
+            if (!writer.queue(command)) {
+                log.append("Failed to queue final MH initialization request").append('\n');
+                return;
+            }
+            boolean writeCompleted = false;
+            boolean readCompleted = false;
+            long deadline = SystemClock.elapsedRealtime() + 4000;
+            while (!writeCompleted || !readCompleted) {
+                long remaining = deadline - SystemClock.elapsedRealtime();
+                if (remaining <= 0) break;
+                UsbRequest completed = conn.requestWait(remaining);
+                if (completed == writer) writeCompleted = true;
+                else if (completed == reader) readCompleted = true;
+            }
+            log.append("MH initialization OUT: ")
+                    .append(writeCompleted && command.position() == 64
+                            ? "64 bytes sent" : "not confirmed").append('\n');
+            if (readCompleted) {
+                int count = response.position();
+                response.flip();
+                byte[] bytes = new byte[count];
+                response.get(bytes);
+                log.append(responseSummary(bytes, count)).append('\n');
+            } else {
+                log.append("MH acknowledgement IN: none within 4 seconds").append('\n');
+            }
+        } finally {
+            reader.cancel();
+            writer.cancel();
+            reader.close();
+            writer.close();
+        }
+    }
+
+    public static String run(UsbManager manager, UsbDevice device) {
+        StringBuilder log = new StringBuilder();
+        log.append("IR Remote Studio — Harmony 300 MH handshake").append('\n')
+                .append("Only session initialization; no permanent device changes")
+                .append('\n').append('\n');
+        if (manager == null || device == null ||
+                !HarmonyUsbIds.isHarmony300Or350(device.getVendorId(), device.getProductId())) {
+            return log.append("Expected Harmony USB ID 046D:C124; nothing sent.")
+                    .toString();
+        }
+        if (!manager.hasPermission(device)) {
+            return log.append("USB permission not granted; nothing sent.").toString();
+        }
+
+        UsbInterface hid = null;
+        UsbEndpoint in = null;
+        UsbEndpoint out = null;
+        for (int i = 0; i < device.getInterfaceCount(); i++) {
+            UsbInterface candidate = device.getInterface(i);
+            if (candidate.getInterfaceClass() != UsbConstants.USB_CLASS_HID) continue;
+            UsbEndpoint foundIn = null, foundOut = null;
+            for (int j = 0; j < candidate.getEndpointCount(); j++) {
+                UsbEndpoint ep = candidate.getEndpoint(j);
+                if (ep.getType() != UsbConstants.USB_ENDPOINT_XFER_INT ||
+                        ep.getMaxPacketSize() != 64) continue;
+                if (ep.getDirection() == UsbConstants.USB_DIR_IN) foundIn = ep;
+                if (ep.getDirection() == UsbConstants.USB_DIR_OUT) foundOut = ep;
+            }
+            if (foundIn != null && foundOut != null) {
+                hid = candidate;
+                in = foundIn;
+                out = foundOut;
+                break;
+            }
+        }
+        if (hid == null) {
+            return log.append("No matching HID interrupt endpoint pair; nothing sent.")
+                    .toString();
+        }
+
+        UsbDeviceConnection conn = null;
+        boolean claimed = false;
+        try {
+            conn = manager.openDevice(device);
+            if (conn == null) return log.append("openDevice: failed").toString();
+            log.append("openDevice: OK").append('\n');
+            claimed = conn.claimInterface(hid, false);
+            log.append("claimInterface(force=false): ")
+                    .append(claimed ? "SUCCESS" : "FAILED").append('\n');
+            if (!claimed) return log.append("No forced takeover attempted.").toString();
+
+            // The MH 300 firmware expects five session-start packets before
+            // a follow-up acknowledgement request.
+            for (int i = 0; i < 5; i++) {
+                if (!writeAndWait(conn, out, MH_START, log, "MH sync " + (i + 1))) {
+                    return log.append("Stopped before final MH request.").toString();
+                }
+            }
+            log.append("MH sync: five 64-byte OUT reports completed").append('\n');
+            exchangeFinal(conn, in, out, log);
+        } catch (TimeoutException error) {
+            log.append("MH IN/OUT acknowledgement timed out").append('\n');
+        } catch (SecurityException error) {
+            log.append("USB permission error: ")
+                    .append(error.getClass().getSimpleName()).append('\n');
+        } catch (RuntimeException error) {
+            log.append("USB error: ").append(error.getClass().getSimpleName())
+                    .append(": ").append(error.getMessage()).append('\n');
+        } finally {
+            if (conn != null) {
+                if (claimed) {
+                    try {
+                        conn.releaseInterface(hid);
+                        log.append("HID interface released").append('\n');
+                    } catch (RuntimeException ignored) {
+                        log.append("Unable to release HID interface").append('\n');
+                    }
+                }
+                conn.close();
+                log.append("USB connection closed").append('\n');
+            }
+        }
+        return log.toString();
+    }
+}

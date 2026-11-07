@@ -202,51 +202,49 @@ public final class UsbHarmonyInspector {
             });
         }
 
-        // The only Harmony-specific request allowed by this experimental
-        // build is GET_VERSION (0x10). It reads identity and never accesses
-        // flash, changes setup, resets the remote, or starts IR learning.
+        // 046D:C124 is Harmony 300 using the MH protocol; 0x10 is
+        // a command for older, incompatible Harmony models.
         if (accessibleHarmony != null) {
-            final UsbDevice identityTarget = accessibleHarmony;
-            Button identity = new Button(context);
-            identity.setAllCaps(false);
-            identity.setText("Read Harmony identity (0x10)");
-            body.addView(identity, new LinearLayout.LayoutParams(
+            final UsbDevice harmony = accessibleHarmony;
+            Button handshake = new Button(context);
+            handshake.setAllCaps(false);
+            handshake.setText("Test Harmony MH handshake");
+            body.addView(handshake, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 52)));
-            identity.setOnClickListener(v -> {
+            handshake.setOnClickListener(v -> {
                 new AlertDialog.Builder(context)
-                    .setTitle("Read Harmony identity")
-                    .setMessage("This sends one documented GET_VERSION (0x10) USB "
-                         + "HID request to your connected Harmony and waits for "
-                         + "its reply. It does not write device settings, update "
-                         + "firmware, reset the remote, or start IR learning. "
-                         + "Continue?")
+                    .setTitle("Harmony 300 USB handshake")
+                    .setMessage("This experimental test sends the Harmony 300's "
+                        + "documented MH session-initialization packets and "
+                        + "tries to read a response. It does not change stored "
+                        + "remote programming, firmware, or settings, and it "
+                        + "does not start IR capture. Continue?")
                     .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Read identity", (d, w) -> {
-                        identity.setEnabled(false);
-                        identity.setText("Reading Harmony identity...");
+                    .setPositiveButton("Run handshake", (d, w) -> {
+                        handshake.setEnabled(false);
+                        handshake.setText("Testing MH handshake...");
                         new Thread(() -> {
-                            String result = HarmonyIdentityProbe.read(manager, identityTarget);
+                            String result = HarmonyMhProbe.run(manager, harmony);
                             context.runOnUiThread(() -> {
                                 if (context.isFinishing() || context.isDestroyed()) return;
                                 dialog.dismiss();
                                 new AlertDialog.Builder(context)
-                                    .setTitle("Harmony identity result")
+                                    .setTitle("Harmony MH handshake result")
                                     .setMessage(result)
                                     .setPositiveButton("Close", (d1, w1) -> {})
                                     .setNeutralButton("Copy result", (d1, w1) -> {
                                         ClipboardManager clipboard = (ClipboardManager)
                                                 context.getSystemService(
-                                                    Context.CLIPBOARD_SERVICE);
+                                                        Context.CLIPBOARD_SERVICE);
                                         if (clipboard != null) {
                                             clipboard.setPrimaryClip(ClipData.newPlainText(
-                                                "Harmony identity report", result));
-                                            Toast.makeText(context,
-                                                "Identity result copied",
-                                                Toast.LENGTH_SHORT).show();
+                                                    "Harmony MH handshake", result));
+                                            Toast.makeText(context, "MH result copied",
+                                                    Toast.LENGTH_SHORT).show();
                                         }
                                     }).show();
                             });
-                        }, "HarmonyIdentityReadOnly").start();
+                        }, "HarmonyMHHandshake").start();
                     }).show();
             });
         }
