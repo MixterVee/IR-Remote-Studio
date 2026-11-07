@@ -1,4 +1,4 @@
-IR Remote Studio v0.1.4 - Windows 11 x64
+IR Remote Studio v0.1.5 - Windows 11 x64
 ========================================
 
 1. Extract the ZIP artifact from GitHub Actions onto your Windows computer.
@@ -32,7 +32,10 @@ Supported Harmony devices: see README.md and irstudio/harmony_models.json.
 The Harmony 700/700i are experimental. Models without documented IR learning
 capability are blocked; remote identification alone is insufficient.
 
-New in v0.1.4: File > Restore library backup (creates automatic safety backup),
+New in v0.1.5: File > Restore library backup (creates automatic safety backup),
 Review captures to select one for export, and Layout editor to set button widths.
 A Harmony USB error 11 may indicate missing batteries, unsuitable USB cable,
 or a failed USB port. Try known-good hardware before changing drivers.
+
+Layout fix in v0.1.5: re-export .irplus files to add explicit row spacer
+entries and prevent narrow buttons from overflowing beside wide buttons.

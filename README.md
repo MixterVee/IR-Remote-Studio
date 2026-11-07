@@ -4,13 +4,13 @@
 
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for your Android phone.
 
-> **Status:** Windows v0.1.4 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
+> **Status:** Windows v0.1.5 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
 
 ## Download Windows beta
 
 1. Open [Actions → Windows executable](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
 2. Open the latest successful workflow run.
-3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.4-Windows-x64**.
+3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.5-Windows-x64**.
 4. Extract the ZIP and run `IR-Remote-Studio.exe` on Windows 11 x64.
 5. Read `WINDOWS-SETUP.txt` for the Harmony prerequisites.
 
@@ -96,7 +96,7 @@ Harmony 300 and 350 have both been directly verified by device owners in end-to-
 A compatible learning remote is only used to *receive* IR codes; normal capture
 does not rewrite its configuration or firmware.
 
-## Windows v0.1.4 improvements
+## Windows v0.1.5 improvements
 
 - **Remote layout editor:** choose a button, set its width, and preview how it fits on a 12-column irplus grid. The saved width is used in .irplus exports and preserved when compatible files are imported.
 - **Capture history:** review all stored recordings of a button, choose the sample used for export or delete a bad sample. Existing automatic best-match selection is retained.
@@ -108,3 +108,12 @@ does not rewrite its configuration or firmware.
 **Hardware verified in field testing:** Harmony 300 and Harmony 350 both completed USB connection, IR learning, .irplus export and playback from a compatible phone. Other documented-compatible models are not individually hardware verified.
 
 **Planned, not yet delivered:** Android app, additional protocol decoders, multi-button drag/drop layout, a formal tagged release, and license selection.
+
+## Windows v0.1.5 — irplus layout fix
+
+The Windows preview and exported .irplus file now use the same 12-column row wrapping.
+When a button cannot fit in a partially filled row, the exporter inserts an
+irplus-supported `<space multiple="N" />` placeholder to finish that row.
+It also fills the last partial row. This fixes the phone clipping / horizontal
+row overflow observed with a 6-column button followed by a 12-column button.
+Re-export and re-import the file to see the fix; existing captures are unchanged.

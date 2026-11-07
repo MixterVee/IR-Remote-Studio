@@ -287,14 +287,28 @@ def export_irplus(device: dict, path: Path, repeats: int = 0) -> int:
         "model": device.get("model") or device["name"],
         "columns": "12", "format": "PRONTO_HEX"})
     exported = 0
+    occupied = 0
+    columns = 12
     for button in device.get("buttons", []):
         if not button.get("captures") and not button.get("pronto_hex"):
             continue
         code = pronto_for_button(button, repeats)
-        ET.SubElement(el, "button", {"label": button["label"], "span": str(button_span(button))}).text = code
+        span = button_span(button)
+        # irplus uses <space multiple="N" /> to fill a short row before
+        # placing a button that cannot fit. Otherwise spans [6, 12] can
+        # overflow on Android instead of wrapping as shown in the preview.
+        if occupied + span > columns:
+            ET.SubElement(el, "space", {"multiple": str(columns - occupied)})
+            occupied = 0
+        ET.SubElement(el, "button", {"label": button["label"], "span": str(span)}).text = code
         exported += 1
+        occupied += span
+        if occupied == columns:
+            occupied = 0
     if not exported:
         raise ValueError("No buttons with IR commands to export")
+    if occupied:
+        ET.SubElement(el, "space", {"multiple": str(columns - occupied)})
     ET.indent(root, space="  ")
     path.parent.mkdir(parents=True, exist_ok=True)
     ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
