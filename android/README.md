@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.9-alpha
+# IR Remote Studio for Android — v0.1.10-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -187,3 +187,20 @@ No IR-learning, configuration, flash, firmware, or user configuration
 commands are issued. This is an experimental USB protocol test; a passed
 handshake does not guarantee the metadata read will work. USB permission
 must be granted and the device should have working batteries.
+
+
+## MH sysinfo transfer correction — v0.1.10-alpha
+
+Hardware testing of 0.1.9 demonstrated a 289-byte file descriptor response to
+`/sys/sysinfo`, but the file-transfer ACK completed with an unexpected USB
+byte count. Review against Concordance `CRemoteMH::ReadFile` identified a
+bad local file-transfer sequence (previously read=03, ACK=04, close=05).
+
+Version 0.1.10 uses the Concordance identity-file sequence read=00, ACK=01,
+and transient sequence close=02. It logs actual OUT and IN transfer byte
+counts, accepts bounded short control and data replies (HID max packet size
+remains 64), and validates each data packet length before reading its payload.
+
+The target file remains strictly `/sys/sysinfo`, bounded to 1,000 bytes.
+Only allowlisted non-identifying metadata is displayed; no IR learning,
+stored configuration, firmware or flash operation is attempted.
