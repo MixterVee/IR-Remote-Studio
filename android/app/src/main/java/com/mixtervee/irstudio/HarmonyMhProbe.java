@@ -18,8 +18,8 @@ import java.util.concurrent.TimeoutException;
  *
  * Sends only the documented MH session-start packets. No IR capture,
  * firmware/flash operations, configuration, resets, or other requests.
- * This test exchanges the first MH response, then optionally sends the
- * documented MH continuation session packet. No /sys/sysinfo read yet.
+ * This test exchanges the first MH response, then conditionally reads the
+ * documented identity metadata. Unsuccessful sessions never trigger retries.
  */
 public final class HarmonyMhProbe {
     private HarmonyMhProbe() {}
@@ -119,13 +119,25 @@ public final class HarmonyMhProbe {
                 && (bytes[4] & 0xFF) == 0x81;
     }
 
-    /** Stage one is unchanged: five sync packets, then 0xFF 0xFF 0x01 ... 0x66. */
+    /** Explain initial exchange progress without interpreting the protocol reply. */
+    static String initialExchangeStatus(boolean outCompleted, int outBytes,
+                                        boolean inCompleted, int inBytes,
+                                        boolean waitTimedOut) {
+        return "MH initial exchange: OUT completed=" + outCompleted
+                + ", OUT bytes=" + outBytes
+                + ", IN completed=" + inCompleted
+                + ", IN bytes=" + inBytes
+                + ", wait timeout=" + waitTimedOut;
+    }
+
+    /**
+     * Stage one uses exactly the existing five sync packets and initial request.
+     * No retries or recovery commands are sent on an incomplete exchange.
+     */
     private static boolean exchangeFinal(UsbDeviceConnection conn, UsbEndpoint in,
-                                         UsbEndpoint out, StringBuilder log)
-            throws TimeoutException {
+                                         UsbEndpoint out, StringBuilder log) {
         UsbRequest reader = new UsbRequest();
         UsbRequest writer = new UsbRequest();
-        boolean observed = false;
         try {
             if (!reader.initialize(conn, in) || !writer.initialize(conn, out)) {
                 log.append("Could not initialize HID IN/OUT transfers\n");
@@ -133,7 +145,7 @@ public final class HarmonyMhProbe {
             }
             ByteBuffer response = ByteBuffer.allocateDirect(64);
             ByteBuffer command = report(MH_INITIAL_REQUEST);
-            // Queue the IN endpoint first so a quick response is not missed.
+            // Queue IN before OUT, preserving the established successful order.
             if (!reader.queue(response)) {
                 log.append("Failed to queue interrupt IN request\n");
                 return false;
@@ -142,38 +154,63 @@ public final class HarmonyMhProbe {
                 log.append("Failed to queue final MH initialization request\n");
                 return false;
             }
+
             boolean writeCompleted = false;
             boolean readCompleted = false;
-            long deadline = SystemClock.elapsedRealtime() + 4000;
+            boolean waitTimedOut = false;
+            // Concordance MH_TIMEOUT is 5 seconds. Use 6 seconds for Android's
+            // USB scheduling overhead; do not retry or send additional packets.
+            long deadline = SystemClock.elapsedRealtime() + 6000;
             while (!writeCompleted || !readCompleted) {
                 long remaining = deadline - SystemClock.elapsedRealtime();
-                if (remaining <= 0) break;
-                UsbRequest completed = conn.requestWait(remaining);
-                if (completed == writer) writeCompleted = true;
-                else if (completed == reader) readCompleted = true;
+                if (remaining <= 0) {
+                    waitTimedOut = true;
+                    break;
+                }
+                try {
+                    UsbRequest completed = conn.requestWait(remaining);
+                    if (completed == writer) writeCompleted = true;
+                    else if (completed == reader) readCompleted = true;
+                    else if (completed == null) {
+                        log.append("MH initial request wait returned null\n");
+                        break;
+                    }
+                } catch (TimeoutException error) {
+                    waitTimedOut = true;
+                    break;
+                }
             }
-            boolean outComplete = writeCompleted && command.position() == 64;
+            int outBytes = command.position();
+            int inBytes = response.position();
+            log.append(initialExchangeStatus(writeCompleted, outBytes,
+                    readCompleted, inBytes, waitTimedOut)).append('\n');
+            boolean outComplete = writeCompleted && outBytes == 64;
             log.append("MH initialization OUT: ")
                     .append(outComplete ? "64 bytes sent" : "not confirmed").append('\n');
-            if (readCompleted) {
-                int count = response.position();
+
+            if (readCompleted && inBytes > 0 && inBytes <= 64) {
                 response.flip();
-                byte[] bytes = new byte[count];
+                byte[] bytes = new byte[inBytes];
                 response.get(bytes);
-                log.append(responseSummary(bytes, count)).append('\n');
-                observed = outComplete && matchesObservedStageOne(bytes);
+                log.append(responseSummary(bytes, inBytes)).append('\n');
+                boolean observed = outComplete && matchesObservedStageOne(bytes);
                 log.append("Session continuation gate (observed response): ")
                         .append(observed ? "PASS" : "FAIL").append('\n');
-            } else {
-                log.append("MH initial reply IN: none within 4 seconds\n");
+                return observed;
             }
+
+            log.append("MH initial reply: ")
+                    .append(readCompleted ? "empty or malformed response"
+                            : "no complete reply during 6-second wait")
+                    .append('\n');
+            log.append("No MH continuation or identity request sent.\n");
+            return false;
         } finally {
             reader.cancel();
             writer.cancel();
             reader.close();
             writer.close();
         }
-        return observed;
     }
 
     static boolean matchesObservedStageTwo(byte[] bytes) {

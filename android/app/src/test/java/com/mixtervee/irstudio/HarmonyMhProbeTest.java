@@ -66,4 +66,24 @@ public class HarmonyMhProbeTest {
         assertFalse(HarmonyMhProbe.matchesObservedStageTwo(null));
     }
 
+
+    @Test public void stageOneStatusDistinguishesOutOnlyTimeout() {
+        String result = HarmonyMhProbe.initialExchangeStatus(true, 64,
+                false, 0, true);
+        assertTrue(result.contains("OUT completed=true"));
+        assertTrue(result.contains("OUT bytes=64"));
+        assertTrue(result.contains("IN completed=false"));
+        assertTrue(result.contains("IN bytes=0"));
+        assertTrue(result.contains("wait timeout=true"));
+    }
+
+    @Test public void stageOneStatusReportsCompleteReadAndWrite() {
+        String result = HarmonyMhProbe.initialExchangeStatus(true, 64,
+                true, 64, false);
+        assertTrue(result.contains("OUT completed=true"));
+        assertTrue(result.contains("IN completed=true"));
+        assertTrue(result.contains("IN bytes=64"));
+        assertTrue(result.contains("wait timeout=false"));
+    }
+
 }
