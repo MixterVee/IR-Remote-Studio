@@ -185,8 +185,8 @@ public final class HarmonyMhProbe {
                 && (bytes[4] & 0xFF) == 0x7D;
     }
 
-    /** Stage two mirrors Concordance's next MH session step (FF 00 02).
-     *  No IR-learning, /sys/sysinfo, configuration, reset, or firmware commands.
+    /** Stage two exchanges only the documented FF 00 02 session message.
+     *  Identity reading, if enabled by a matching reply, is a separate step.
      */
     private static boolean exchangeContinuation(UsbDeviceConnection conn, UsbEndpoint in,
                                              UsbEndpoint out, StringBuilder log)
@@ -230,6 +230,7 @@ public final class HarmonyMhProbe {
                 response.get(bytes);
                 log.append("MH continuation reply:\n");
                 log.append(responseSummary(bytes, count)).append('\n');
+                log.append("(The FF FF 81 prefix check above applies to stage one only.)\n");
                 stageTwo = writeCompleted && command.position() == 64
                         && matchesObservedStageTwo(bytes);
                 log.append("Observed stage-two reply pattern: ")
