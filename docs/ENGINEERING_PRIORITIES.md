@@ -58,7 +58,7 @@ capture backend.
 
 ## Licensing and safeguards
 
-- Concordance is a separate GPLv2-licensed project. Do not copy its source
+- Concordance is a separately GPL-licensed project. Do not copy its source
   into our MIT-licensed code or ship its binaries without a deliberate GPL
   compliance plan.
 - A clean implementation referencing hardware behavior/protocol documentation
