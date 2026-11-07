@@ -176,10 +176,19 @@ public final class HarmonyMhProbe {
         return observed;
     }
 
-    /** Stage two mirrors Concordance's next MH session step (FF 00 02).
-     *  No IR-learning, /sys/sysinfo, configuration, reset, or firmware commands.
+    static boolean matchesObservedStageTwo(byte[] bytes) {
+        return bytes != null && bytes.length == 64
+                && (bytes[0] & 0xFF) == 0xFF
+                && (bytes[1] & 0xFF) == 0x00
+                && (bytes[2] & 0xFF) == 0x82
+                && (bytes[3] & 0xFF) == 0x00
+                && (bytes[4] & 0xFF) == 0x7D;
+    }
+
+    /** Stage two exchanges only the documented FF 00 02 session message.
+     *  Identity reading, if enabled by a matching reply, is a separate step.
      */
-    private static void exchangeContinuation(UsbDeviceConnection conn, UsbEndpoint in,
+    private static boolean exchangeContinuation(UsbDeviceConnection conn, UsbEndpoint in,
                                              UsbEndpoint out, StringBuilder log)
             throws TimeoutException {
         UsbRequest reader = new UsbRequest();
@@ -187,17 +196,17 @@ public final class HarmonyMhProbe {
         try {
             if (!reader.initialize(conn, in) || !writer.initialize(conn, out)) {
                 log.append("MH continuation: could not initialize USB transfers\n");
-                return;
+                return false;
             }
             ByteBuffer response = ByteBuffer.allocateDirect(64);
             ByteBuffer command = report(MH_CONTINUE);
             if (!reader.queue(response)) {
                 log.append("MH continuation: could not queue IN\n");
-                return;
+                return false;
             }
             if (!writer.queue(command)) {
                 log.append("MH continuation: could not queue OUT\n");
-                return;
+                return false;
             }
             boolean writeCompleted = false;
             boolean readCompleted = false;
@@ -213,6 +222,7 @@ public final class HarmonyMhProbe {
             log.append("MH continuation OUT: ")
                     .append(writeCompleted && command.position() == 64
                             ? "64 bytes sent" : "not confirmed").append('\n');
+            boolean stageTwo = false;
             if (readCompleted) {
                 int count = response.position();
                 response.flip();
@@ -220,10 +230,16 @@ public final class HarmonyMhProbe {
                 response.get(bytes);
                 log.append("MH continuation reply:\n");
                 log.append(responseSummary(bytes, count)).append('\n');
+                log.append("(The FF FF 81 prefix check above applies to stage one only.)\n");
+                stageTwo = writeCompleted && command.position() == 64
+                        && matchesObservedStageTwo(bytes);
+                log.append("Observed stage-two reply pattern: ")
+                        .append(stageTwo ? "MATCH" : "DIFFERENT").append('\n');
             } else {
                 log.append("MH continuation IN: none within 4 seconds\n");
             }
-            log.append("No identity file read or IR capture attempted.\n");
+            log.append("No IR learning or configuration access attempted.\n");
+            return stageTwo;
         } finally {
             reader.cancel();
             writer.cancel();
@@ -234,8 +250,8 @@ public final class HarmonyMhProbe {
 
     public static String run(UsbManager manager, UsbDevice device) {
         StringBuilder log = new StringBuilder();
-        log.append("IR Remote Studio — Harmony 300 MH session continuation").append('\n')
-                .append("Only session initialization; no permanent device changes")
+        log.append("IR Remote Studio — Harmony 300 read-only identity test").append('\n')
+                .append("Read-only /sys/sysinfo with serial/GUID redaction; no permanent device changes")
                 .append('\n').append('\n');
         if (manager == null || device == null ||
                 !HarmonyUsbIds.isHarmony300Or350(device.getVendorId(), device.getProductId())) {
@@ -292,7 +308,11 @@ public final class HarmonyMhProbe {
             }
             log.append("MH sync: five 64-byte OUT reports completed").append('\n');
             if (exchangeFinal(conn, in, out, log)) {
-                exchangeContinuation(conn, in, out, log);
+                if (exchangeContinuation(conn, in, out, log)) {
+                    HarmonySysinfoProbe.readIdentity(conn, in, out, log);
+                } else {
+                    log.append("sysinfo read skipped: stage-two reply did not match observed pattern\n");
+                }
             } else {
                 log.append("MH continuation skipped: stage-one response not confirmed\n");
             }

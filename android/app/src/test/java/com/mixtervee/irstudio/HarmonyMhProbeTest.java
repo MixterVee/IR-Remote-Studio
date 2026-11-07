@@ -53,4 +53,17 @@ public class HarmonyMhProbeTest {
         assertFalse(HarmonyMhProbe.matchesObservedStageOne(null));
     }
 
+
+    @Test public void stageTwoMatcherRequiresObservedFullReply() {
+        byte[] observed = new byte[64];
+        observed[0] = (byte)0xFF;
+        observed[2] = (byte)0x82;
+        observed[4] = (byte)0x7D;
+        assertTrue(HarmonyMhProbe.matchesObservedStageTwo(observed));
+        observed[4] = (byte)0x7E;
+        assertFalse(HarmonyMhProbe.matchesObservedStageTwo(observed));
+        assertFalse(HarmonyMhProbe.matchesObservedStageTwo(new byte[5]));
+        assertFalse(HarmonyMhProbe.matchesObservedStageTwo(null));
+    }
+
 }
