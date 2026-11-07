@@ -6,8 +6,11 @@ import android.hardware.usb.UsbDeviceConnection;
 import android.hardware.usb.UsbEndpoint;
 import android.hardware.usb.UsbInterface;
 import android.hardware.usb.UsbManager;
+import android.hardware.usb.UsbRequest;
 
+import java.nio.ByteBuffer;
 import java.util.Locale;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Exact, user-initiated, READ-ONLY Harmony GET_VERSION request (0x10).
@@ -97,21 +100,66 @@ public final class HarmonyIdentityProbe {
                .append(claimed?"SUCCESS":"FAILED").append("\\n");
             if(!claimed)return log.append("USB HID interface unavailable; nothing sent.").toString();
 
-            byte[] request=new byte[64];
-            request[0]=(byte)GET_VERSION;
-            // This is a protocol query: byte 0 = 0x10, remaining bytes = 0.
-            // Do not send any other Harmony command in this diagnostic.
-            log.append("Sending single 64-byte GET_VERSION (0x10) HID OUT report...\\n");
-            int written=connection.bulkTransfer(out,request,request.length,1800);
-            log.append("OUT bytes sent: ").append(written).append("\\n");
-            if(written!=64){
-                return log.append("GET_VERSION request incomplete; stopping.").toString();
+            // HID report endpoints are INTERRUPT, not BULK.
+            // Android requires UsbRequest.queue()/requestWait() for interrupt
+            // endpoints. A bulkTransfer() call would not be correct here.
+            UsbRequest send = new UsbRequest();
+            try {
+                if (!send.initialize(connection, out)) {
+                    log.append("Failed to initialize interrupt OUT request.\\n");
+                    return log.toString();
+                }
+                ByteBuffer request = ByteBuffer.allocateDirect(64);
+                request.put((byte) GET_VERSION);
+                while (request.position() < 64) request.put((byte) 0);
+                request.flip();
+                log.append("Sending one GET_VERSION (0x10) report...\\n");
+                if (!send.queue(request)) {
+                    log.append("Could not queue HID OUT transfer.\\n");
+                    return log.toString();
+                }
+                UsbRequest completed = connection.requestWait(2000);
+                if (completed != send) {
+                    log.append("OUT completion missing; stopping.\\n");
+                    return log.toString();
+                }
+                log.append("OUT bytes sent: ").append(request.position()).append("\\n");
+                if (request.position() != 64) {
+                    return log.append("Partial OUT transfer; stopping.").toString();
+                }
+            } catch (TimeoutException timeout) {
+                return log.append("HID OUT transfer timed out.").toString();
+            } finally {
+                send.cancel();
+                send.close();
             }
-            byte[] response=new byte[64];
-            int got=connection.bulkTransfer(in,response,response.length,2200);
-            log.append("IN bytes received: ").append(got).append("\\n");
-            if(got<0)return log.append("No version response (timeout/error).").toString();
-            log.append(decodeResponse(response,got));
+
+            UsbRequest receive = new UsbRequest();
+            try {
+                if (!receive.initialize(connection, in)) {
+                    return log.append("Failed to initialize interrupt IN request.").toString();
+                }
+                ByteBuffer response = ByteBuffer.allocateDirect(64);
+                if (!receive.queue(response)) {
+                    return log.append("Could not queue HID IN transfer.").toString();
+                }
+                UsbRequest completed = connection.requestWait(2500);
+                if (completed != receive) {
+                    return log.append("HID IN completion missing.").toString();
+                }
+                int got = response.position();
+                log.append("IN bytes received: ").append(got).append("\\n");
+                if (got <= 0) return log.append("No version response bytes.").toString();
+                response.flip();
+                byte[] received = new byte[got];
+                response.get(received);
+                log.append(decodeResponse(received, got));
+            } catch (TimeoutException timeout) {
+                return log.append("No version response within 2.5 seconds.").toString();
+            } finally {
+                receive.cancel();
+                receive.close();
+            }
         } catch(SecurityException error){
             log.append("USB permission error: ").append(error.getClass().getSimpleName());
         } catch(RuntimeException error){
