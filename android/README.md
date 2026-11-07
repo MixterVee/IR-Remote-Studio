@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.8-alpha
+# IR Remote Studio for Android — v0.1.9-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -172,3 +172,18 @@ is logged in full. The remote interface is always released afterward.
 No /sys/sysinfo identity file, configuration file, flash memory, reset,
 firmware operation, or IR-learning interface is accessed. The result is
 a USB protocol experiment, not a claim of IR capture support.
+
+
+## Read-only Harmony /sys/sysinfo — v0.1.9-alpha
+
+After the observed FF 00 82 00 7D session reply, this experimental
+option attempts a bounded metadata read of the published /sys/sysinfo
+path. It follows Concordance's sequence of read request, transfer ACK,
+limited data reads, and a transient sequence reset. Only firmware/hardware
+metadata is displayed: fw_ver, hw_ver, arch, fw_type, and skin.
+
+The app never logs the device's GUID, serial number, or unknown keys.
+No IR-learning, configuration, flash, firmware, or user configuration
+commands are issued. This is an experimental USB protocol test; a passed
+handshake does not guarantee the metadata read will work. USB permission
+must be granted and the device should have working batteries.
