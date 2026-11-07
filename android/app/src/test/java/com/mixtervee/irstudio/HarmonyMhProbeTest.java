@@ -36,4 +36,21 @@ public class HarmonyMhProbeTest {
         assertTrue(HarmonyMhProbe.responseSummary(new byte[0], 0)
             .contains("No valid MH reply bytes received"));
     }
+    @Test public void observedStageOneReplyAllowsOnlyKnownPrefix() {
+        byte[] observed = new byte[64];
+        observed[0] = (byte) 0xFF;
+        observed[1] = (byte) 0xFF;
+        observed[2] = (byte) 0x81;
+        observed[4] = (byte) 0x81;
+        assertTrue(HarmonyMhProbe.matchesObservedStageOne(observed));
+
+        observed[2] = (byte) 0x80;
+        assertFalse(HarmonyMhProbe.matchesObservedStageOne(observed));
+        observed[2] = (byte) 0x81;
+        observed[4] = 0x00;
+        assertFalse(HarmonyMhProbe.matchesObservedStageOne(observed));
+        assertFalse(HarmonyMhProbe.matchesObservedStageOne(new byte[5]));
+        assertFalse(HarmonyMhProbe.matchesObservedStageOne(null));
+    }
+
 }

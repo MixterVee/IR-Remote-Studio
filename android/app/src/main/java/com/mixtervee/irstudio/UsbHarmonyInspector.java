@@ -208,15 +208,16 @@ public final class UsbHarmonyInspector {
             final UsbDevice harmony = accessibleHarmony;
             Button handshake = new Button(context);
             handshake.setAllCaps(false);
-            handshake.setText("Test Harmony MH handshake");
+            handshake.setText("Test MH session continuation");
             body.addView(handshake, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 52)));
             handshake.setOnClickListener(v -> {
                 new AlertDialog.Builder(context)
                     .setTitle("Harmony 300 USB handshake")
                     .setMessage("This experimental test sends the Harmony 300's "
-                        + "documented MH session-initialization packets and "
-                        + "tries to read a response. It does not change stored "
+                        + "documented MH session-initialization packets, then (only if the "
+                        + "first response matches our observed pattern) sends the "
+                        + "Concordance session continuation FF 00 02. It does not change stored "
                         + "remote programming, firmware, or settings, and it "
                         + "does not start IR capture. Continue?")
                     .setNegativeButton("Cancel", null)
@@ -229,7 +230,7 @@ public final class UsbHarmonyInspector {
                                 if (context.isFinishing() || context.isDestroyed()) return;
                                 dialog.dismiss();
                                 new AlertDialog.Builder(context)
-                                    .setTitle("Harmony MH handshake result")
+                                    .setTitle("Harmony MH session result")
                                     .setMessage(result)
                                     .setPositiveButton("Close", (d1, w1) -> {})
                                     .setNeutralButton("Copy result", (d1, w1) -> {

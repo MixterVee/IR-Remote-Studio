@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.7-alpha
+# IR Remote Studio for Android — v0.1.8-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -156,3 +156,19 @@ is only a repeatability diagnostic, **not** proof of a valid protocol reply.
 The five MH sync reports and final MH session-init request remain unchanged;
 no configuration, firmware, reset, or IR-learning commands have been added.
 Copy the result from the app, ideally from two separate runs, for comparison.
+
+
+## Harmony MH session continuation — v0.1.8-alpha
+
+A repeatable 64-byte reply with the first bytes FF FF 81 00 81 was observed
+after the v0.1.7-alpha test. This is not proven to be a protocol success code.
+
+The **Test MH session continuation** action repeats the earlier MH session
+handshake and, **only if** a complete outgoing packet and a 64-byte reply with
+the observed first five bytes are seen, sends Concordance's documented next
+session packet: FF 00 02 (zero-padded to 64 bytes). The next 64-byte reply
+is logged in full. The remote interface is always released afterward.
+
+No /sys/sysinfo identity file, configuration file, flash memory, reset,
+firmware operation, or IR-learning interface is accessed. The result is
+a USB protocol experiment, not a claim of IR capture support.
