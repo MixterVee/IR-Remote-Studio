@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.0-alpha
+# IR Remote Studio for Android — v0.1.1-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -40,3 +40,4 @@ or are authorized to operate.
 
 The Android app and Windows app both use the same `.irplus` interchange
 format; Android does not yet read Windows library.json files directly.
+\n## Import fix in v0.1.1-alpha\n\nAndroid's XML parser does not support every JAXP configuration option used\nby Java desktop. The initial alpha enabled XML settings that could abort\nbefore reading valid Windows .irplus files. The importer now uses bounded XML\ninput and rejects DTD/entity declarations, while tolerating missing optional\nJAXP features. Failures now show the full reason in a visible dialog.\n\nUpdate by installing the new debug APK over the original; existing local\nremote data remains stored under the same application ID.\n

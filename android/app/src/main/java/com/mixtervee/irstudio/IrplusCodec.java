@@ -5,12 +5,17 @@ import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import javax.xml.XMLConstants;
+import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import org.xml.sax.SAXException;
 
 /** Portable IRPLUS PRONTO_HEX import/export; intentionally no Android UI dependencies. */
 public final class IrplusCodec {
@@ -94,14 +99,33 @@ public final class IrplusCodec {
     }
 
     public static List<Remote> read(InputStream stream) throws Exception {
+        // Android's DocumentBuilderFactory does not implement every JAXP feature.
+        // In particular FEATURE_SECURE_PROCESSING and setXIncludeAware(false)
+        // can throw before a valid .irplus file is even read. Instead limit input,
+        // disallow DTD/entity declarations, and disable external resolution.
+        byte[] xml = boundedXml(stream, 2_000_000);
+        String text = new String(xml, StandardCharsets.UTF_8);
+        if (text.indexOf('\u0000') >= 0) {
+            throw new IllegalArgumentException("Only UTF-8 .irplus files are currently supported.");
+        }
+        if (text.matches("(?is).*<!\\\\s*(DOCTYPE|ENTITY)\\\\b.*")) {
+            throw new IllegalArgumentException("XML files with DTD or entity declarations are not allowed.");
+        }
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-        factory.setFeature("http://xml.org/sax/features/external-general-entities", false);
-        factory.setFeature("http://xml.org/sax/features/external-parameter-entities", false);
-        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true);
-        factory.setXIncludeAware(false);
+        factory.setNamespaceAware(false);
+        factory.setValidating(false);
         factory.setExpandEntityReferences(false);
-        Document doc = factory.newDocumentBuilder().parse(stream);
+        // On some Android XML implementations the optional SAX features are
+        // unsupported. A bounded input and explicit DOCTYPE rejection above
+        // remain in force even if a specific feature cannot be configured.
+        optionalFeature(factory, "http://apache.org/xml/features/disallow-doctype-decl", true);
+        optionalFeature(factory, "http://xml.org/sax/features/external-general-entities", false);
+        optionalFeature(factory, "http://xml.org/sax/features/external-parameter-entities", false);
+        DocumentBuilder builder = factory.newDocumentBuilder();
+        builder.setEntityResolver((publicId, systemId) -> {
+            throw new SAXException("External XML resources are not allowed.");
+        });
+        Document doc = builder.parse(new ByteArrayInputStream(xml));
         Element root = doc.getDocumentElement();
         if (root == null || !"irplus".equals(root.getTagName())) {
             throw new IllegalArgumentException("This is not an .irplus XML file.");
@@ -149,6 +173,29 @@ public final class IrplusCodec {
             throw new IllegalArgumentException("No compatible PRONTO_HEX devices found.");
         }
         return remotes;
+    }
+
+    private static void optionalFeature(DocumentBuilderFactory factory, String name, boolean value) {
+        try {
+            factory.setFeature(name, value);
+        } catch (ParserConfigurationException | UnsupportedOperationException unsupported) {
+            // Some Android parsers don't implement optional JAXP features.
+            // The input bound and DTD check still protect the import.
+        }
+    }
+
+    private static byte[] boundedXml(InputStream input, int maxBytes) throws Exception {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] chunk = new byte[8192];
+        int n;
+        while ((n = input.read(chunk)) != -1) {
+            if (n == 0) continue;
+            if (output.size() + n > maxBytes) {
+                throw new IllegalArgumentException(".irplus file exceeds the 2 MB import limit.");
+            }
+            output.write(chunk, 0, n);
+        }
+        return output.toByteArray();
     }
 
     private static int parseWidth(String input, int fallback) {

@@ -1,6 +1,7 @@
 package com.mixtervee.irstudio;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -106,7 +107,7 @@ public class MainActivity extends Activity {
         titles.setPadding(dp(10), 0, 0, 0);
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.addView(text("IR Remote Studio", 22, WHITE, true));
-        titles.addView(text("Android test build · v0.1.0-alpha", 12, MUTED, false));
+        titles.addView(text("Android test build · v0.1.1-alpha", 12, MUTED, false));
         header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
 
@@ -345,8 +346,17 @@ public class MainActivity extends Activity {
                 refreshDevices();
                 setStatus("Imported " + added.size() + " remote(s). Tap a button to transmit IR.");
             } catch (Exception exception) {
-                setStatus("Import failed: " + exception.getMessage());
-                Toast.makeText(this, "Import failed", Toast.LENGTH_SHORT).show();
+                String reason = exception.getMessage();
+                if (reason == null || reason.trim().isEmpty()) {
+                    reason = exception.getClass().getSimpleName();
+                }
+                setStatus("Import failed: " + reason);
+                new AlertDialog.Builder(this)
+                    .setTitle("Could not import remote")
+                    .setMessage(reason + "\\n\\nChoose a PRONTO_HEX .irplus file exported from IR Remote Studio on Windows. "
+                        + "If it still fails, send us this exact error message.")
+                    .setPositiveButton("OK", null)
+                    .show();
             }
         } else if (requestCode == EXPORT_DEVICE) {
             try (OutputStream output = getContentResolver().openOutputStream(uri)) {

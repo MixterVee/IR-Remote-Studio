@@ -22,6 +22,27 @@ public class IrplusCodecTest {
         } catch (IllegalArgumentException expected) { }
     }
 
+    @Test public void rejectsUnsafeXmlAndSupportsWindowsStyleExport() throws Exception {
+        String knownWindowsExport = "<?xml version='1.0' encoding='utf-8'?>"
+            + "<irplus><device manufacturer='Xflyee' model='099' columns='12'"
+            + " format='PRONTO_HEX'><button label='SET' span='12'>"
+            + "0000 006D 0002 0000 0157 0057 0016 4DFA"
+            + "</button></device></irplus>";
+        List<IrplusCodec.Remote> parsed = IrplusCodec.read(
+            new ByteArrayInputStream(knownWindowsExport.getBytes(StandardCharsets.UTF_8)));
+        assertEquals(1, parsed.size());
+        assertEquals("Xflyee 099", parsed.get(0).displayName());
+        assertEquals("SET", parsed.get(0).items.get(0).label);
+        String dangerous = "<?xml version='1.0'?><!DOCTYPE irplus [<!ENTITY evil SYSTEM 'file:///x'>]>"
+            + "<irplus>&evil;</irplus>";
+        try {
+            IrplusCodec.read(new ByteArrayInputStream(dangerous.getBytes(StandardCharsets.UTF_8)));
+            fail("DTD declarations must be rejected.");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("DTD"));
+        }
+    }
+
     @Test public void roundTripsRowsAndXmlLabels() throws Exception {
         IrplusCodec.Remote original = new IrplusCodec.Remote("Xflyee", "099");
         original.items.add(new IrplusCodec.Item("SET & Mode", PRONTO, 6, false));
