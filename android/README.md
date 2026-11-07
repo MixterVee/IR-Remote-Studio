@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.6-alpha
+# IR Remote Studio for Android — v0.1.7-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -146,3 +146,13 @@ firmware, configuration, IR-learning commands, or reset packets are issued.
 Reference: Concordance `libconcord/libconcord.cpp` (`is_mh_pid` and
 `init_concord`) and `libconcord/remote_mh.cpp` (`CRemoteMH::GetIdentity`).
 The new code is independently written using published protocol facts.
+
+## MH full-response diagnostics — v0.1.7-alpha
+
+The existing **Test Harmony MH handshake** test now logs all bytes of the
+64-byte USB reply (16 bytes per line), the HID endpoint addresses, an observed
+header-prefix comparison, and the last non-zero byte offset. Header comparison
+is only a repeatability diagnostic, **not** proof of a valid protocol reply.
+The five MH sync reports and final MH session-init request remain unchanged;
+no configuration, firmware, reset, or IR-learning commands have been added.
+Copy the result from the app, ideally from two separate runs, for comparison.
