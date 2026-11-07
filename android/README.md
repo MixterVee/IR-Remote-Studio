@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.10-alpha
+# IR Remote Studio for Android — v0.1.11-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -204,3 +204,20 @@ remains 64), and validates each data packet length before reading its payload.
 The target file remains strictly `/sys/sysinfo`, bounded to 1,000 bytes.
 Only allowlisted non-identifying metadata is displayed; no IR learning,
 stored configuration, firmware or flash operation is attempted.
+
+
+## Stage-one USB timeout diagnostics — v0.1.11-alpha
+
+The v0.1.10-alpha hardware report timed out during the first MH
+initialization exchange, before reaching the earlier corrected sysinfo read.
+
+This version preserves the five MH sync reports and exact initialization bytes,
+but extends the initial reply wait from 4 to 6 seconds (Concordance MH_TIMEOUT
+is 5 seconds). It reports separately whether the 64-byte OUT request completed,
+whether the IN request completed, actual transferred byte counts, and whether
+the USB wait itself timed out.
+
+There is **no automatic retry** and no extra Harmony command. On an
+incomplete first reply, the identity-file read is skipped and the USB
+interface is released. For a repeat test, unplug and reconnect the Harmony
+USB cable, leave batteries installed, then run the identity diagnostic once.
