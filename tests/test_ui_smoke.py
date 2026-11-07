@@ -25,6 +25,7 @@ class UIStartupTests(unittest.TestCase):
                     app.update_idletasks()
                     self.assertIsNotNone(app.probe_btn)
                     self.assertIsNotNone(app.capture_btn)
+                    self.assertIsNotNone(app.brand_image, "Expected embedded transparent logo")
                     device = core.new_device("Test TV")
                     device["buttons"].append(core.new_button("Power"))
                     app.library["devices"].append(device)

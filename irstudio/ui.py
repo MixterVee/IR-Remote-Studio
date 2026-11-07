@@ -14,6 +14,7 @@ from irstudio import __version__
 from irstudio import core
 from irstudio.harmony import invoke_harmony
 from irstudio.layout_preview import LayoutDialog
+from irstudio.branding import install_icon
 
 
 class Studio(tk.Tk):
@@ -33,6 +34,7 @@ class Studio(tk.Tk):
         self.status_var = tk.StringVar(value=f"Library: {self.library_path}")
         self.repeat_var = tk.StringVar(value="0")
         self.progress_var = tk.StringVar(value="No buttons yet")
+        self.brand_image = install_icon(self)
         self._make_ui()
         self._reload_devices()
         self.protocol("WM_DELETE_WINDOW", self._close)
@@ -58,14 +60,21 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.1.6\n\nCompatible Harmony remotes use the installed Concordance libconcord DLL through a separate x86 PowerShell process.\n\nCapture reads IR only; it does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.1.7\n\nCompatible Harmony remotes use the installed Concordance libconcord DLL through a separate x86 PowerShell process.\n\nCapture reads IR only; it does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
         header = ttk.Frame(self, padding=(16, 14, 16, 6))
         header.pack(fill="x")
-        ttk.Label(header, text="IR Remote Studio", font=("Segoe UI Semibold", 20)).pack(anchor="w")
-        ttk.Label(header, text="Create devices, label buttons, learn IR with compatible Harmony remotes, and export .irplus remotes.",
+        identity = ttk.Frame(header)
+        identity.pack(fill="x")
+        if self.brand_image:
+            self.brand_header_image = self.brand_image.subsample(4, 4)
+            ttk.Label(identity, image=self.brand_header_image).pack(side="left", padx=(0, 10))
+        heading = ttk.Frame(identity)
+        heading.pack(side="left", fill="x", expand=True)
+        ttk.Label(heading, text="IR Remote Studio", font=("Segoe UI Semibold", 20)).pack(anchor="w")
+        ttk.Label(heading, text="Create devices, label buttons, learn IR with compatible Harmony remotes, and export .irplus remotes.",
                   foreground="#505b69").pack(anchor="w", pady=(2, 0))
 
         toolbar = ttk.Frame(self, padding=(16, 10, 16, 10))
