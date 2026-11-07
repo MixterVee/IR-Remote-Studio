@@ -2,15 +2,15 @@
 
 **Portable IR remote learning and management for Windows, with Android planned.**
 
-Create devices, use custom labels for every button, capture commands from a Logitech Harmony 350, compare repeated recordings, and export **`.irplus`** remotes for your Android phone.
+Create devices, use custom labels for every button, capture commands from a Logitech Harmony 300 or 350, compare repeated recordings, and export **`.irplus`** remotes for your Android phone.
 
-> **Status:** Windows v0.1.1 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
+> **Status:** Windows v0.1.2 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
 
 ## Download Windows beta
 
 1. Open [Actions → Windows executable](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
 2. Open the latest successful workflow run.
-3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.1-Windows-x64**.
+3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.2-Windows-x64**.
 4. Extract the ZIP and run `IR-Remote-Studio.exe` on Windows 11 x64.
 5. Read `WINDOWS-SETUP.txt` for the Harmony prerequisites.
 
@@ -19,7 +19,7 @@ The one-file `.exe` includes the Python UI and capture worker. Python is **not**
 ## Features in Windows v0.1
 
 - Unlimited devices, custom button labels, button ordering, rename/delete.
-- Capture Harmony 350 IR commands in an isolated helper process (no firmware/configuration writes).
+- Capture Harmony 300/350 IR commands in an isolated helper process (no firmware/configuration writes).
 - Reject incomplete NEC repeat-only signals, validate carrier and mark/space durations.
 - Decode standard and extended NEC when supported; show address, command and bytes.
 - Save multiple captures for each button and identify matching NEC frames.
@@ -32,7 +32,7 @@ The one-file `.exe` includes the Python UI and capture worker. Python is **not**
 
 1. Run the app; choose **+ Add** under **Devices**, enter a name such as `Kitchen Clock`, manufacturer `Xflyee`, model `099`.
 2. Choose **+ Add** under **Buttons** and type your own label, such as `SET`, `Alarm`, `HR`, `MIN`.
-3. Click **Check Harmony 350**, then select a button, click **Capture selected button** and press its original remote button.
+3. Click **Check Harmony 300/350**, then select a button, click **Capture selected button** and press its original remote button.
 4. Repeat the capture twice for comparison. A `2/2` count means the samples agree at the decoded NEC command level.
 5. Select **Export .irplus**, then import the file into `irplus` on Android.
 

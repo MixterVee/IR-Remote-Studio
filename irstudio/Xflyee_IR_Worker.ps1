@@ -82,18 +82,22 @@ public static class HarmonyNative {
     $model = [Runtime.InteropServices.Marshal]::PtrToStringAnsi($modelPointer)
     $answer.model = $model
     Log-Step "Connected to model: $model"
-    if ($model -notmatch '350') { throw "Connected to '$model', not Harmony 350." }
+    # Harmony 300 and 350 share the same Logitech USB device family.
+    # Other models require separate validation.
+    if ($model -notmatch '(?i)\bHarmony\s*(?:300|350)\b') {
+        throw "Connected to '$model'. This build supports Harmony 300 and Harmony 350."
+    }
 
     if ($Mode -eq 'Capture') {
         $answer.stage = 'learn_from_remote'
         [uint32]$carrier = 0
         [uint32]$count = 0
-        Log-Step 'Starting IR capture (press Xflyee remote now)'
+        Log-Step 'Starting IR capture (press original remote now)'
         $rc = [HarmonyNative]::learn_from_remote([ref]$carrier, [ref]$signalPointer,
                                                  [ref]$count, [HarmonyNative]::Progress,
                                                  [IntPtr]::Zero)
         Log-Step "learn_from_remote returned $rc; carrier=$carrier; values=$count"
-        if ($rc -eq 18) { throw 'IR receive timed out. Try again and press the Xflyee button immediately.' }
+        if ($rc -eq 18) { throw 'IR receive timed out. Try again and press the original remote button immediately.' }
         if ($rc -eq 17) { throw 'IR receive buffer overflow; try a shorter button press.' }
         if ($rc -ne 0) { throw "IR capture returned libconcord error $rc." }
         if ($signalPointer -eq [IntPtr]::Zero -or $count -lt 2 -or $count -gt 10000 -or ($count % 2) -ne 0) {

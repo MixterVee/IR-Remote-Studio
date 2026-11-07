@@ -53,19 +53,19 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.1.1\n\nHarmony 350 capture uses the installed Concordance libconcord DLL through a separate x86 PowerShell process.\n\nCapture reads IR only; it does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.1.2\n\nHarmony 300/350 capture uses the installed Concordance libconcord DLL through a separate x86 PowerShell process.\n\nCapture reads IR only; it does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
         header = ttk.Frame(self, padding=(16, 14, 16, 6))
         header.pack(fill="x")
         ttk.Label(header, text="IR Remote Studio", font=("Segoe UI Semibold", 20)).pack(anchor="w")
-        ttk.Label(header, text="Create devices, label buttons, learn IR with Harmony 350, and export .irplus remotes.",
+        ttk.Label(header, text="Create devices, label buttons, learn IR with Harmony 300/350, and export .irplus remotes.",
                   foreground="#505b69").pack(anchor="w", pady=(2, 0))
 
         toolbar = ttk.Frame(self, padding=(16, 10, 16, 10))
         toolbar.pack(fill="x")
-        self.probe_btn = ttk.Button(toolbar, text="Check Harmony 350", command=self.probe)
+        self.probe_btn = ttk.Button(toolbar, text="Check Harmony 300/350", command=self.probe)
         self.probe_btn.pack(side="left")
         ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=12)
         ttk.Button(toolbar, text="Import JSON capture", command=self.import_capture).pack(side="left", padx=(0, 6))
@@ -341,7 +341,7 @@ class Studio(tk.Tk):
                 self.status_var.set("Harmony check failed. See the error message.")
                 messagebox.showerror("Harmony connection", error)
             else:
-                self.status_var.set(f"Connected: {result.get('model', 'Harmony 350')}. Ready for capture.")
+                self.status_var.set(f"Connected: {result.get('model', 'Harmony remote')}. Ready for capture.")
         self._background("Probe", done)
 
     def capture(self):

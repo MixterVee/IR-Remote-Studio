@@ -1,13 +1,13 @@
-IR Remote Studio v0.1.1 - Windows 11 x64
+IR Remote Studio v0.1.2 - Windows 11 x64
 ========================================
 
 1. Extract the ZIP artifact from GitHub Actions onto your Windows computer.
 2. Keep the official/unofficial Concordance v1.5.0.2 install at:
    C:\Program Files (x86)\Concordance\libconcord-6.dll
-3. Plug the Logitech Harmony 350 into its KNOWN WORKING USB port.
+3. Plug the Logitech Harmony 300/350 into its KNOWN WORKING USB port.
 4. Close Concordance and any other application accessing the Harmony.
 5. Double-click IR-Remote-Studio.exe.
-6. Add a device and a custom-labeled button, then choose Check Harmony 350.
+6. Add a device and a custom-labeled button, then choose Check Harmony 300/350.
 7. Select the button, click Capture, point original IR remote at the
    top of Harmony (5-10 cm) and press the button briefly.
 8. Capture again for confidence, then Export .irplus.
@@ -23,7 +23,7 @@ Your device library is stored in:
   %USERPROFILE%\Documents\IR Remote Studio\library.json
 
 This is an early Windows beta. The capture interface has been tested
-previously with the user's Harmony 350, but this newly packaged application
+previously with the user's Harmony 300/350, but this newly packaged application
 requires user hardware testing. Android application is a later milestone.
 
 Project: https://github.com/MixterVee/IR-Remote-Studio
