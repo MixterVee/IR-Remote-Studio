@@ -208,29 +208,29 @@ public final class UsbHarmonyInspector {
             final UsbDevice harmony = accessibleHarmony;
             Button handshake = new Button(context);
             handshake.setAllCaps(false);
-            handshake.setText("Test MH session continuation");
+            handshake.setText("Read Harmony identity (experimental)");
             body.addView(handshake, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 52)));
             handshake.setOnClickListener(v -> {
                 new AlertDialog.Builder(context)
-                    .setTitle("Harmony 300 USB handshake")
+                    .setTitle("Harmony 300 identity read")
                     .setMessage("This experimental test sends the Harmony 300's "
                         + "documented MH session-initialization packets, then (only if the "
                         + "first response matches our observed pattern) sends the "
-                        + "Concordance session continuation FF 00 02. It does not change stored "
-                        + "remote programming, firmware, or settings, and it "
+                        + "Concordance session continuation FF 00 02 and reads /sys/sysinfo. It does not change stored "
+                        + "remote programming, firmware, or settings; device serial numbers and GUIDs are withheld, and it "
                         + "does not start IR capture. Continue?")
                     .setNegativeButton("Cancel", null)
-                    .setPositiveButton("Run handshake", (d, w) -> {
+                    .setPositiveButton("Read identity", (d, w) -> {
                         handshake.setEnabled(false);
-                        handshake.setText("Testing MH handshake...");
+                        handshake.setText("Reading Harmony identity...");
                         new Thread(() -> {
                             String result = HarmonyMhProbe.run(manager, harmony);
                             context.runOnUiThread(() -> {
                                 if (context.isFinishing() || context.isDestroyed()) return;
                                 dialog.dismiss();
                                 new AlertDialog.Builder(context)
-                                    .setTitle("Harmony MH session result")
+                                    .setTitle("Harmony identity diagnostic")
                                     .setMessage(result)
                                     .setPositiveButton("Close", (d1, w1) -> {})
                                     .setNeutralButton("Copy result", (d1, w1) -> {
