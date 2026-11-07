@@ -4,7 +4,7 @@
 
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for compatible Android phones.
 
-> **Status:** Windows v0.1.7 is an official GitHub beta release. Android v0.1.2-alpha is an experimental import/playback companion with a CI-built debug APK. Android USB learning is not implemented.
+> **Status:** Windows v0.1.7 is an official GitHub beta release. Android v0.1.6-alpha supports verified Harmony USB detection and an experimental MH handshake diagnostic; a CI-built debug APK is available. Android USB learning is not implemented.
 
 ## Download the Windows beta
 
@@ -17,7 +17,7 @@ Python is **not** required to run the one-file Windows executable. Harmony learn
 requires a separate local Concordance `libconcord-6.dll` and Windows 32-bit PowerShell.
 
 
-## Android USB lab (v0.1.2-alpha)
+## Android USB lab (v0.1.6-alpha)
 
 The native Android companion can import and export PRONTO_HEX `.irplus` files,
 display their 12-column button layouts, store multiple remotes locally, and
@@ -27,12 +27,14 @@ work through the public Android `ConsumerIrManager`; the app reports that
 limitation clearly.
 
 1. Open the [successful Android Actions build](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/android.yml).
-2. Download **IR-Remote-Studio-v0.1.2-alpha-Android-debug** under Artifacts.
+2. Download **IR-Remote-Studio-v0.1.6-alpha-Android-debug** under Artifacts.
 3. Extract its ZIP to get `app-debug.apk`. Install the debug APK on a test phone.
 4. Import a known-working `.irplus` device exported from Windows.
 5. Check the layout and test one safe button with the phone pointed at the target.
 
-The v0.1.2-alpha build adds read-only **Harmony USB detection and interface inspection** with USB access permission, as an initial step toward Android learning. USB IR capture itself is not implemented.\n\nThis is an unsigned-for-production, **debug-signed** prototype, not a Play
+The Android build has read-only **Harmony USB detection and HID inspection** plus an opt-in first-stage **Harmony 300 MH protocol handshake**, after physical tests confirmed `046D:C124` and 64-byte HID endpoints. **USB IR capture is not implemented yet.**
+
+This is an unsigned-for-production, **debug-signed** prototype, not a Play
 Store or official stable Android release. See [android/README.md](android/README.md)
 for details. It does not connect to Harmony devices, learn IR via USB, or offer
 full Android layout editing yet.

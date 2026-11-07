@@ -26,9 +26,9 @@ Android SDK 35 installed. AGP 8.13.2 with Gradle 8.13 is used. Or download
 the debug APK from the GitHub Actions **Android prototype APK** workflow.
 
 The APK is debug-signed for testing only. An eventual public release requires
-normal application signing and field testing. The USB lab can **enumerate devices** and request access permission but cannot
-capture IR signals yet. USB-C learning and Harmony protocol commands remain
-future work; Windows is still the learning station.
+normal application signing and field testing. The USB lab enumerates Harmony devices, requests USB permission, inspects HID
+interfaces and offers an experimental first-stage MH handshake. **IR capture is
+not implemented**; Windows is still the learning station.
 
 ## Data, safety and privacy
 
@@ -40,8 +40,12 @@ or are authorized to operate.
 
 The Android app and Windows app both use the same `.irplus` interchange
 format; Android does not yet read Windows library.json files directly.
-\n## Import fix in v0.1.5-alpha\n\nAndroid's XML parser does not support every JAXP configuration option used\nby Java desktop. The initial alpha enabled XML settings that could abort\nbefore reading valid Windows .irplus files. The importer now uses bounded XML\ninput and rejects DTD/entity declarations, while tolerating missing optional\nJAXP features. Failures now show the full reason in a visible dialog.\n\nUpdate by installing the new debug APK over the original; existing local\nremote data remains stored under the same application ID.\n
-## Harmony USB lab — v0.1.5-alpha
+\n## Import fix in v0.1.1-alpha
+
+Android's XML parser does not support every JAXP configuration option used\nby Java desktop. The initial alpha enabled XML settings that could abort\nbefore reading valid Windows .irplus files. The importer now uses bounded XML\ninput and rejects DTD/entity declarations, while tolerating missing optional\nJAXP features. Failures now show the full reason in a visible dialog.
+
+Update by installing the new debug APK over the original; existing local\nremote data remains stored under the same application ID.\n
+## Harmony USB lab — v0.1.2-alpha
 
 This is a **read-only discovery prototype**, not IR capture.
 
@@ -56,8 +60,9 @@ This is a **read-only discovery prototype**, not IR capture.
 
 For Harmony 300/350, expect VID `046D` and PID `C124`, though we must
 confirm this with your hardware. A successful enumeration, permission grant,
-or descriptor read does **not** constitute IR learning. We send **no commands**
-to the remote in this build and never write its settings or firmware.
+or descriptor read does **not** constitute IR learning. The v0.1.2 USB discovery feature sent **no Harmony commands**;
+later builds add separately confirmed protocol diagnostics, without changing
+stored settings or firmware.
 
 The USB diagnostics have no network access. Only the user can choose to copy
 the report to the Android clipboard.
@@ -68,7 +73,7 @@ Harmony USB IR learning on Android and a Concordance-independent Windows
 learning backend are **equal** priorities. Cosmetic editing and new remotes
 are deferred until the hardware experiments are validated.
 
-## USB permission layout fix (v0.1.5-alpha)
+## USB permission layout fix (v0.1.3-alpha)
 
 The detection report now scrolls inside a height-limited panel; **Grant Harmony
 USB access** is always above that panel when Android detects an eligible
@@ -79,7 +84,7 @@ Detect Harmony USB again and check that permission is Granted and opening
 the device for descriptor inspection succeeds. This remains read-only:
 no HID report transmission or IR capture is attempted in this version.
 
-## Read-only HID claim and descriptor test (v0.1.5-alpha)
+## Read-only HID claim and descriptor test (v0.1.4-alpha)
 
 After attaching the Harmony and granting USB permission, **Detect Harmony USB**
 shows **Test HID interface (read-only)** for VID:PID 046D:C124.
