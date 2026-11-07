@@ -18,7 +18,8 @@ import java.util.concurrent.TimeoutException;
  *
  * Sends only the documented MH session-start packets. No IR capture,
  * firmware/flash operations, configuration, resets, or other requests.
- * This test establishes whether Android can exchange the first MH response.
+ * This test exchanges the first MH response, then optionally sends the
+ * documented MH continuation session packet. No /sys/sysinfo read yet.
  */
 public final class HarmonyMhProbe {
     private HarmonyMhProbe() {}
@@ -28,6 +29,9 @@ public final class HarmonyMhProbe {
     };
     private static final byte[] MH_INITIAL_REQUEST = {
             (byte) 0xFF, (byte) 0xFF, 0x01, 0x01, 0x01, 0x66
+    };
+    private static final byte[] MH_CONTINUE = {
+            (byte) 0xFF, 0x00, 0x02
     };
 
     /** Full, non-interpretive trace; protocol acceptance is NOT inferred. */
@@ -101,25 +105,98 @@ public final class HarmonyMhProbe {
         }
     }
 
-    private static void exchangeFinal(UsbDeviceConnection conn, UsbEndpoint in,
-                                      UsbEndpoint out, StringBuilder log)
+    /**
+     * Match only the repeatable, user-observed stage-one response prefix.
+     * This is a conservative gate for a session-only experiment, NOT a
+     * claim that 0x81 denotes success in the protocol specification.
+     */
+    static boolean matchesObservedStageOne(byte[] bytes) {
+        return bytes != null && bytes.length == 64
+                && (bytes[0] & 0xFF) == 0xFF
+                && (bytes[1] & 0xFF) == 0xFF
+                && (bytes[2] & 0xFF) == 0x81
+                && (bytes[3] & 0xFF) == 0x00
+                && (bytes[4] & 0xFF) == 0x81;
+    }
+
+    /** Stage one is unchanged: five sync packets, then 0xFF 0xFF 0x01 ... 0x66. */
+    private static boolean exchangeFinal(UsbDeviceConnection conn, UsbEndpoint in,
+                                         UsbEndpoint out, StringBuilder log)
+            throws TimeoutException {
+        UsbRequest reader = new UsbRequest();
+        UsbRequest writer = new UsbRequest();
+        boolean observed = false;
+        try {
+            if (!reader.initialize(conn, in) || !writer.initialize(conn, out)) {
+                log.append("Could not initialize HID IN/OUT transfers\n");
+                return false;
+            }
+            ByteBuffer response = ByteBuffer.allocateDirect(64);
+            ByteBuffer command = report(MH_INITIAL_REQUEST);
+            // Queue the IN endpoint first so a quick response is not missed.
+            if (!reader.queue(response)) {
+                log.append("Failed to queue interrupt IN request\n");
+                return false;
+            }
+            if (!writer.queue(command)) {
+                log.append("Failed to queue final MH initialization request\n");
+                return false;
+            }
+            boolean writeCompleted = false;
+            boolean readCompleted = false;
+            long deadline = SystemClock.elapsedRealtime() + 4000;
+            while (!writeCompleted || !readCompleted) {
+                long remaining = deadline - SystemClock.elapsedRealtime();
+                if (remaining <= 0) break;
+                UsbRequest completed = conn.requestWait(remaining);
+                if (completed == writer) writeCompleted = true;
+                else if (completed == reader) readCompleted = true;
+            }
+            boolean outComplete = writeCompleted && command.position() == 64;
+            log.append("MH initialization OUT: ")
+                    .append(outComplete ? "64 bytes sent" : "not confirmed").append('\n');
+            if (readCompleted) {
+                int count = response.position();
+                response.flip();
+                byte[] bytes = new byte[count];
+                response.get(bytes);
+                log.append(responseSummary(bytes, count)).append('\n');
+                observed = outComplete && matchesObservedStageOne(bytes);
+                log.append("Session continuation gate (observed response): ")
+                        .append(observed ? "PASS" : "FAIL").append('\n');
+            } else {
+                log.append("MH initial reply IN: none within 4 seconds\n");
+            }
+        } finally {
+            reader.cancel();
+            writer.cancel();
+            reader.close();
+            writer.close();
+        }
+        return observed;
+    }
+
+    /** Stage two mirrors Concordance's next MH session step (FF 00 02).
+     *  No IR-learning, /sys/sysinfo, configuration, reset, or firmware commands.
+     */
+    private static void exchangeContinuation(UsbDeviceConnection conn, UsbEndpoint in,
+                                             UsbEndpoint out, StringBuilder log)
             throws TimeoutException {
         UsbRequest reader = new UsbRequest();
         UsbRequest writer = new UsbRequest();
         try {
             if (!reader.initialize(conn, in) || !writer.initialize(conn, out)) {
-                log.append("Could not initialize HID IN/OUT transfers").append('\n');
+                log.append("MH continuation: could not initialize USB transfers\n");
                 return;
             }
             ByteBuffer response = ByteBuffer.allocateDirect(64);
-            ByteBuffer command = report(MH_INITIAL_REQUEST);
-            // Queue IN first so a quick acknowledgement cannot be missed.
+            ByteBuffer command = report(MH_CONTINUE);
             if (!reader.queue(response)) {
-                log.append("Failed to queue interrupt IN request").append('\n');
+                log.append("MH continuation: could not queue IN\n");
                 return;
             }
             if (!writer.queue(command)) {
-                log.append("Failed to queue final MH initialization request").append('\n');
+                log.append("MH continuation: could not queue OUT\n");
                 return;
             }
             boolean writeCompleted = false;
@@ -132,7 +209,8 @@ public final class HarmonyMhProbe {
                 if (completed == writer) writeCompleted = true;
                 else if (completed == reader) readCompleted = true;
             }
-            log.append("MH initialization OUT: ")
+            log.append("MH continuation packet: FF 00 02 (zero-padded)\n");
+            log.append("MH continuation OUT: ")
                     .append(writeCompleted && command.position() == 64
                             ? "64 bytes sent" : "not confirmed").append('\n');
             if (readCompleted) {
@@ -140,10 +218,12 @@ public final class HarmonyMhProbe {
                 response.flip();
                 byte[] bytes = new byte[count];
                 response.get(bytes);
+                log.append("MH continuation reply:\n");
                 log.append(responseSummary(bytes, count)).append('\n');
             } else {
-                log.append("MH acknowledgement IN: none within 4 seconds").append('\n');
+                log.append("MH continuation IN: none within 4 seconds\n");
             }
+            log.append("No identity file read or IR capture attempted.\n");
         } finally {
             reader.cancel();
             writer.cancel();
@@ -154,7 +234,7 @@ public final class HarmonyMhProbe {
 
     public static String run(UsbManager manager, UsbDevice device) {
         StringBuilder log = new StringBuilder();
-        log.append("IR Remote Studio — Harmony 300 MH handshake").append('\n')
+        log.append("IR Remote Studio — Harmony 300 MH session continuation").append('\n')
                 .append("Only session initialization; no permanent device changes")
                 .append('\n').append('\n');
         if (manager == null || device == null ||
@@ -211,7 +291,11 @@ public final class HarmonyMhProbe {
                 }
             }
             log.append("MH sync: five 64-byte OUT reports completed").append('\n');
-            exchangeFinal(conn, in, out, log);
+            if (exchangeFinal(conn, in, out, log)) {
+                exchangeContinuation(conn, in, out, log);
+            } else {
+                log.append("MH continuation skipped: stage-one response not confirmed\n");
+            }
         } catch (TimeoutException error) {
             log.append("MH IN/OUT acknowledgement timed out").append('\n');
         } catch (SecurityException error) {
