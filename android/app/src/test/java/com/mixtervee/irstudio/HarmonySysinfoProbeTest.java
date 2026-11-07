@@ -10,7 +10,7 @@ public class HarmonySysinfoProbeTest {
         assertEquals(64, cmd.length);
         assertEquals(0xFF, cmd[0] & 0xFF);
         assertEquals(0x01, cmd[1] & 0xFF);
-        assertEquals(0x03, cmd[2] & 0xFF);
+        assertEquals(0x00, cmd[2] & 0xFF);
         assertEquals(0x02, cmd[3] & 0xFF);
         assertEquals(0x80, cmd[4] & 0xFF);
         assertEquals('R', cmd[19]);
@@ -27,7 +27,27 @@ public class HarmonySysinfoProbeTest {
         assertEquals(562, HarmonySysinfoProbe.declaredLength(header));
         header[9] = 0x04;
         assertEquals(-1, HarmonySysinfoProbe.declaredLength(header)); // >1000
-        assertEquals(-1, HarmonySysinfoProbe.declaredLength(new byte[63]));
+        assertEquals(-1, HarmonySysinfoProbe.declaredLength(new byte[10]));
+        byte[] shortHeader = new byte[11];
+        shortHeader[10] = 0x19;
+        assertEquals(25, HarmonySysinfoProbe.declaredLength(shortHeader));
+    }
+
+    @Test public void usesConcordanceReadAckAndCloseSequence() {
+        byte[] ack = HarmonySysinfoProbe.ackRequest(289, (byte) 0x7D);
+        assertArrayEquals(new byte[]{
+                (byte)0xFF, 0x04, 0x01, 0x02, 0x01,
+                (byte)0x7D, 0x01, 0x06
+        }, ack);
+        byte[] close = HarmonySysinfoProbe.closeRequest((byte) 0x7D);
+        assertArrayEquals(new byte[]{
+                (byte)0xFF, 0x07, 0x02, 0x01, 0x01, (byte)0x7D
+        }, close);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void disallowsExcessiveAckFileSizes() {
+        HarmonySysinfoProbe.ackRequest(1001, (byte) 0x01);
     }
 
     @Test public void redactsDeviceIdentifiersAndUnknownKeys() {
