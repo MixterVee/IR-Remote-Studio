@@ -108,7 +108,7 @@ public final class IrplusCodec {
         if (text.indexOf('\u0000') >= 0) {
             throw new IllegalArgumentException("Only UTF-8 .irplus files are currently supported.");
         }
-        if (text.matches("(?is).*<!\\\\s*(DOCTYPE|ENTITY)\\\\b.*")) {
+        if (text.matches("(?is).*<!\\s*(DOCTYPE|ENTITY)\\b.*")) {
             throw new IllegalArgumentException("XML files with DTD or entity declarations are not allowed.");
         }
         DocumentBuilderFactory factory = DocumentBuilderFactory.newInstance();
