@@ -4,17 +4,18 @@
 
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for your Android phone.
 
-> **Status:** Windows v0.1.7 beta source and Windows build workflow. The actual Windows executable is built by GitHub Actions and is an **artifact**, not yet a GitHub Release. Direct Android learning and the Android app are future work.
+> **Status:** Windows v0.1.7 public beta. Download the official versioned Windows ZIP from GitHub Releases. Direct Android learning and the Android app are future work.
 
-## Download Windows beta
+## Download the Windows beta
 
-1. Open [Actions → Windows executable](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
-2. Open the latest successful workflow run.
-3. Under **Artifacts**, download **IR-Remote-Studio-v0.1.7-Windows-x64**.
-4. Extract the ZIP and run `IR-Remote-Studio.exe` on Windows 11 x64.
-5. Read `WINDOWS-SETUP.txt` for the Harmony prerequisites.
+1. Open **[GitHub Releases](https://github.com/MixterVee/IR-Remote-Studio/releases)**.
+2. Select **v0.1.7** and download **IR-Remote-Studio-v0.1.7-Windows-x64.zip** under Assets.
+3. Extract the ZIP and run `IR-Remote-Studio.exe` on Windows 11 x64.
+4. Read the included `WINDOWS-SETUP.txt` to install compatible Concordance separately.
 
-The one-file `.exe` includes the Python UI and capture worker. Python is **not** required on the target PC. The Harmony capture integration **does require** an existing compatible Concordance `libconcord-6.dll` installation and 32-bit Windows PowerShell, both used by the earlier successful prototype.
+Python is **not** required to run the one-file Windows executable. Harmony learning
+requires a separate local Concordance `libconcord-6.dll` and Windows 32-bit PowerShell.
+
 
 ## Features in Windows v0.1
 
@@ -67,7 +68,7 @@ The project does not ship Logitech firmware or Concordance DLLs. The existing in
 
 ## Licensing
 
-License decision pending. Code is publicly readable, but reuse permission has not been granted by a LICENSE file yet.
+IR Remote Studio's original source code and included generated artwork are published under the **MIT License** (see [LICENSE](LICENSE)). Its optional external Harmony learning dependency, **Concordance/libconcord**, is a separate GPLv2 project; its binaries are **not** included. See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## Harmony IR-learning compatibility
 
@@ -107,9 +108,9 @@ does not rewrite its configuration or firmware.
 
 **Hardware verified in field testing:** Harmony 300 and Harmony 350 both completed USB connection, IR learning, .irplus export and playback from a compatible phone. Other documented-compatible models are not individually hardware verified.
 
-**Planned, not yet delivered:** Android app, additional protocol decoders, multi-button drag/drop layout, a formal tagged release, and license selection.
+**Planned, not yet delivered:** Android app, additional protocol decoders, and multi-button drag/drop layout.
 
-## Windows v0.1.7 — irplus layout fix
+## Windows v0.1.5 — irplus layout fix
 
 The Windows preview and exported .irplus file now use the same 12-column row wrapping.
 When a button cannot fit in a partially filled row, the exporter inserts an
@@ -118,7 +119,7 @@ It also fills the last partial row. This fixes the phone clipping / horizontal
 row overflow observed with a 6-column button followed by a 12-column button.
 Re-export and re-import the file to see the fix; existing captures are unchanged.
 
-## Windows v0.1.7 — phone-style layout editor and capture visibility
+## Windows v0.1.6 — phone-style layout editor and capture visibility
 
 - **Phone Preview** (default): a scrollable portrait phone mockup with a remote title,
   dark/light themes, screen-size choices, text-size choices, and selection highlighting.
@@ -147,4 +148,4 @@ is a visualization, not a phone emulator or IR transmitter.
   runs and packaged builds load the same image. A failed icon load does not prevent
   IR Remote Studio from starting.
 - This is a **branding-only beta** with no changes to Harmony capture, exported
-  signals, or the library file format. A formal GitHub Release is still planned.
+  signals, or the library file format. The first GitHub Release is v0.1.7 (public beta).

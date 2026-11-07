@@ -51,3 +51,10 @@ may differ. Capture status reports Verified only for 2+ matching samples.
 
 Branding in v0.1.7: the approved remote-and-brush logo is bundled with the
 application and used as its window, taskbar and executable icon.
+
+OFFICIAL DOWNLOAD
+=================
+The versioned beta ZIP is available under GitHub Releases:
+https://github.com/MixterVee/IR-Remote-Studio/releases/tag/v0.1.7
+The separate Concordance native DLL is not redistributed by this project.
+See THIRD_PARTY_NOTICES.md for dependency licensing.
