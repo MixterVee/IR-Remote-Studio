@@ -30,6 +30,6 @@ jobs:
       - name: Upload Android test APK
         uses: actions/upload-artifact@v4
         with:
-          name: IR-Remote-Studio-v0.1.1-alpha-Android-debug
+          name: IR-Remote-Studio-v0.1.2-alpha-Android-debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 60

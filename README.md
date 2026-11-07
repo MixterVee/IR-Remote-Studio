@@ -4,7 +4,7 @@
 
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for compatible Android phones.
 
-> **Status:** Windows v0.1.7 is an official GitHub beta release. Android v0.1.0-alpha is an experimental import/playback companion with a CI-built debug APK. Android USB learning is not implemented.
+> **Status:** Windows v0.1.7 is an official GitHub beta release. Android v0.1.2-alpha is an experimental import/playback companion with a CI-built debug APK. Android USB learning is not implemented.
 
 ## Download the Windows beta
 
@@ -17,7 +17,7 @@ Python is **not** required to run the one-file Windows executable. Harmony learn
 requires a separate local Concordance `libconcord-6.dll` and Windows 32-bit PowerShell.
 
 
-## Android test build (v0.1.0-alpha)
+## Android USB lab (v0.1.2-alpha)
 
 The native Android companion can import and export PRONTO_HEX `.irplus` files,
 display their 12-column button layouts, store multiple remotes locally, and
@@ -26,13 +26,13 @@ Some hardware IR blasters are hidden behind manufacturer APIs and will not
 work through the public Android `ConsumerIrManager`; the app reports that
 limitation clearly.
 
-1. Open the [successful Android Actions build](https://github.com/MixterVee/IR-Remote-Studio/actions/runs/42337297781).
-2. Download **IR-Remote-Studio-v0.1.0-alpha-Android-debug** under Artifacts.
+1. Open the [successful Android Actions build](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/android.yml).
+2. Download **IR-Remote-Studio-v0.1.2-alpha-Android-debug** under Artifacts.
 3. Extract its ZIP to get `app-debug.apk`. Install the debug APK on a test phone.
 4. Import a known-working `.irplus` device exported from Windows.
 5. Check the layout and test one safe button with the phone pointed at the target.
 
-This is an unsigned-for-production, **debug-signed** prototype, not a Play
+The v0.1.2-alpha build adds read-only **Harmony USB detection and interface inspection** with USB access permission, as an initial step toward Android learning. USB IR capture itself is not implemented.\n\nThis is an unsigned-for-production, **debug-signed** prototype, not a Play
 Store or official stable Android release. See [android/README.md](android/README.md)
 for details. It does not connect to Harmony devices, learn IR via USB, or offer
 full Android layout editing yet.
@@ -169,3 +169,10 @@ is a visualization, not a phone emulator or IR transmitter.
   IR Remote Studio from starting.
 - This is a **branding-only beta** with no changes to Harmony capture, exported
   signals, or the library file format. The first GitHub Release is v0.1.7 (public beta).
+
+## Current development priorities
+
+Android Harmony 300/350 **USB IR learning** and an independent **Windows
+standalone learning backend** are equal priorities. The Android USB detector
+is an experimental read-only diagnostic; it is not yet a learning feature.
+See [the engineering milestones](docs/ENGINEERING_PRIORITIES.md).

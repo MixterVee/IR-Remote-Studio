@@ -3,6 +3,7 @@
     <uses-permission android:name="android.permission.TRANSMIT_IR"/>
     <!-- Keep the app installable on phones without IR, for import and editing. -->
     <uses-feature android:name="android.hardware.consumerir" android:required="false"/>
+    <uses-feature android:name="android.hardware.usb.host" android:required="false"/>
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
@@ -10,6 +11,9 @@
         android:roundIcon="@drawable/ir_remote_studio"
         android:theme="@style/IRStudioTheme"
         android:supportsRtl="true">
+        <receiver
+            android:name=".UsbAccessReceiver"
+            android:exported="false"/>
         <activity
             android:name=".MainActivity"
             android:exported="true">

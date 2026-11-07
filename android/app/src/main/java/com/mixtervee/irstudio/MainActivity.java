@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
         titles.setPadding(dp(10), 0, 0, 0);
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.addView(text("IR Remote Studio", 22, WHITE, true));
-        titles.addView(text("Android test build · v0.1.1-alpha", 12, MUTED, false));
+        titles.addView(text("Android USB lab · v0.1.2-alpha", 12, MUTED, false));
         header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
 
@@ -123,6 +123,14 @@ public class MainActivity extends Activity {
         exportParams.setMargins(dp(8), 0, 0, 0);
         actions.addView(exportButton, exportParams);
         root.addView(actions);
+
+        // Read-only USB inspection is a prerequisite for future Harmony learning.
+        Button usbButton = actionButton("Detect Harmony USB (experimental)");
+        usbButton.setOnClickListener(v -> UsbHarmonyInspector.show(this));
+        LinearLayout.LayoutParams usbParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        usbParams.setMargins(0, 0, 0, dp(9));
+        root.addView(usbButton, usbParams);
 
         deviceSpinner = new Spinner(this);
         deviceSpinner.setBackground(background(SURFACE, 8));
