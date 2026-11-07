@@ -13,6 +13,7 @@ from tkinter import filedialog, font as tkfont, messagebox, simpledialog, ttk
 from irstudio import __version__
 from irstudio import core
 from irstudio.harmony import invoke_harmony
+from irstudio.layout_preview import LayoutDialog
 
 
 class Studio(tk.Tk):
@@ -31,6 +32,7 @@ class Studio(tk.Tk):
         self.aim_var = tk.StringVar(value="Aim the original remote at the Harmony learning receiver, about 5-10 cm away.")
         self.status_var = tk.StringVar(value=f"Library: {self.library_path}")
         self.repeat_var = tk.StringVar(value="0")
+        self.progress_var = tk.StringVar(value="No buttons yet")
         self._make_ui()
         self._reload_devices()
         self.protocol("WM_DELETE_WINDOW", self._close)
@@ -44,10 +46,10 @@ class Studio(tk.Tk):
         tkfont.nametofont("TkDefaultFont").configure(family="Segoe UI", size=10)
         menu = tk.Menu(self)
         file_menu = tk.Menu(menu, tearoff=0)
-        file_menu.add_command(label="Import capture JSON...", command=self.import_capture)
-        file_menu.add_command(label="Import .irplus remote...", command=self.import_irplus)
+        file_menu.add_command(label="Import IR Capture (.json)...", command=self.import_capture)
+        file_menu.add_command(label="Import Device (.irplus)...", command=self.import_irplus)
         file_menu.add_separator()
-        file_menu.add_command(label="Export current device as .irplus...", command=self.export_irplus)
+        file_menu.add_command(label="Export Device (.irplus)...", command=self.export_irplus)
         file_menu.add_command(label="Back up library JSON...", command=self.backup_library)
         file_menu.add_command(label="Restore library backup...", command=self.restore_library)
         file_menu.add_separator()
@@ -56,7 +58,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.1.5\n\nCompatible Harmony remotes use the installed Concordance libconcord DLL through a separate x86 PowerShell process.\n\nCapture reads IR only; it does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.1.6\n\nCompatible Harmony remotes use the installed Concordance libconcord DLL through a separate x86 PowerShell process.\n\nCapture reads IR only; it does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -71,9 +73,9 @@ class Studio(tk.Tk):
         self.probe_btn = ttk.Button(toolbar, text="Check Harmony IR learner", command=self.probe)
         self.probe_btn.pack(side="left")
         ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=12)
-        ttk.Button(toolbar, text="Import capture (.json)", command=self.import_capture).pack(side="left", padx=(0, 6))
-        ttk.Button(toolbar, text="Import remote (.irplus)", command=self.import_irplus).pack(side="left")
-        ttk.Button(toolbar, text="Export remote (.irplus)", command=self.export_irplus).pack(side="right")
+        ttk.Button(toolbar, text="Import IR Capture (.json)", command=self.import_capture).pack(side="left", padx=(0, 6))
+        ttk.Button(toolbar, text="Import Device (.irplus)", command=self.import_irplus).pack(side="left")
+        ttk.Button(toolbar, text="Export Device (.irplus)", command=self.export_irplus).pack(side="right")
         ttk.Label(toolbar, text="NEC repeat frames:").pack(side="right", padx=(15, 6))
         ttk.Combobox(toolbar, textvariable=self.repeat_var, values=("0", "1", "2"),
                      width=4, state="readonly").pack(side="right")
@@ -104,16 +106,23 @@ class Studio(tk.Tk):
         ttk.Button(dl, text="Delete", command=self.delete_device).pack(side="left", expand=True, fill="x")
 
         ttk.Label(middle, text="Buttons", font=("Segoe UI Semibold", 13)).pack(anchor="w", pady=(0, 8))
-        self.button_tree = ttk.Treeview(middle, columns=("count", "code"), show="headings", selectmode="browse")
-        self.button_tree.heading("#0", text="")
-        self.button_tree["columns"] = ("label", "count", "code")
-        self.button_tree.heading("label", text="Custom label")
-        self.button_tree.heading("count", text="Captures")
-        self.button_tree.heading("code", text="Decoded code")
-        self.button_tree.column("label", width=150, minwidth=80)
-        self.button_tree.column("count", width=80, minwidth=60, anchor="center")
-        self.button_tree.column("code", width=140, minwidth=100)
+        self.button_tree = ttk.Treeview(middle, columns=("label", "status", "count", "code"),
+                                         show="headings", selectmode="browse")
+        for key, caption, width, minimum in (
+            ("label", "Custom label", 130, 70),
+            ("status", "Capture status", 102, 85),
+            ("count", "Samples", 61, 52),
+            ("code", "Decoded code", 120, 80),
+        ):
+            self.button_tree.heading(key, text=caption)
+            self.button_tree.column(key, width=width, minwidth=minimum,
+                                    anchor="center" if key in ("count", "status") else "w")
+        self.button_tree.tag_configure("Verified", foreground="#16723d")
+        self.button_tree.tag_configure("Mismatch", foreground="#b24b22")
+        self.button_tree.tag_configure("Not learned", foreground="#7a8490")
         self.button_tree.pack(fill="both", expand=True)
+        ttk.Label(middle, textvariable=self.progress_var,
+                  foreground="#536277").pack(anchor="w", pady=(5, 0))
         self.button_tree.bind("<<TreeviewSelect>>", self._select_button)
         button_actions = ttk.Frame(middle)
         button_actions.pack(fill="x", pady=(10, 0))
@@ -201,13 +210,25 @@ class Studio(tk.Tk):
                 cap = core.selected_capture(b)
                 decoded = core.decode_nec(cap["timings_us"]) if cap else None
                 code = decoded["bytes"] if decoded else ("Pronto" if b.get("pronto_hex") else "Not learned")
+                state = core.capture_status(b)
                 self.button_tree.insert("", "end", iid=b["id"],
-                                        values=(b["label"], f"{match}/{total}" if total else "-", code))
+                                        values=(b["label"], state,
+                                                f"{match}/{total}" if total else "-", code),
+                                        tags=(state,))
             ids = [b["id"] for b in device["buttons"]]
             if keep not in ids:
                 keep = ids[0] if ids else None
+            states = [core.capture_status(b) for b in device["buttons"]]
+            learned = sum(state != "Not learned" for state in states)
+            verified = states.count("Verified")
+            conflicts = states.count("Mismatch")
+            self.progress_var.set(
+                f"{learned} / {len(states)} with IR codes  |  "
+                f"{verified} verified  |  {conflicts} mismatches"
+            )
         else:
             keep = None
+            self.progress_var.set("No device selected")
         self.active_button = keep
         if keep:
             self.button_tree.selection_set(keep)
@@ -226,7 +247,8 @@ class Studio(tk.Tk):
         if button:
             cap = core.selected_capture(button)
             match, count = core.match_count(button)
-            lines = [f"DEVICE: {device['name']}", f"BUTTON: {button['label']}", ""]
+            lines = [f"DEVICE: {device['name']}", f"BUTTON: {button['label']}",
+                     f"STATUS: {core.capture_status(button)}", ""]
             if cap:
                 decoded = core.decode_nec(cap["timings_us"])
                 lines += [f"Carrier: {cap['carrier_hz']:,} Hz", f"Timings: {len(cap['timings_us'])}",
@@ -332,91 +354,18 @@ class Studio(tk.Tk):
             self._reload_buttons(b["id"])
 
     def edit_layout(self):
-        """Edit the widths of buttons in a 12-column irplus grid."""
         device = self._selected_device()
         if not device:
             return messagebox.showwarning("Layout", "Select a device first.")
         if not device["buttons"]:
             return messagebox.showwarning("Layout", "Add buttons to the device first.")
-        modal = tk.Toplevel(self)
-        modal.title("Remote layout - " + device["name"])
-        modal.geometry("740x540")
-        modal.minsize(590, 420)
-        modal.transient(self)
-        working = {button["id"]: core.button_span(button) for button in device["buttons"]}
-        box = ttk.Frame(modal, padding=14)
-        box.pack(fill="both", expand=True)
-        ttk.Label(box, text="Button sizes in the 12-column .irplus grid",
-                  font=("Segoe UI Semibold", 12)).pack(anchor="w")
-        ttk.Label(box, text="Select a button, choose its width, and update the preview. Button order follows the main list.").pack(anchor="w", pady=(3, 10))
-        chooser = ttk.Frame(box)
-        chooser.pack(fill="x")
-        tree = ttk.Treeview(chooser, columns=("label", "span"), show="headings", height=7)
-        tree.heading("label", text="Button")
-        tree.heading("span", text="Width / 12")
-        tree.column("label", width=300)
-        tree.column("span", width=110, anchor="center")
-        tree.pack(side="left", fill="both", expand=True)
-        rowbar = ttk.Frame(chooser, padding=(12, 0))
-        rowbar.pack(side="right", fill="y")
-        ttk.Label(rowbar, text="Width (columns)").pack(anchor="w")
-        selected_span = tk.StringVar(value="6")
-        span_picker = ttk.Combobox(rowbar, textvariable=selected_span, state="readonly",
-                                   values=("2", "3", "4", "6", "12"), width=10)
-        span_picker.pack(fill="x", pady=(5, 9))
-        preview_outer = ttk.LabelFrame(box, text="Preview", padding=8)
-        preview_outer.pack(fill="both", expand=True, pady=(12, 8))
-        preview = ttk.Frame(preview_outer)
-        preview.pack(fill="x", expand=False)
-        for button in device["buttons"]:
-            tree.insert("", "end", iid=button["id"], values=(button["label"], working[button["id"]]))
-        def select_button(_event=None):
-            ids = tree.selection()
-            if ids:
-                selected_span.set(str(working[ids[0]]))
-        tree.bind("<<TreeviewSelect>>", select_button)
-        def redraw():
-            for widget in preview.winfo_children():
-                widget.destroy()
-            for col in range(12):
-                preview.columnconfigure(col, weight=1, uniform="buttoncol")
-            row, col = 0, 0
-            for button in device["buttons"]:
-                span = working[button["id"]]
-                if col + span > 12:
-                    row += 1
-                    col = 0
-                ttk.Label(preview, text=button["label"], anchor="center", relief="ridge",
-                          padding=7).grid(row=row, column=col, columnspan=span, sticky="ew",
-                                          padx=2, pady=2)
-                col += span
-                if col == 12:
-                    row += 1
-                    col = 0
-        def update_span():
-            ids = tree.selection()
-            if not ids:
-                return messagebox.showinfo("Layout", "Select a button in the list.", parent=modal)
-            width = int(selected_span.get())
-            working[ids[0]] = width
-            tree.item(ids[0], values=(tree.item(ids[0], "values")[0], width))
-            redraw()
-        ttk.Button(rowbar, text="Apply width", command=update_span).pack(fill="x")
-        redraw()
-        def save_changes():
-            for button in device["buttons"]:
-                button["span"] = working[button["id"]]
+
+        def after_save():
             self._save()
             self._reload_buttons(self.active_button)
             self.status_var.set(f"Saved remote layout: {device['name']}")
-            modal.destroy()
-        actions = ttk.Frame(box)
-        actions.pack(fill="x")
-        ttk.Button(actions, text="Save layout", command=save_changes).pack(side="right")
-        ttk.Button(actions, text="Cancel", command=modal.destroy).pack(side="right", padx=8)
-        first = device["buttons"][0]["id"]
-        tree.selection_set(first)
-        select_button()
+
+        LayoutDialog(self, device, after_save)
 
     def browse_samples(self):
         """Inspect a button's raw captures and select the sample to export."""
@@ -604,7 +553,7 @@ class Studio(tk.Tk):
             self._reload_buttons(b["id"])
 
     def import_capture(self):
-        path = filedialog.askopenfilename(title="Import captured IR JSON", filetypes=[("IR capture", "*.json")])
+        path = filedialog.askopenfilename(title="Import IR Capture (.json)", filetypes=[("IR Capture (*.json)", "*.json")])
         if not path:
             return
         try:
@@ -630,7 +579,7 @@ class Studio(tk.Tk):
             messagebox.showerror("Import failed", str(exc))
 
     def import_irplus(self):
-        path = filedialog.askopenfilename(title="Import .irplus", filetypes=[("irplus remote", "*.irplus"), ("XML", "*.xml")])
+        path = filedialog.askopenfilename(title="Import Device (.irplus)", filetypes=[("IR Device (*.irplus)", "*.irplus"), ("XML", "*.xml")])
         if not path:
             return
         try:
@@ -646,14 +595,20 @@ class Studio(tk.Tk):
         device = self._selected_device()
         if not device:
             return messagebox.showwarning("Select a device", "Select a device to export")
-        path = filedialog.asksaveasfilename(title="Save irplus remote", defaultextension=".irplus",
+        path = filedialog.asksaveasfilename(title="Export Device (.irplus)", defaultextension=".irplus",
             initialfile=f"{device['name'].replace('/', '-')}.irplus", filetypes=[("irplus remote", "*.irplus")])
         if not path:
             return
         try:
             count = core.export_irplus(device, Path(path), int(self.repeat_var.get()))
-            self.status_var.set(f"Exported {count} buttons to {path}")
-            messagebox.showinfo("Export complete", f"Exported {count} buttons.\n\n{path}\n\nImport this file in irplus on a compatible phone.")
+            skipped = len(device["buttons"]) - count
+            self.status_var.set(f"Exported {device['name']}: {count} button(s) to {path}")
+            messagebox.showinfo("Device exported",
+                f"Device: {device['name']}\n"
+                f"Buttons exported: {count}\n"
+                f"Unlearned buttons skipped: {skipped}\n\n"
+                f"Saved to:\n{path}\n\n"
+                "Import this .irplus file on a compatible phone.")
         except Exception as exc:
             messagebox.showerror("Export failed", str(exc))
 

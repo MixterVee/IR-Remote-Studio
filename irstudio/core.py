@@ -280,35 +280,65 @@ def pronto_for_button(button: dict, repeats: int = 0) -> str:
     raise ValueError(f"'{button.get('label', '?')}' has no captured command")
 
 
+def layout_rows(device: dict) -> list[list[dict]]:
+    """Exportable button rows; the single source of truth for preview and .irplus.
+
+    Unlearned buttons are intentionally omitted from the exported layout.
+    """
+    rows: list[list[dict]] = []
+    row: list[dict] = []
+    occupied = 0
+    for button in device.get("buttons", []):
+        if not button.get("captures") and not button.get("pronto_hex"):
+            continue
+        width = button_span(button)
+        if occupied + width > 12:
+            rows.append(row)
+            row = []
+            occupied = 0
+        row.append(button)
+        occupied += width
+        if occupied == 12:
+            rows.append(row)
+            row = []
+            occupied = 0
+    if row:
+        rows.append(row)
+    return rows
+
+
+def capture_status(button: dict) -> str:
+    """Distinguish capture confidence from successful playback validation."""
+    caps = button.get("captures", [])
+    if not caps:
+        return "Imported" if button.get("pronto_hex") else "Not learned"
+    if len(caps) < 2:
+        return "Captured once"
+    matches, total = match_count(button)
+    return "Verified" if matches == total else "Mismatch"
+
+
 def export_irplus(device: dict, path: Path, repeats: int = 0) -> int:
     root = ET.Element("irplus")
     el = ET.SubElement(root, "device", {
         "manufacturer": device.get("manufacturer") or device["name"],
         "model": device.get("model") or device["name"],
         "columns": "12", "format": "PRONTO_HEX"})
-    exported = 0
-    occupied = 0
-    columns = 12
-    for button in device.get("buttons", []):
-        if not button.get("captures") and not button.get("pronto_hex"):
-            continue
-        code = pronto_for_button(button, repeats)
-        span = button_span(button)
-        # irplus uses <space multiple="N" /> to fill a short row before
-        # placing a button that cannot fit. Otherwise spans [6, 12] can
-        # overflow on Android instead of wrapping as shown in the preview.
-        if occupied + span > columns:
-            ET.SubElement(el, "space", {"multiple": str(columns - occupied)})
-            occupied = 0
-        ET.SubElement(el, "button", {"label": button["label"], "span": str(span)}).text = code
-        exported += 1
-        occupied += span
-        if occupied == columns:
-            occupied = 0
-    if not exported:
+    rows = layout_rows(device)
+    if not rows:
         raise ValueError("No buttons with IR commands to export")
-    if occupied:
-        ET.SubElement(el, "space", {"multiple": str(columns - occupied)})
+    exported = 0
+    for row in rows:
+        occupied = 0
+        for button in row:
+            code = pronto_for_button(button, repeats)
+            width = button_span(button)
+            ET.SubElement(el, "button", {"label": button["label"], "span": str(width)}).text = code
+            occupied += width
+            exported += 1
+        # The irplus Android renderer needs this spacer to end an incomplete row.
+        if occupied < 12:
+            ET.SubElement(el, "space", {"multiple": str(12 - occupied)})
     ET.indent(root, space="  ")
     path.parent.mkdir(parents=True, exist_ok=True)
     ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)

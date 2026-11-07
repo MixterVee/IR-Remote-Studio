@@ -1,0 +1,295 @@
+"""IR Remote Studio phone-like and grid layout editor (preview-only, no IR transmission).
+
+Both modes consume core.layout_rows(), the same row planner used by irplus export.
+The simulated app chrome is illustrative: Android irplus may render differently.
+"""
+from __future__ import annotations
+
+import tkinter as tk
+from tkinter import font as tkfont, messagebox, ttk
+
+from irstudio import core
+
+SCREEN_SIZES = {"Small": 250, "Normal": 305, "Large": 365}
+TEXT_SIZES = {"Small": 9, "Normal": 11, "Large": 13}
+
+
+class LayoutDialog(tk.Toplevel):
+    """Edit 12-column button widths and preview them within a mock phone."""
+
+    def __init__(self, master, device: dict, on_save):
+        super().__init__(master)
+        self.device = device
+        self.on_save = on_save
+        self.working = {button["id"]: core.button_span(button)
+                        for button in device["buttons"]}
+        self.mode = tk.StringVar(master=self, value="Phone")
+        self.screen_size = tk.StringVar(master=self, value="Normal")
+        self.theme = tk.StringVar(master=self, value="Dark")
+        self.text_size = tk.StringVar(master=self, value="Normal")
+        self.chosen_span = tk.StringVar(master=self, value="6")
+        self.preview_info = tk.StringVar(master=self, value="")
+        self.title("Remote layout - " + device["name"])
+        self.geometry("930x690")
+        self.minsize(760, 540)
+        self.transient(master)
+        self.button_font = tkfont.Font(root=self, family="Segoe UI", size=11, weight="bold")
+        self._make_ui()
+        self._render()
+
+    def _make_ui(self):
+        outer = ttk.Frame(self, padding=14)
+        outer.pack(fill="both", expand=True)
+        ttk.Label(outer, text="Remote layout editor",
+                  font=("Segoe UI", 15, "bold")).pack(anchor="w")
+        ttk.Label(outer, text="Set button widths and preview the exported .irplus layout. Only buttons with IR codes appear in the preview.",
+                  wraplength=800).pack(anchor="w", pady=(3, 10))
+        body = ttk.PanedWindow(outer, orient="horizontal")
+        body.pack(fill="both", expand=True)
+
+        left = ttk.Frame(body, padding=(0, 0, 10, 0))
+        right = ttk.Frame(body, padding=(10, 0, 0, 0))
+        body.add(left, weight=2)
+        body.add(right, weight=3)
+
+        ttk.Label(left, text="Buttons", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        self.tree = ttk.Treeview(left, columns=("label", "width", "state"),
+                                 show="headings", height=14, selectmode="browse")
+        for key, heading, width in (
+            ("label", "Label", 140), ("width", "Width / 12", 78),
+            ("state", "IR status", 105),
+        ):
+            self.tree.heading(key, text=heading)
+            self.tree.column(key, width=width, minwidth=60)
+        self.tree.pack(fill="both", expand=True, pady=(5, 8))
+        for b in self.device["buttons"]:
+            self.tree.insert("", "end", iid=b["id"],
+                             values=(b["label"], self.working[b["id"]],
+                                     core.capture_status(b)))
+        self.tree.bind("<<TreeviewSelect>>", self._select)
+
+        width_bar = ttk.Frame(left)
+        width_bar.pack(fill="x")
+        ttk.Label(width_bar, text="Selected width").pack(side="left")
+        self.width_combo = ttk.Combobox(width_bar, textvariable=self.chosen_span,
+                                         values=("2", "3", "4", "6", "12"),
+                                         width=5, state="readonly")
+        self.width_combo.pack(side="left", padx=(10, 5))
+        ttk.Button(width_bar, text="Apply width",
+                   command=self._apply_width).pack(side="left")
+        ttk.Label(left, text="Use Move up / Move down in the main window to reorder buttons.",
+                  wraplength=290, foreground="#586579").pack(anchor="w", pady=(8, 0))
+
+        ttk.Label(right, text="Preview", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        toolbar = ttk.Frame(right)
+        toolbar.pack(fill="x", pady=(5, 7))
+        for label, var, options, width in (
+            ("Mode", self.mode, ("Phone", "Grid"), 7),
+            ("Size", self.screen_size, tuple(SCREEN_SIZES), 7),
+            ("Theme", self.theme, ("Dark", "Light"), 7),
+            ("Text", self.text_size, tuple(TEXT_SIZES), 7),
+        ):
+            group = ttk.Frame(toolbar)
+            group.pack(side="left", padx=(0, 7))
+            ttk.Label(group, text=label).pack(anchor="w")
+            combo = ttk.Combobox(group, textvariable=var, values=options,
+                                 width=width, state="readonly")
+            combo.pack()
+            combo.bind("<<ComboboxSelected>>", lambda _e: self._render())
+
+        canvas_holder = ttk.Frame(right)
+        canvas_holder.pack(fill="both", expand=True)
+        self.canvas = tk.Canvas(canvas_holder, bg="#e9edf3",
+                                highlightthickness=0, height=380)
+        scrollbar = ttk.Scrollbar(canvas_holder, orient="vertical",
+                                  command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=scrollbar.set)
+        scrollbar.pack(side="right", fill="y")
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.canvas.bind("<Configure>", lambda _e: self._render())
+        self.canvas.bind("<MouseWheel>", self._wheel)
+        self.canvas.bind("<Button-4>", lambda _e: self.canvas.yview_scroll(-3, "units"))
+        self.canvas.bind("<Button-5>", lambda _e: self.canvas.yview_scroll(3, "units"))
+        ttk.Label(right, textvariable=self.preview_info, wraplength=400,
+                  foreground="#536177").pack(fill="x", pady=(6, 0))
+
+        footer = ttk.Frame(outer)
+        footer.pack(fill="x", pady=(10, 0))
+        ttk.Label(footer, text="Preview is illustrative; final font and chrome depend on the phone and irplus.",
+                  foreground="#59677b").pack(side="left")
+        ttk.Button(footer, text="Save layout",
+                   command=self._save).pack(side="right")
+        ttk.Button(footer, text="Cancel",
+                   command=self.destroy).pack(side="right", padx=8)
+        if self.device["buttons"]:
+            first = self.device["buttons"][0]["id"]
+            self.tree.selection_set(first)
+            self._select()
+
+    def _wheel(self, event):
+        units = -1 if event.delta > 0 else 1
+        self.canvas.yview_scroll(units * 3, "units")
+
+    def _select(self, _event=None):
+        ids = self.tree.selection()
+        if ids:
+            self.chosen_span.set(str(self.working[ids[0]]))
+        self._render()
+
+    def _apply_width(self):
+        ids = self.tree.selection()
+        if not ids:
+            return messagebox.showinfo("Layout editor", "Select a button first.", parent=self)
+        width = int(self.chosen_span.get())
+        self.working[ids[0]] = width
+        label = self.tree.item(ids[0], "values")[0]
+        status = self.tree.item(ids[0], "values")[2]
+        self.tree.item(ids[0], values=(label, width, status))
+        self._render()
+
+    def _preview_device(self):
+        buttons = [dict(b, span=self.working[b["id"]])
+                   for b in self.device["buttons"]]
+        return {"name": self.device["name"], "buttons": buttons}
+
+    def _rows(self):
+        return core.layout_rows(self._preview_device())
+
+    def _label(self, label, width):
+        """Conservatively emulate one-line mobile button text truncation."""
+        if self.button_font.measure(label) <= width - 12:
+            return label, False
+        suffix = "..."
+        available = max(0, width - 12 - self.button_font.measure(suffix))
+        while label and self.button_font.measure(label) > available:
+            label = label[:-1]
+        return (label + suffix) if label else suffix, True
+
+    def _render(self):
+        if not hasattr(self, "canvas"):
+            return
+        canvas = self.canvas
+        canvas.delete("all")
+        width = max(canvas.winfo_width(), 430)
+        rows = self._rows()
+        exported = sum(map(len, rows))
+        missing = sum(not (b.get("captures") or b.get("pronto_hex"))
+                      for b in self.device["buttons"])
+        self.preview_info.set(
+            f"{exported} exportable button(s) displayed; {missing} not learned (hidden). "
+            "Grid positions match the .irplus exporter."
+        )
+        self.button_font.configure(size=TEXT_SIZES[self.text_size.get()])
+        selected = self.tree.selection()[0] if self.tree.selection() else None
+        if self.mode.get() == "Grid":
+            self._draw_grid(width, rows, selected)
+        else:
+            self._draw_phone(width, rows, selected)
+        bounds = canvas.bbox("all")
+        canvas.configure(scrollregion=(0, 0, max(width, bounds[2] + 20 if bounds else width),
+                                      bounds[3] + 18 if bounds else 460))
+
+    def _button(self, x, y, width, height, button, selected, dark):
+        canvas = self.canvas
+        chosen = button["id"] == selected
+        fill = ("#365d93" if dark else "#d7e9ff") if chosen else ("#323e52" if dark else "#f8fafc")
+        border = "#80b9ff" if chosen else ("#637184" if dark else "#a1b1c7")
+        canvas.create_rectangle(x, y, x+width, y+height, fill=fill,
+                                outline=border, width=2 if chosen else 1)
+        text, clipped = self._label(button["label"], width)
+        canvas.create_text(x+width/2, y+height/2, text=text,
+                           font=self.button_font, fill="#ffffff" if dark else "#1f2937")
+        return clipped
+
+    def _draw_phone(self, canvas_width, rows, selected):
+        canvas = self.canvas
+        screen_width = SCREEN_SIZES[self.screen_size.get()]
+        x = max(15, (canvas_width-screen_width-28)/2)
+        y = 16
+        dark = self.theme.get() == "Dark"
+        bezel = "#121820" if dark else "#334155"
+        screen = "#111a29" if dark else "#f1f5f9"
+        text = "#f8fafc" if dark else "#1e293b"
+        row_height = 52
+        body_top = y+118
+        content_height = max(440, 160 + max(1,len(rows))*row_height + 70)
+        body_bottom = y + content_height
+        canvas.create_rectangle(x, y, x+screen_width+28, body_bottom+18,
+                                fill=bezel, outline="#46576c", width=3)
+        left = x+14
+        right = left+screen_width
+        canvas.create_rectangle(left, y+30, right, body_bottom-8,
+                                fill=screen, outline=screen)
+        canvas.create_oval(x+(screen_width+28)/2-16, y+10,
+                           x+(screen_width+28)/2+16, y+16, fill="#526478",
+                           outline="")
+        canvas.create_text(left+18, y+48, text="9:41", anchor="w", font=("Segoe UI", 9, "bold"),
+                           fill=text)
+        canvas.create_text(right-18, y+48, text="Wi-Fi   100%", anchor="e",
+                           font=("Segoe UI", 9), fill=text)
+        canvas.create_rectangle(left, y+66, right, y+105,
+                                fill="#243449" if dark else "#dce5f0", outline="")
+        title = self.device["name"]
+        if len(title) > 28:
+            title = title[:25] + "..."
+        canvas.create_text((left+right)/2, y+86, text=title,
+                           font=("Segoe UI", 12, "bold"), fill=text)
+        interior_margin = 10
+        col_width = (screen_width-interior_margin*2)/12
+        warnings = []
+        for ri, row in enumerate(rows):
+            col = 0
+            top = body_top + ri*row_height
+            for button in row:
+                span = core.button_span(button)
+                bx = left + interior_margin + col*col_width + 2
+                bw = span*col_width - 4
+                if self._button(bx, top, bw, 41, button, selected, dark):
+                    warnings.append(button["label"])
+                col += span
+        canvas.create_rectangle((left+right)/2-33, body_bottom-22,
+                                (left+right)/2+33, body_bottom-18,
+                                fill="#8797a9", outline="")
+        if not rows:
+            canvas.create_text((left+right)/2, body_top+25, text="No learned buttons yet",
+                               fill=text, font=("Segoe UI", 10))
+        if warnings:
+            canvas.create_text(canvas_width/2, body_bottom+39,
+                text="Possible clipped labels: " + ", ".join(warnings[:4]),
+                font=("Segoe UI", 9), fill="#9b492f", width=canvas_width-30)
+        canvas.configure(scrollregion=(0, 0, canvas_width, body_bottom+95))
+
+    def _draw_grid(self, canvas_width, rows, selected):
+        canvas = self.canvas
+        x = 22
+        right = max(400, canvas_width-24)
+        unit = (right-x)/12
+        dark = self.theme.get() == "Dark"
+        ink = "#1f2937"
+        canvas.create_text(x, 22, text="12-column export grid", anchor="w",
+                           font=("Segoe UI", 12, "bold"), fill=ink)
+        for col in range(13):
+            bx = x+col*unit
+            canvas.create_line(bx, 50, bx, 50+max(1,len(rows))*57,
+                               fill="#b5c4d6", dash=(2, 3))
+        for ri, row in enumerate(rows):
+            col = 0
+            top = 55+ri*57
+            for button in row:
+                span = core.button_span(button)
+                bx = x+col*unit+2
+                self._button(bx, top, span*unit-4, 43, button, selected, dark)
+                col += span
+            if col < 12:
+                canvas.create_text(x+col*unit+4, top+22,
+                    text=f"space ({12-col})", anchor="w", fill="#64748b",
+                    font=("Segoe UI", 9))
+        if not rows:
+            canvas.create_text(x+12, 87, anchor="w", text="No learned buttons yet",
+                               fill=ink, font=("Segoe UI", 10))
+
+    def _save(self):
+        for button in self.device["buttons"]:
+            button["span"] = self.working[button["id"]]
+        self.on_save()
+        self.destroy()
