@@ -353,7 +353,7 @@ public class MainActivity extends Activity {
                 setStatus("Import failed: " + reason);
                 new AlertDialog.Builder(this)
                     .setTitle("Could not import remote")
-                    .setMessage(reason + "\\n\\nChoose a PRONTO_HEX .irplus file exported from IR Remote Studio on Windows. "
+                    .setMessage(reason + "\n\nChoose a PRONTO_HEX .irplus file exported from IR Remote Studio on Windows. "
                         + "If it still fails, send us this exact error message.")
                     .setPositiveButton("OK", null)
                     .show();
