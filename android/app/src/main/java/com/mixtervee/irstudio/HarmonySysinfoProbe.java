@@ -27,7 +27,7 @@ final class HarmonySysinfoProbe {
         byte[] data = new byte[REPORT_SIZE];
         data[0] = (byte) 0xFF;
         data[1] = 0x01;
-        data[2] = 0x03; // Concordance's read-only identity start sequence
+        data[2] = 0x00; // Concordance ReadFile starts at sequence zero
         data[3] = 0x02;
         data[4] = (byte) 0x80;
         System.arraycopy(path, 0, data, 5, path.length);
@@ -40,13 +40,41 @@ final class HarmonySysinfoProbe {
     }
 
     static int declaredLength(byte[] response) {
-        if (response == null || response.length != REPORT_SIZE) return -1;
+        if (response == null || response.length < 11 || response.length > REPORT_SIZE) return -1;
         long length = ((long) (response[7] & 0xFF) << 24)
                 | ((long) (response[8] & 0xFF) << 16)
                 | ((long) (response[9] & 0xFF) << 8)
                 | (long) (response[10] & 0xFF);
         if (length <= 0 || length > MAX_SYSINFO_SIZE) return -1;
         return (int) length;
+    }
+
+    /** Concordance ReadFile sequence: read=0, ACK=1, close=2. */
+    static byte[] ackRequest(int length, byte parameter) {
+        if (length < 1 || length > MAX_SYSINFO_SIZE)
+            throw new IllegalArgumentException("Invalid sysinfo size");
+        int packets = (length + 61) / 62;
+        int count = Math.min(packets + 1, 0x33);
+        return new byte[] {
+                (byte) 0xFF, 0x04, 0x01, 0x02, 0x01, parameter,
+                0x01, (byte) count
+        };
+    }
+
+    static byte[] closeRequest(byte parameter) {
+        return new byte[] {
+                (byte) 0xFF, 0x07, 0x02, 0x01, 0x01, parameter
+        };
+    }
+
+    private static String firstBytes(byte[] reply) {
+        StringBuilder value = new StringBuilder();
+        if (reply == null) return "none";
+        for (int i = 0; i < Math.min(reply.length, 12); i++) {
+            if (i > 0) value.append(' ');
+            value.append(String.format(Locale.ROOT, "%02X", reply[i] & 0xFF));
+        }
+        return value.toString();
     }
 
     private static ByteBuffer direct(byte[] data) {
@@ -90,15 +118,22 @@ final class HarmonySysinfoProbe {
                 if (complete == reader) gotIn = true;
                 else if (complete == writer) gotOut = true;
             }
-            if (!gotOut || outgoing.position() != REPORT_SIZE || !gotIn
-                    || incoming.position() != REPORT_SIZE) {
-                log.append(label).append(": incomplete or timed out (OUT=")
-                        .append(gotOut).append(", IN=").append(gotIn).append(")\n");
+            int sent = outgoing.position();
+            int received = incoming.position();
+            log.append(label).append(": OUT=")
+                    .append(gotOut).append('/').append(sent).append(" bytes, IN=")
+                    .append(gotIn).append('/').append(received).append(" bytes\n");
+            if (!gotOut || sent != REPORT_SIZE || !gotIn ||
+                    received < 1 || received > REPORT_SIZE) {
+                log.append(label).append(": incomplete, empty or timed out\n");
                 return null;
             }
             incoming.flip();
-            byte[] reply = new byte[REPORT_SIZE];
+            byte[] reply = new byte[received];
             incoming.get(reply);
+            // Only log the short control header; never log file-data contents.
+            log.append(label).append(" response prefix: ")
+                    .append(firstBytes(reply)).append('\n');
             return reply;
         } finally {
             reader.cancel();
@@ -123,12 +158,14 @@ final class HarmonySysinfoProbe {
                 return null;
             }
             UsbRequest done = connection.requestWait(TIMEOUT_MS);
-            if (done != reader || incoming.position() != REPORT_SIZE) {
-                log.append("MH file data IN timed out or incomplete\n");
+            int received = incoming.position();
+            if (done != reader || received < 2 || received > REPORT_SIZE) {
+                log.append("MH file data IN timed out, empty or incomplete (bytes=")
+                        .append(received).append(")\n");
                 return null;
             }
             incoming.flip();
-            byte[] reply = new byte[REPORT_SIZE];
+            byte[] reply = new byte[received];
             incoming.get(reply);
             return reply;
         } finally {
@@ -178,17 +215,19 @@ final class HarmonySysinfoProbe {
         }
 
         int dataPackets = (length + 61) / 62;
-        int expectedTotal = dataPackets + 1;
         byte parameter = header[5];
-        byte[] ack = {
-                (byte) 0xFF, 0x04, 0x04, 0x02, 0x01, parameter,
-                0x01, (byte) expectedTotal
-        };
+        byte[] ack = ackRequest(length, parameter);
+        log.append("sysinfo expected data packets: ").append(dataPackets)
+                .append("; ACK sequence: 01; packet count + 1: ")
+                .append(ack[7] & 0xFF).append('\n');
         boolean transferStarted = false;
         try {
             byte[] ackResponse = exchange(connection, in, out, ack, log,
                     "sysinfo transfer ACK");
-            if (ackResponse == null) return;
+            if (ackResponse == null || ackResponse.length < 3) {
+                log.append("sysinfo ACK reply too short; file read stopped\n");
+                return;
+            }
             transferStarted = true;
             int expectedSeq = ackResponse[2] & 0x3F;
             ByteArrayOutputStream content = new ByteArrayOutputStream(length);
@@ -199,7 +238,7 @@ final class HarmonySysinfoProbe {
                 int seq = packet[0] & 0x3F;
                 int size = packet[1] & 0x3F;
                 if (seq != expectedSeq || size < 1 || size > 62
-                        || content.size() + size > length) {
+                        || packet.length < size + 2 || content.size() + size > length) {
                     log.append("sysinfo data packet malformed at index ")
                             .append(i + 1).append("; stopped\n");
                     return;
@@ -216,12 +255,10 @@ final class HarmonySysinfoProbe {
             // The documented session-sequence reset is permitted only after
             // the file ACK has been accepted, never blindly after an error.
             if (transferStarted) {
-                byte[] reset = {
-                        (byte) 0xFF, 0x07, 0x05, 0x01, 0x01, parameter
-                };
+                byte[] reset = closeRequest(parameter);
                 byte[] resetResponse = exchange(connection, in, out, reset,
                         log, "sysinfo sequence close");
-                log.append("sysinfo session sequence close: ")
+                log.append("sysinfo session sequence close (02): ")
                         .append(resetResponse != null ? "reply received" : "unconfirmed")
                         .append('\n');
             }
