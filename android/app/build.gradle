@@ -10,8 +10,8 @@ android {
         applicationId 'com.mixtervee.irstudio'
         minSdk 26
         targetSdk 34
-        versionCode 13
-        versionName '0.1.12-alpha'
+        versionCode 14
+        versionName '0.1.13-alpha'
     }
 
     compileOptions {
