@@ -230,6 +230,12 @@ final class HarmonyIrCaptureProbe {
         return -1;
     }
 
+    /** Never offer local saving until both transient receive cleanup replies are verified. */
+    static boolean eligibleForLocalSave(String pronto, boolean stopped,
+                                        boolean closed) {
+        return pronto != null && !pronto.isEmpty() && stopped && closed;
+    }
+
     static boolean isIrDoneReport(byte[] report) {
         // MH control frames start with FF and must not be confused with
         // the observed F0 70 IR-capture DONE marker.
@@ -511,7 +517,7 @@ final class HarmonyIrCaptureProbe {
                 }
             }
         }
-        if (candidate != null && cleanStop && cleanClose) {
+        if (eligibleForLocalSave(candidate, cleanStop, cleanClose)) {
             log.append("Verified capture candidate available for user-approved local save\n");
             if (onVerifiedCandidate != null) {
                 try {
