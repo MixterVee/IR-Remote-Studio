@@ -1,4 +1,4 @@
-IR Remote Studio 0.2.5-beta — Windows 11 x64
+IR Remote Studio 0.2.6-beta — Windows 11 x64
 ================================================
 
 FIRST STANDALONE LEARNER TEST
@@ -7,7 +7,7 @@ This beta adds direct USB learning WITHOUT requiring Concordance for
 supported Harmony 300/350 and an experimental Ocrustar/ElkSmart dongle
 adapter. Previous Windows features and the Concordance backend remain.
 
-1. Download the v0.2.5-beta Windows x64 ZIP from GitHub Actions.
+1. Download the v0.2.6-beta Windows x64 ZIP from GitHub Actions.
 2. Extract the files and launch IR-Remote-Studio.exe.
 3. Connect ONE supported USB IR learning device.
 4. From "IR learning hardware", choose one of:
@@ -125,3 +125,32 @@ and the SofaBaton X-series hub protocols are not interchangeable with
 U1 app configuration. The existing Harmony/Ocrustar/Concordance backends
 are unaffected. Windows BLE scanning may require suitable PC Bluetooth
 hardware and Windows permissions.
+
+SOFABATON U1 — READ AN EXISTING SAVED IR CODE (NEW IN 0.2.6)
+------------------------------------------------------------
+This is NOT new IR learning. It reads back an existing command that
+the U1 already stores, as a safe stepping stone toward native learning.
+Only the documented device-info (0x01) and read-command (0x0C) inquiries
+are transmitted. No U1 profile updates, learning start/finish operations,
+or configuration writes are sent.
+
+1. Back up the IR Remote Studio Windows library first.
+2. Close the official SofaBaton app (so Windows can use the BLE session).
+3. Connect to a U1 with working batteries and open
+   "SofaBaton U1 Bluetooth..." from the main window.
+4. Scan Bluetooth and identify your SB-prefixed U1 advertising FFF0.
+5. Choose a U1 slot containing a known stored IR code, initially 7
+   (previously observed in official-app trace) or 8 (newly taught test).
+6. Click "Read stored IR (test)" and approve the warning.
+7. Wait for complete 0x0D fragments. The app checks the device identity,
+   BLE service UUIDs, packet checksum, segment ordering, aggregate
+   checksum, carrier frequency and timing validity. A failed/incomplete
+   session is rejected without saving anything.
+8. In the main IR Remote Studio window, select your destination device
+   and button. Choose "Save to selected button" in the Bluetooth window.
+9. Export that device as .irplus and verify playback on your Android phone.
+
+The read request may not work on all U1 firmwares or Windows BLE adapters.
+The U1 is NOT yet a native learner in IR Remote Studio. Do not experiment
+with arbitrary firmware or configuration writes. Full direct learning is
+a subsequent milestone requiring careful confirmation of start/end codes.

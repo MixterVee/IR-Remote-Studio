@@ -1,6 +1,7 @@
 """Opt-in Windows BLE discovery for experimental SofaBaton U1 research.
 
-This is NOT a SofaBaton protocol implementation, IR learner, or BLE remote.
+This module is only the scanner and metadata inspector. The experimental
+stored-command reader lives in sofabaton_u1_read.py; it does NOT start IR learning.
 Safe scope: scan advertisements and, after explicit user selection, connect
 to enumerate GATT service/characteristic metadata only.
 
@@ -32,7 +33,12 @@ def normalize_discoveries(discovered: dict) -> list[BleEntry]:
         raw_rssi = getattr(advertisement, "rssi", None)
         rssi = int(raw_rssi) if raw_rssi is not None else None
         services = tuple(str(x) for x in (advertisement.service_uuids or ()))
-        hint = "sofabaton" in name.casefold() or "sofa" in name.casefold()
+        # Observed U1 advertises SB<identifier> and 0xFFF0, not the word SofaBaton.
+        hint = ("sofabaton" in name.casefold()
+                or (name.upper().startswith("SB") and
+                    any(str(uuid).lower() ==
+                        "0000fff0-0000-1000-8000-00805f9b34fb"
+                        for uuid in services)))
         results.append(BleEntry(name, addr, rssi, services, hint))
     results.sort(key=lambda x: (
         not x.likely_sofabaton,

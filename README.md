@@ -5,7 +5,7 @@
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for compatible Android phones.
 
 > **Status (November 2026):** Windows v0.1.7 is the established GitHub release.
-> **Windows v0.2.5-beta** builds on direct USB learning backends for Harmony 300/350
+> **Windows v0.2.6-beta** builds on direct USB learning backends for Harmony 300/350
 > (shared HID ID 046D:C124) and a documented Ocrustar/ElkSmart D226/D552
 > learning family (045C:02AA). Both Windows USB transports need real-device
 > validation before they can be treated as production-ready. The existing
@@ -18,13 +18,13 @@ Create devices, use custom labels for every button, capture commands from a comp
 For the tested Windows v0.1.7 release, use
 [GitHub Releases](https://github.com/MixterVee/IR-Remote-Studio/releases).
 
-For the **experimental v0.2.5-beta direct USB learner**, obtain the
+For the **experimental v0.2.6-beta direct USB learner**, obtain the
 Windows ZIP from the latest successful
 [Windows Actions build](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
 Extract the ZIP and launch the standalone \`IR-Remote-Studio.exe\`.
 Python is not required to run the packaged executable.
 
-In v0.2.5-beta the Windows learning panel provides **Save** to
+In v0.2.6-beta the Windows learning panel provides **Save** to
 confirm the selected command is saved without starting another capture, and
 **Save & Learn another** to save and continue learning. Captures remain
 autosaved immediately after successful receiving, as in the previous version.
@@ -54,25 +54,39 @@ own verified adapters; no learning commands are sent to unrecognized
 hardware. Windows USB driver installation/replacement is never performed
 automatically. Follow \`WINDOWS-SETUP.txt\` and keep a library backup.
 
-## SofaBaton U1 Bluetooth (Windows diagnostic beta)
+## SofaBaton U1 Bluetooth — stored IR read-back (Windows beta)
 
-The U1 is known to support learning IR from another remote via its
-official Bluetooth-connected SofaBaton phone app. The U1's proprietary
-Bluetooth command protocol has not been identified.
+The SofaBaton U1 learns IR using its own receiver, controlled by the
+official Bluetooth-connected app. In November 2026, a Pixel HCI capture
+revealed its proprietary A5 5A packet framing and allowed reconstruction
+of two infrared recordings which successfully played in IRPlus.
 
-Windows v0.2.5-beta adds **SofaBaton U1 Bluetooth...** to the IR learner
-connection panel. This **research-only** lab can scan BLE advertisements,
-list discovered devices and, only after you explicitly select a device
-and confirm, briefly inspect its GATT service/characteristic UUIDs.
-It does **not** learn, read, transmit, or program IR commands, pair
-Bluetooth automatically, read characteristic values or send any
-device-specific writes. It does not claim full U1 integration.
+In Windows v0.2.6-beta, **SofaBaton U1 Bluetooth...** offers:
 
-To test, put the U1 into the SofaBaton app's Pairing mode with **- and E**,
-close the official phone app if connected, open the diagnostic window,
-scan, and inspect only a device you can positively identify. Save the
-resulting report locally; review/redact addresses before sharing. This
-evidence can guide an eventual U1-specific learning driver.
+- BLE scanning and read-only GATT structure inspection (same as v0.2.5).
+- **Read stored IR (test)**: for a positively identified U1, query a
+  previously learned IR command from an occupied slot (1–8), initially
+  try slot 7 or 8 from the verified recording.
+- **Save to selected button**: save the validated read-back IR timings
+  directly to the selected device/button in IR Remote Studio's local
+  library. Export that device as .irplus for replay testing.
+
+This *read-back* operation sends only observed official-app **device
+status inquiry (0x01)** and **stored IR read inquiry (0x0C)** frames.
+It verifies exact U1 FFF0/FFF1/FFF2 characteristic UUIDs, checks all
+Bluetooth frame checksums and fragment ordering, assembles the complete
+IR waveform, and validates aggregate checksum, carrier and durations.
+It **does not initiate new IR learning or send U1 profile/firmware
+configuration writes**. Malformed/incomplete reads are rejected, and
+the local library changes only when you explicitly choose Save.
+
+To test: close the SofaBaton phone app; put batteries in the U1 and
+open the BLE window, scan and select the identified SB-prefixed U1.
+Choose a populated slot, click **Read stored IR (test)**, confirm,
+select a device/button in the Windows main app, and choose
+**Save to selected button**. Verify playback after .irplus export.
+This experimental Windows BLE read-back path needs physical testing
+and is not yet a native live Bluetooth IR learner.
 
 ## Android Learn & Library (v0.2.1-alpha)
 
