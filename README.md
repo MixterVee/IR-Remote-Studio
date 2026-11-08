@@ -4,40 +4,53 @@
 
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for compatible Android phones.
 
-> **Status:** Windows v0.1.7 is an official GitHub beta release. Android v0.1.6-alpha supports verified Harmony USB detection and an experimental MH handshake diagnostic; a CI-built debug APK is available. Android USB learning is not implemented.
+> **Status (November 2026):** Windows v0.1.7 is the established GitHub release.
+> **Windows v0.2.0-beta** adds direct USB learning backends for Harmony 300/350
+> (shared HID ID 046D:C124) and a documented Ocrustar/ElkSmart D226/D552
+> learning family (045C:02AA). Both Windows USB transports need real-device
+> validation before they can be treated as production-ready. The existing
+> Concordance/PowerShell backend remains selectable. Android v0.2.1-alpha
+> has passed real-world Harmony 300 learning, saving, .irplus export and
+> replay in IRPlus.
 
-## Download the Windows beta
+## Download Windows
 
-1. Open **[GitHub Releases](https://github.com/MixterVee/IR-Remote-Studio/releases)**.
-2. Select **v0.1.7** and download **IR-Remote-Studio-v0.1.7-Windows-x64.zip** under Assets.
-3. Extract the ZIP and run `IR-Remote-Studio.exe` on Windows 11 x64.
-4. Read the included `WINDOWS-SETUP.txt` to install compatible Concordance separately.
+For the tested Windows v0.1.7 release, use
+[GitHub Releases](https://github.com/MixterVee/IR-Remote-Studio/releases).
 
-Python is **not** required to run the one-file Windows executable. Harmony learning
-requires a separate local Concordance `libconcord-6.dll` and Windows 32-bit PowerShell.
+For the **experimental v0.2.0-beta direct USB learner**, obtain the
+Windows ZIP from the latest successful
+[Windows Actions build](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
+Extract the ZIP and launch the standalone \`IR-Remote-Studio.exe\`.
+Python is not required to run the packaged executable.
 
+Use the **IR learning hardware** selector to choose:
+- **Auto detect supported learner**: read-only detection of registered
+  device adapters; asks you to select if more than one is connected
+- **Harmony 300/350 — standalone HID**: built-in MH protocol, with no
+  Concordance DLL required
+- **Ocrustar / ElkSmart — USB bulk (experimental)**: separate protocol
+  adapter for VID:PID 045C:02AA; *38 kHz carrier is assumed, not measured*
+- **Concordance — legacy DLL**: original external libconcord/x86
+  PowerShell backend, supporting the broader documented Harmony list
 
-## Android USB lab (v0.1.6-alpha)
+**USB IR dongles are not interchangeable.** Unknown dongles need their
+own verified adapters; no learning commands are sent to unrecognized
+hardware. Windows USB driver installation/replacement is never performed
+automatically. Follow \`WINDOWS-SETUP.txt\` and keep a library backup.
 
-The native Android companion can import and export PRONTO_HEX `.irplus` files,
-display their 12-column button layouts, store multiple remotes locally, and
-transmit commands **when Android exposes a compatible consumer IR emitter**.
-Some hardware IR blasters are hidden behind manufacturer APIs and will not
-work through the public Android `ConsumerIrManager`; the app reports that
-limitation clearly.
+## Android Learn & Library (v0.2.1-alpha)
 
-1. Open the [successful Android Actions build](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/android.yml).
-2. Download **IR-Remote-Studio-v0.1.6-alpha-Android-debug** under Artifacts.
-3. Extract its ZIP to get `app-debug.apk`. Install the debug APK on a test phone.
-4. Import a known-working `.irplus` device exported from Windows.
-5. Check the layout and test one safe button with the phone pointed at the target.
+Android's working Harmony 300 IR capture pipeline can learn a button,
+preview/test it using the phone's IR hardware, save named buttons to a
+remote, import and export .irplus, and **Save & Learn Another**. On actual
+hardware, users have confirmed exporting an expanded .irplus profile,
+importing it into IRPlus and replaying successfully.
 
-The Android build has read-only **Harmony USB detection and HID inspection** plus an opt-in first-stage **Harmony 300 MH protocol handshake**, after physical tests confirmed `046D:C124` and 64-byte HID endpoints. **USB IR capture is not implemented yet.**
-
-This is an unsigned-for-production, **debug-signed** prototype, not a Play
-Store or official stable Android release. See [android/README.md](android/README.md)
-for details. It does not connect to Harmony devices, learn IR via USB, or offer
-full Android layout editing yet.
+Download a successful build from
+[Android Actions](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/android.yml).
+This is a debug-signed test APK, not a Play Store release. See
+[android/README.md](android/README.md).
 
 ## Features in Windows v0.1
 
@@ -75,7 +88,7 @@ GitHub Actions builds and uploads the executable on every push to `main`.
 
 ## Hardware and safety
 
-The Harmony learning interface is based on libconcord and invokes the helper in a **separate 32-bit Windows PowerShell process** (the earlier x86 prototype worked with that DLL). Different Harmony models and USB ports may behave differently. Never run Concordance and this app simultaneously. Ensure a normal working USB connection before learning.
+The Windows beta offers a direct HID backend for Harmony 300/350 and an independent Ocrustar USB bulk backend. Both are hardware-gated and experimental on Windows; the Harmony 300 MH protocol is already proven on Android. The optional legacy Concordance mode still invokes the existing native DLL through a separate 32-bit PowerShell process. Never run other USB remote-control software simultaneously. Inspect USB IDs and drivers before attempting untested dongles.
 
 New raw formats are preserved in the local library even when a protocol decoder does not recognize them. Repeat-only NEC captures are rejected rather than falsely marked valid. Other protocols are marked raw/unidentified until verified.
 
