@@ -13,7 +13,7 @@ from tkinter import filedialog, font as tkfont, messagebox, simpledialog, ttk
 from irstudio import __version__
 from irstudio import core
 from irstudio.harmony import invoke_harmony
-from irstudio.harmony_direct import invoke_harmony_direct
+from irstudio.receivers import AUTO, BACKENDS, invoke_receiver, harmony_attached, ocrustar_attached
 from irstudio.layout_preview import LayoutDialog
 from irstudio.branding import install_icon
 
@@ -31,7 +31,7 @@ class Studio(tk.Tk):
         self.active_button = None
         self.running = False
         self.connected_model = None
-        self.direct_hid_var = tk.BooleanVar(value=True)
+        self.receiver_var = tk.StringVar(value=AUTO)
         self.aim_var = tk.StringVar(value="Aim the original remote at the Harmony learning receiver, about 5-10 cm away.")
         self.status_var = tk.StringVar(value=f"Library: {self.library_path}")
         self.repeat_var = tk.StringVar(value="0")
@@ -62,7 +62,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.2.0-beta\n\nExperimental standalone Windows HID for Harmony 300 (046D:C124). Other supported Harmony remotes can still use the optional Concordance backend.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.2.0-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -83,8 +83,7 @@ class Studio(tk.Tk):
         toolbar.pack(fill="x")
         self.probe_btn = ttk.Button(toolbar, text="Check Harmony IR learner", command=self.probe)
         self.probe_btn.pack(side="left")
-        ttk.Checkbutton(toolbar, text="Standalone HID (Harmony 300)",
-                        variable=self.direct_hid_var).pack(side="left", padx=(10, 0))
+
         ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=12)
         ttk.Button(toolbar, text="Import IR Capture (.json)", command=self.import_capture).pack(side="left", padx=(0, 6))
         ttk.Button(toolbar, text="Import Device (.irplus)", command=self.import_irplus).pack(side="left")
@@ -92,6 +91,17 @@ class Studio(tk.Tk):
         ttk.Label(toolbar, text="NEC repeat frames:").pack(side="right", padx=(15, 6))
         ttk.Combobox(toolbar, textvariable=self.repeat_var, values=("0", "1", "2"),
                      width=4, state="readonly").pack(side="right")
+
+        receiver_strip = ttk.Frame(self, padding=(16, 0, 16, 8))
+        receiver_strip.pack(fill="x")
+        ttk.Label(receiver_strip, text="IR learning hardware:").pack(side="left")
+        receiver_picker = ttk.Combobox(receiver_strip, textvariable=self.receiver_var,
+            values=BACKENDS, state="readonly", width=43)
+        receiver_picker.pack(side="left", padx=(10, 8))
+        ttk.Button(receiver_strip, text="Detect attached learner",
+                   command=self.detect_learner).pack(side="left")
+        ttk.Label(receiver_strip, text="Unknown dongles are never sent commands.",
+                  foreground="#536277").pack(side="left", padx=(12, 0))
 
         # Reserve status space before the expandable work area.
         status = ttk.Frame(self, padding=(16, 6, 16, 12))
@@ -487,17 +497,15 @@ class Studio(tk.Tk):
         self.running = True
         self.probe_btn.configure(state="disabled")
         self.capture_btn.configure(state="disabled")
-        self.status_var.set("Connecting to Harmony USB..." if mode == "Probe"
-                            else "Connecting to Harmony... wait for READY before pressing.")
+        self.status_var.set("Identifying IR learning hardware..." if mode == "Probe"
+                            else "Connecting to IR learner... wait for READY.")
+        chosen_receiver = self.receiver_var.get()
 
         def job():
             try:
-                if self.direct_hid_var.get():
-                    result = invoke_harmony_direct(mode, self.folder / "Logs",
-                        on_ready=lambda: self.after(0, lambda:
-                            self.status_var.set("READY — press and release the source IR button now!")))
-                else:
-                    result = invoke_harmony(mode, self.folder / "Logs")
+                result = invoke_receiver(chosen_receiver, mode, self.folder / "Logs",
+                    on_ready=lambda: self.after(0, lambda:
+                        self.status_var.set("READY — press and release the source IR button NOW!")))
                 self.after(0, lambda: complete(result, None))
             except Exception as exc:
                 error = str(exc)
@@ -508,6 +516,28 @@ class Studio(tk.Tk):
         self.running = False
         self.probe_btn.configure(state="normal")
         self.capture_btn.configure(state="normal")
+
+    def detect_learner(self):
+        """Read-only enumeration; never starts USB communication or IR capture."""
+        if self.running:
+            return
+        self.status_var.set("Scanning supported USB IR learner IDs...")
+        def job():
+            h = harmony_attached()
+            o = ocrustar_attached()
+            def done():
+                if h and o:
+                    self.status_var.set("Harmony 300/350 AND Ocrustar detected. Select the receiver explicitly.")
+                elif h:
+                    self.receiver_var.set(BACKENDS[1])
+                    self.status_var.set("Detected Harmony 300/350 USB HID (046D:C124).")
+                elif o:
+                    self.receiver_var.set(BACKENDS[2])
+                    self.status_var.set("Detected Ocrustar/ElkSmart USB (045C:02AA). Windows USB driver access still needs testing.")
+                else:
+                    self.status_var.set("No supported direct learner found. Check USB and Windows drivers. Unlisted dongles need individual adapters.")
+            self.after(0, done)
+        threading.Thread(target=job, daemon=True).start()
 
     def probe(self):
         def done(result, error):
