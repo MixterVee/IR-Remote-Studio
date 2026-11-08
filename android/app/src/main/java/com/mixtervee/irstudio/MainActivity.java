@@ -344,6 +344,383 @@ public class MainActivity extends Activity {
         }, "IrStudioTransmit").start();
     }
 
+    private void createRemote() {
+        EditText field = new EditText(this);
+        field.setSingleLine(true);
+        field.setHint("e.g. Living Room TV");
+        field.setText("");
+        field.setPadding(dp(18), dp(14), dp(18), dp(14));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Create a remote")
+                .setMessage("Give this remote a name. Learn its buttons whenever you're ready.")
+                .setView(field)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Create", null)
+                .create();
+        dialog.setOnShowListener(v ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w -> {
+                    String name = field.getText().toString().trim();
+                    if (name.length() < 1 || name.length() > 60) {
+                        field.setError("Enter a name up to 60 characters");
+                        return;
+                    }
+                    if (remotes.size() >= 100) {
+                        toast("The library supports up to 100 remotes.");
+                        return;
+                    }
+                    IrplusCodec.Remote newRemote = new IrplusCodec.Remote("", name);
+                    remotes.add(newRemote);
+                    try {
+                        saveRemotes();
+                        selectedDevice = remotes.size() - 1;
+                        refreshDevices();
+                        setStatus("Created " + name + ". Tap Learn IR Button to add commands.");
+                        dialog.dismiss();
+                    } catch (Exception error) {
+                        remotes.remove(newRemote);
+                        toast("Could not save remote: " + error.getMessage());
+                    }
+                }));
+        dialog.show();
+    }
+
+    /** The phone hosts the learning workflow. Harmony never receives a configuration write. */
+    private void startLearning() {
+        UsbManager usb = (UsbManager) getSystemService(USB_SERVICE);
+        UsbDevice harmony = null;
+        if (usb != null) {
+            for (UsbDevice device : usb.getDeviceList().values()) {
+                if (HarmonyUsbIds.isHarmony300Or350(device.getVendorId(),
+                        device.getProductId())) {
+                    harmony = device;
+                    break;
+                }
+            }
+        }
+        if (harmony == null || !usb.hasPermission(harmony)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Connect your Harmony 300")
+                    .setMessage("Connect the Harmony to your phone with USB and grant "
+                            + "permission in Harmony USB Connection & Diagnostics. "
+                            + "Your existing Harmony buttons won't be changed.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Connect / grant permission",
+                            (d, w) -> UsbHarmonyInspector.show(this))
+                    .show();
+            return;
+        }
+        final UsbDevice target = harmony;
+        final UsbManager manager = usb;
+        new AlertDialog.Builder(this)
+                .setTitle("Learn an IR button")
+                .setMessage("Aim another IR remote at the Harmony 300. Tap Start, "
+                        + "wait until IR Remote Studio says READY, then press and "
+                        + "release ONE button. A compatible capture can be tested "
+                        + "and named before it's saved to your phone.\n\n"
+                        + "The Harmony's own programming and firmware are untouched.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Start learning", (d, w) -> {
+                    learnButton.setEnabled(false);
+                    learnButton.setText("Connecting to Harmony...");
+                    AtomicReference<String> candidate = new AtomicReference<>();
+                    new Thread(() -> {
+                        String report = HarmonyMhProbe.runCapture(manager, target,
+                                () -> runOnUiThread(() -> {
+                                    if (isFinishing() || isDestroyed()) return;
+                                    learnButton.setText("READY • Press source button");
+                                    toast("READY! Press and release the source remote button.");
+                                }),
+                                candidate::set);
+                        runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) return;
+                            learnButton.setEnabled(true);
+                            learnButton.setText("◉  Learn IR Button");
+                            String pronto = candidate.get();
+                            if (pronto == null) {
+                                showFailedLearning(report);
+                            } else {
+                                showCapturePreview(pronto, report);
+                            }
+                        });
+                    }, "HarmonyLearnAndPreview").start();
+                }).show();
+    }
+
+    private void showFailedLearning(String report) {
+        new AlertDialog.Builder(this)
+                .setTitle("No verified IR command yet")
+                .setMessage("A command can be saved only when the capture, STOP and "
+                        + "CLOSE checks succeed. See the diagnostic below:\n\n" + report)
+                .setNegativeButton("Close", null)
+                .setNeutralButton("Copy diagnostic",
+                        (d, w) -> copyText("Harmony learning diagnostic", report))
+                .show();
+    }
+
+    private void showCapturePreview(String pronto, String report) {
+        final IrplusCodec.Signal signal;
+        try {
+            signal = IrplusCodec.decodePronto(pronto);
+        } catch (IllegalArgumentException bad) {
+            showFailedLearning(report + "\nPronto validation error: " + bad.getMessage());
+            return;
+        }
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(9), dp(20), dp(4));
+
+        TextView success = text("SIGNAL RECEIVED", 13, TEAL, true);
+        content.addView(success);
+        TextView details = text(signal.carrierHz + " Hz   •   "
+                + (signal.microseconds.length / 2)
+                + " timing pairs\nTest it against the target equipment before saving.",
+                13, MUTED, false);
+        details.setPadding(0, dp(4), 0, dp(12));
+        content.addView(details);
+
+        TextView labelText = text("BUTTON NAME", 11, MUTED, true);
+        content.addView(labelText);
+        EditText buttonName = new EditText(this);
+        buttonName.setSingleLine(true);
+        buttonName.setHint("Power, Volume Up, Input...");
+        buttonName.setText("");
+        content.addView(buttonName);
+
+        TextView targetText = text("SAVE TO REMOTE", 11, MUTED, true);
+        targetText.setPadding(0, dp(14), 0, dp(4));
+        content.addView(targetText);
+        List<String> targets = new ArrayList<>();
+        targets.add("+ Create a new remote");
+        for (IrplusCodec.Remote remote : remotes) targets.add(remote.displayName());
+        Spinner targetSpinner = new Spinner(this);
+        ArrayAdapter<String> pickerAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, targets);
+        pickerAdapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item);
+        targetSpinner.setAdapter(pickerAdapter);
+        content.addView(targetSpinner, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(49)));
+
+        EditText remoteName = new EditText(this);
+        remoteName.setSingleLine(true);
+        remoteName.setHint("New remote name, e.g. Bedroom TV");
+        content.addView(remoteName);
+        int defaultTarget = remotes.isEmpty() ? 0 : Math.min(selectedDevice + 1,
+                remotes.size());
+        targetSpinner.setSelection(defaultTarget);
+        remoteName.setVisibility(defaultTarget == 0 ? View.VISIBLE : View.GONE);
+        targetSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view,
+                                                  int position, long id) {
+                remoteName.setVisibility(position == 0 ? View.VISIBLE : View.GONE);
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) {}
+        });
+
+        Button test = actionButton("▶  Test IR on target device", TEAL);
+        test.setOnClickListener(v -> transmitPreview(pronto));
+        LinearLayout.LayoutParams testParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(49));
+        testParams.setMargins(0, dp(13), 0, dp(5));
+        content.addView(test, testParams);
+
+        Button copy = actionButton("Copy Pronto Hex", Color.rgb(39, 72, 113));
+        copy.setOnClickListener(v -> copyText("Captured Pronto Hex", pronto));
+        content.addView(copy, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+
+        TextView note = text("Local phone library only • Harmony programming unchanged",
+                11, MUTED, false);
+        note.setPadding(0, dp(12), 0, dp(3));
+        content.addView(note);
+
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Learned IR Signal")
+                .setView(scroll)
+                .setNegativeButton("Discard", null)
+                .setNeutralButton("Copy full report",
+                        (d, w) -> copyText("Harmony learning report", report))
+                .setPositiveButton("Save button", null)
+                .create();
+        dialog.setOnShowListener(v ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w -> {
+                    if (saveLearnedButton(pronto,
+                            buttonName.getText().toString().trim(),
+                            targetSpinner.getSelectedItemPosition(),
+                            remoteName.getText().toString().trim(),
+                            buttonName, remoteName)) {
+                        dialog.dismiss();
+                    }
+                }));
+        dialog.show();
+    }
+
+    private boolean saveLearnedButton(String pronto, String label, int destination,
+                                      String newName, EditText labelField,
+                                      EditText remoteField) {
+        if (label.length() < 1 || label.length() > 40) {
+            labelField.setError("Enter a button name (1-40 characters)");
+            return false;
+        }
+        if (destination == 0 && (newName.length() < 1 || newName.length() > 60)) {
+            remoteField.setError("Enter a remote name (1-60 characters)");
+            return false;
+        }
+        if (destination == 0 && remotes.size() >= 100) {
+            toast("The library limit is 100 remotes.");
+            return false;
+        }
+        if (destination > remotes.size() || destination < 0) return false;
+        // Validate any provided code again before changing local state.
+        try {
+            IrplusCodec.decodePronto(pronto);
+        } catch (IllegalArgumentException bad) {
+            toast("Invalid captured code: " + bad.getMessage());
+            return false;
+        }
+        boolean created = destination == 0;
+        IrplusCodec.Remote target = created
+                ? new IrplusCodec.Remote("", newName)
+                : remotes.get(destination - 1);
+        if (target.items.size() >= 500) {
+            toast("This remote has reached the 500-button limit.");
+            return false;
+        }
+        for (IrplusCodec.Item item : target.items) {
+            if (!item.space && item.label.equalsIgnoreCase(label)) {
+                labelField.setError("That button name already exists in this remote");
+                return false;
+            }
+        }
+        IrplusCodec.Item learned = new IrplusCodec.Item(label, pronto, 6, false);
+        if (created) remotes.add(target);
+        target.items.add(learned);
+        try {
+            saveRemotes();
+            selectedDevice = remotes.indexOf(target);
+            refreshDevices();
+            setStatus("Saved " + label + " to " + target.displayName()
+                    + ". Long-press buttons to rename or delete. Export to back up.");
+            toast("IR button saved to your phone");
+            return true;
+        } catch (Exception error) {
+            target.items.remove(learned);
+            if (created) remotes.remove(target);
+            toast("Could not save: " + error.getMessage());
+            return false;
+        }
+    }
+
+    private void transmitPreview(String pronto) {
+        if (irManager == null || !irManager.hasIrEmitter()) {
+            toast("This phone does not expose an IR transmitter through Android.");
+            return;
+        }
+        final IrplusCodec.Signal signal;
+        try {
+            signal = IrplusCodec.decodePronto(pronto);
+        } catch (IllegalArgumentException bad) {
+            toast("Cannot transmit: " + bad.getMessage());
+            return;
+        }
+        new Thread(() -> {
+            try {
+                irManager.transmit(signal.carrierHz, signal.microseconds);
+                runOnUiThread(() -> {
+                    setStatus("Test transmitted. Did the target device respond?");
+                    toast("IR signal sent — check the target equipment");
+                });
+            } catch (RuntimeException error) {
+                runOnUiThread(() -> toast("IR test failed: " + error.getMessage()));
+            }
+        }, "IrStudioOneShotTest").start();
+    }
+
+    private void editLearnedButton(IrplusCodec.Remote remote, IrplusCodec.Item item) {
+        new AlertDialog.Builder(this)
+                .setTitle(item.label)
+                .setItems(new String[]{"Rename button", "Delete button"}, (d, choice) -> {
+                    if (choice == 0) renameButton(remote, item);
+                    else deleteButton(remote, item);
+                }).show();
+    }
+
+    private void renameButton(IrplusCodec.Remote remote, IrplusCodec.Item item) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(item.label);
+        input.selectAll();
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Rename button")
+                .setView(input)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", null).create();
+        dialog.setOnShowListener(v ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty() || name.length() > 40) {
+                        input.setError("Enter 1-40 characters");
+                        return;
+                    }
+                    for (IrplusCodec.Item other : remote.items) {
+                        if (other != item && !other.space
+                                && other.label.equalsIgnoreCase(name)) {
+                            input.setError("This name is already used");
+                            return;
+                        }
+                    }
+                    int index = remote.items.indexOf(item);
+                    if (index < 0) return;
+                    remote.items.set(index, new IrplusCodec.Item(
+                            name, item.prontoHex, item.span, false));
+                    try {
+                        saveRemotes();
+                        renderRemote();
+                        dialog.dismiss();
+                    } catch (Exception error) {
+                        remote.items.set(index, item);
+                        toast("Rename failed: " + error.getMessage());
+                    }
+                }));
+        dialog.show();
+    }
+
+    private void deleteButton(IrplusCodec.Remote remote, IrplusCodec.Item item) {
+        new AlertDialog.Builder(this)
+                .setTitle("Delete " + item.label + "?")
+                .setMessage("This removes the button from the phone's library. "
+                        + "It does not change the Harmony or other equipment.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete", (d, w) -> {
+                    int index = remote.items.indexOf(item);
+                    if (index < 0) return;
+                    remote.items.remove(index);
+                    try {
+                        saveRemotes();
+                        renderRemote();
+                        setStatus("Deleted " + item.label + " from the local library.");
+                    } catch (Exception error) {
+                        remote.items.add(index, item);
+                        toast("Delete failed: " + error.getMessage());
+                    }
+                }).show();
+    }
+
+    private void copyText(String label, String value) {
+        android.content.ClipboardManager clipboard =
+                (android.content.ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard != null) {
+            clipboard.setPrimaryClip(android.content.ClipData.newPlainText(label, value));
+            toast("Copied to clipboard");
+        }
+    }
+
+    private void toast(String message) {
+        Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
+
     private void openImport() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.setType("*/*");
