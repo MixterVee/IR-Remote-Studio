@@ -275,7 +275,7 @@ public final class HarmonyMhProbe {
             } else {
                 log.append("MH continuation IN: none within 4 seconds\n");
             }
-            log.append("No IR learning or configuration access attempted.\n");
+            // The caller selects identity-only vs. opt-in IR receiving.
             return stageTwo;
         } finally {
             reader.cancel();
@@ -364,6 +364,7 @@ public final class HarmonyMhProbe {
                         log.append(HarmonyIrCaptureProbe.capture(conn, in, out));
                     } else {
                         HarmonySysinfoProbe.readIdentity(conn, in, out, log);
+                        log.append("No IR learning or configuration access attempted.\n");
                     }
                 } else {
                     log.append(captureIr
