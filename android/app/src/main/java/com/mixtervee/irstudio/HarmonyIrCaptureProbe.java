@@ -204,6 +204,117 @@ final class HarmonyIrCaptureProbe {
         return out.toString();
     }
 
+    /**
+     * Conservative repeat-boundary hint: the first IR header burst and its
+     * following total period reappear after a long inter-frame gap.
+     * This is only a candidate, never proof of a complete exportable signal.
+     */
+    static int firstRepeatBoundary(List<Integer> words) {
+        if (words == null || words.size() < 26) return -1;
+        int firstOn = words.get(1);
+        int firstPeriod = words.get(3);
+        if (firstOn < 300 || firstOn > 20000 || firstPeriod <= firstOn)
+            return -1;
+        int onTolerance = Math.max(80, firstOn / 25);
+        int periodTolerance = Math.max(120, firstPeriod / 25);
+        int gapThreshold = Math.max(6000, firstPeriod * 3 / 4);
+        for (int i = 24; i + 1 < words.size(); i++) {
+            if (words.get(i - 1) < gapThreshold) continue;
+            if (Math.abs(words.get(i) - firstOn) <= onTolerance
+                    && Math.abs(words.get(i + 1) - firstPeriod)
+                            <= periodTolerance) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    static boolean isIrDoneReport(byte[] report) {
+        return report != null && report.length >= 1
+                && (report[0] & 0xF0) == 0xF0;
+    }
+
+    static boolean isCloseAcknowledgement(byte[] report, byte parameter) {
+        return report != null && report.length >= 6
+                && (report[0] & 0xFF) == 0xFF
+                && (report[1] & 0xFF) == 0x07
+                && (report[2] & 0xFF) == 0x83
+                && (report[3] & 0xFF) == 0x01
+                && (report[4] & 0xFF) == 0x01
+                && report[5] == parameter;
+    }
+
+    /**
+     * The outgoing STOP/CLOSE may have older IR frames queued on IN.
+     * Send the OUT on its own, then drain bounded IN reports until the
+     * expected response type is found. This prevents attributing an
+     * unrelated pending IR frame to a successful STOP or CLOSE.
+     */
+    private static boolean sendOnly(UsbDeviceConnection conn, UsbEndpoint out,
+                                    byte[] command, StringBuilder log,
+                                    String label) {
+        UsbRequest writer = new UsbRequest();
+        try {
+            if (!writer.initialize(conn, out)) {
+                log.append(label).append(": OUT initialization failed\n");
+                return false;
+            }
+            ByteBuffer bytes = direct(command);
+            if (!writer.queue(bytes)) {
+                log.append(label).append(": OUT queue failed\n");
+                return false;
+            }
+            UsbRequest completion;
+            try {
+                completion = conn.requestWait(EXCHANGE_WAIT_MS);
+            } catch (TimeoutException ignored) {
+                completion = null;
+            }
+            boolean good = completion == writer && bytes.position() == 64;
+            log.append(label).append(": OUT=")
+                    .append(good ? "64 bytes" : "not confirmed").append('\n');
+            return good;
+        } catch (RuntimeException error) {
+            log.append(label).append(": USB error ")
+                    .append(error.getClass().getSimpleName()).append('\n');
+            return false;
+        } finally {
+            writer.cancel();
+            writer.close();
+        }
+    }
+
+    private static boolean drainForResponse(UsbDeviceConnection conn,
+                                            UsbEndpoint in, boolean forClose,
+                                            byte parameter, StringBuilder log) {
+        int remainingData = 0;
+        int other = 0;
+        boolean matched = false;
+        long deadline = SystemClock.elapsedRealtime() + 3500;
+        for (int i = 0; i < 160; i++) {
+            long remaining = deadline - SystemClock.elapsedRealtime();
+            if (remaining <= 0) break;
+            byte[] report = nextReport(conn, in, Math.min(remaining, 400));
+            if (report == null) break;
+            boolean expected = forClose
+                    ? isCloseAcknowledgement(report, parameter)
+                    : isIrDoneReport(report);
+            if (expected) {
+                matched = true;
+                break;
+            }
+            if ((report[0] & 0xF0) == 0x90) remainingData++;
+            else other++;
+        }
+        log.append(forClose ? "CLOSE" : "STOP")
+                .append(" response scan: stale IR reports=")
+                .append(remainingData).append(", other reports=")
+                .append(other).append(", expected response=")
+                .append(matched ? "FOUND" : "NOT CONFIRMED")
+                .append('\n');
+        return matched;
+    }
+
     /** Ignore idle keepalives until timing data has actually arrived. */
     static boolean idleLimitReached(int capturedWords, int consecutiveEmpty) {
         return capturedWords > 0 && consecutiveEmpty >= MAX_IDLE_AFTER_DATA;
@@ -283,6 +394,12 @@ final class HarmonyIrCaptureProbe {
             } else {
                 dataReports++;
                 idleAfterData = 0;
+                int repeatAt = firstRepeatBoundary(words);
+                if (repeatAt >= 0) {
+                    reason = "probable first-frame repeat boundary at timing word "
+                            + repeatAt;
+                    break;
+                }
             }
         }
         long duration = SystemClock.elapsedRealtime() - start;
@@ -336,16 +453,20 @@ final class HarmonyIrCaptureProbe {
                 // Concordance's transient stop+close are always attempted
                 // even when no IR button was pressed or the data was malformed.
                 log.append("Closing IR capture session\n");
-                byte[] stop = exchange(conn, in, out, stopCommand(parameter),
-                        EXCHANGE_WAIT_MS, log, "IR receive STOP");
-                log.append("IR stop reply: ")
-                        .append(stop == null ? "not confirmed" : "received")
-                        .append('\n');
-                byte[] close = exchange(conn, in, out, closeCommand(parameter),
-                        EXCHANGE_WAIT_MS, log, "IR sequence CLOSE");
-                log.append("IR sequence close reply: ")
-                        .append(close == null ? "not confirmed" : "received")
-                        .append('\n');
+                boolean stopped = sendOnly(conn, out, stopCommand(parameter),
+                        log, "IR receive STOP");
+                if (stopped) {
+                    drainForResponse(conn, in, false, parameter, log);
+                } else {
+                    log.append("STOP send unconfirmed; continuing bounded CLOSE cleanup\n");
+                }
+                boolean closed = sendOnly(conn, out, closeCommand(parameter),
+                        log, "IR sequence CLOSE");
+                if (closed) {
+                    drainForResponse(conn, in, true, parameter, log);
+                } else {
+                    log.append("CLOSE send unconfirmed; unplug USB if next test fails\n");
+                }
             }
         }
         return log.toString();

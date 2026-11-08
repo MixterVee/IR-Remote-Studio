@@ -304,8 +304,8 @@ public final class UsbHarmonyInspector {
                 .setTitle("Experimental Harmony IR receiver")
                 .setMessage("This test temporarily enables the Harmony 300's "
                         + "IR-learning receiver. After tapping Start, point "
-                        + "another IR remote at the Harmony and press one "
-                        + "button once within 10 seconds. The test stops the "
+                        + "another IR remote at the Harmony and tap then release "
+                        + "one button promptly within 10 seconds. The test stops the "
                         + "receiver afterwards, even on an error. No learned "
                         + "command is saved or transmitted, and the Harmony's "
                         + "stored programming and firmware are not modified.")

@@ -92,6 +92,56 @@ public class HarmonyIrCaptureProbeTest {
         assertTrue(summary.contains("632"));
     }
 
+    @Test public void detectsProbableRepeatAfterLongFrameGap() {
+        List<Integer> words = new ArrayList<>();
+        words.add(9);
+        words.add(4006);
+        words.add(153);
+        words.add(7995);
+        for (int i = 0; i < 20; i++)
+            words.add(i % 2 == 0 ? 482 : 1499);
+        words.add(482);
+        words.add(8772);
+        assertEquals(-1, HarmonyIrCaptureProbe.firstRepeatBoundary(words));
+        words.add(4008);
+        words.add(7996);
+        assertEquals(26, HarmonyIrCaptureProbe.firstRepeatBoundary(words));
+    }
+
+    @Test public void doesNotMistakeShortGapForRepeat() {
+        List<Integer> words = new ArrayList<>();
+        words.add(9);
+        words.add(4006);
+        words.add(153);
+        words.add(7995);
+        for (int i = 0; i < 20; i++)
+            words.add(i % 2 == 0 ? 482 : 1499);
+        words.add(482);
+        words.add(1499);
+        words.add(4006);
+        words.add(7995);
+        assertEquals(-1, HarmonyIrCaptureProbe.firstRepeatBoundary(words));
+        assertEquals(-1, HarmonyIrCaptureProbe.firstRepeatBoundary(null));
+    }
+
+    @Test public void distinguishesQueuedIrFromStopAndCloseResponses() {
+        byte[] staleIrPacket = {(byte)0x90, (byte)0x90, 0x05, (byte)0xDB};
+        byte[] done = {(byte)0xF0, 0x70};
+        byte[] close = {
+                (byte)0xFF, 0x07, (byte)0x83, 0x01, 0x01, 0x0C, 0x77
+        };
+        assertFalse(HarmonyIrCaptureProbe.isIrDoneReport(staleIrPacket));
+        assertTrue(HarmonyIrCaptureProbe.isIrDoneReport(done));
+        assertFalse(HarmonyIrCaptureProbe.isCloseAcknowledgement(
+                staleIrPacket, (byte)0x0C));
+        assertFalse(HarmonyIrCaptureProbe.isCloseAcknowledgement(
+                done, (byte)0x0C));
+        assertTrue(HarmonyIrCaptureProbe.isCloseAcknowledgement(
+                close, (byte)0x0C));
+        assertFalse(HarmonyIrCaptureProbe.isCloseAcknowledgement(
+                close, (byte)0x06));
+    }
+
     private static byte[] prefix(byte[] bytes, int size) {
         byte[] result = new byte[size];
         System.arraycopy(bytes, 0, result, 0, size);
