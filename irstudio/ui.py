@@ -169,8 +169,6 @@ class Studio(tk.Tk):
                   justify="left").pack(fill="x", pady=(6, 8))
         self.capture_btn = ttk.Button(controls, text="Capture selected button", command=self.capture)
         self.capture_btn.pack(fill="x", ipady=7)
-        capture_tools = ttk.Frame(controls)
-        capture_tools.pack(fill="x", pady=(6, 0))
         save_actions = ttk.Frame(controls)
         save_actions.pack(fill="x", pady=(6, 0))
         self.save_button_btn = ttk.Button(save_actions, text="Save button",
@@ -179,6 +177,8 @@ class Studio(tk.Tk):
         self.save_next_btn = ttk.Button(save_actions, text="Save & Learn another",
                                          command=self.learn_another)
         self.save_next_btn.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=5)
+        capture_tools = ttk.Frame(controls)
+        capture_tools.pack(fill="x", pady=(6, 0))
         for label, cmd in (("Review captures...", self.browse_samples),
                            ("Use best match", self.choose_best),
                            ("Remove last", self.remove_capture)):
@@ -622,7 +622,7 @@ class Studio(tk.Tk):
         try:
             self._save()
         except Exception as error:
-            messagebox.showerror("Save button", f"Could not save the library:\\n{error}")
+            messagebox.showerror("Save button", f"Could not save the library:\n{error}")
             self.status_var.set("Save unsuccessful; previous library not replaced.")
             return False
         self.status_var.set(
