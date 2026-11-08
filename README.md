@@ -61,13 +61,13 @@ official Bluetooth-connected app. In November 2026, a Pixel HCI capture
 revealed its proprietary A5 5A packet framing and allowed reconstruction
 of two infrared recordings which successfully played in IRPlus.
 
-In Windows v0.2.8-beta, **SofaBaton U1 Bluetooth...** offers:
+In Windows v0.2.9-beta, **SofaBaton U1 Bluetooth...** offers:
 
 - BLE scanning and read-only GATT structure inspection (same as v0.2.5).
-- **Read stored IR (test)**: for a positively identified U1, query a
+- **Advanced → Read stored IR (test)**: for a positively identified U1, query a
   previously learned IR command from an occupied slot (1–8), initially
   try slot 7 or 8 from the verified recording.
-- **Save to selected button**: save the validated read-back IR timings
+- **Advanced → Save to selected button**: save the validated read-back IR timings
   directly to the selected device/button in IR Remote Studio's local
   library. Export that device as .irplus for replay testing.
 
@@ -82,7 +82,7 @@ the local library changes only when you explicitly choose Save.
 
 To test: close the SofaBaton phone app; put batteries in the U1 and
 open the BLE window, scan and select the identified SB-prefixed U1.
-Choose a populated slot, click **Read stored IR (test)**, confirm,
+Open **Advanced**, choose a populated slot, click **Read stored IR (test)**, confirm,
 select a device/button in the Windows main app, and choose
 **Save to selected button**. Verify playback after .irplus export.
 This experimental Windows BLE read-back path needs physical testing
@@ -265,3 +265,19 @@ U1 supports direct connection without pairing. A **Request Windows
 pairing (only if needed)** checkbox is available during Connect; use
 only after normal connection fails. Pairing can prompt for user input.
 There is no U1 firmware/profile programming, nor new live IR learning.
+
+### Windows 0.2.9-beta: simplified SofaBaton connection screen
+
+The normal U1 window now focuses on **Scan Bluetooth**, **Connect U1**,
+**Disconnect**, a high-contrast connected indicator and the identified
+remote list. It presents a disabled **Learn IR** action with explicit
+explanation: direct SofaBaton U1 learning has **not** yet been implemented
+or safety-validated. This is not a working learn function.
+
+Choose **Advanced ▸** only when you need existing stored-IR slot
+read-back, Save to selected button, GATT inspection, optional Windows
+pairing or diagnostic reports. The Advanced area is hidden by default;
+opening it never sends Bluetooth commands. Existing proven stored-code
+reads continue to use the persistent connected session. Main-window USB
+capture is labeled **(USB)**, separately from the U1 Bluetooth status.
+All U1 programming and firmware writes remain disabled.
