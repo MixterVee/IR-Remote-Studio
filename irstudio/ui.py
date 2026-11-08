@@ -175,7 +175,6 @@ class Studio(tk.Tk):
         self.button_progress = ttk.Label(middle, textvariable=self.progress_var,
                                          foreground="#536277")
         self.button_progress.pack(side="bottom", fill="x", pady=(5, 0))
-        self.button_tree.bind("<<TreeviewSelect>>", self._select_button)
         self.button_tree = ttk.Treeview(middle, columns=("label", "status", "count", "code"),
                                          show="headings", selectmode="browse")
         for key, caption, width, minimum in (
@@ -191,6 +190,7 @@ class Studio(tk.Tk):
         self.button_tree.tag_configure("Mismatch", foreground="#b24b22")
         self.button_tree.tag_configure("Not learned", foreground="#7a8490")
         self.button_tree.pack(fill="both", expand=True)
+        self.button_tree.bind("<<TreeviewSelect>>", self._select_button)
         ttk.Label(right, text="Selected button", font=("Segoe UI Semibold", 13)).pack(anchor="w", pady=(0, 8))
         # Keep capture controls visible even when the user narrows the window.
         controls = ttk.Frame(right)
