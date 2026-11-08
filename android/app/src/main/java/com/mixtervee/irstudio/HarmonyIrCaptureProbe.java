@@ -16,7 +16,7 @@ import java.util.concurrent.TimeoutException;
  * Uses the documented transient /ir/ir_cap read session, not configuration
  * or firmware writes. Stops the receive session in a finally block.
  *
- * Does not save, transmit, or export a learned command in this build.
+ * Shows a local-only unverified Pronto candidate. Does not save or transmit it.
  */
 final class HarmonyIrCaptureProbe {
     private HarmonyIrCaptureProbe() {}
@@ -337,6 +337,7 @@ final class HarmonyIrCaptureProbe {
         int idleAfterData = 0;
         int sequence = 0x90; // Concordance starts MH arch 16 learning at 0x90.
         boolean endMarker = false;
+        int firstRepeatAt = -1;
         String reason = "maximum 128 IR reports reached";
         long start = SystemClock.elapsedRealtime();
         long deadline = start + MAX_CAPTURE_MS;
@@ -399,6 +400,7 @@ final class HarmonyIrCaptureProbe {
                 idleAfterData = 0;
                 int repeatAt = firstRepeatBoundary(words);
                 if (repeatAt >= 0) {
+                    firstRepeatAt = repeatAt;
                     reason = "probable first-frame repeat boundary at timing word "
                             + repeatAt;
                     break;
@@ -420,7 +422,23 @@ final class HarmonyIrCaptureProbe {
                             : "capture completeness unverified")
                     .append('\n');
         }
-        log.append("Diagnostic only: no command saved or exported.\n");
+        if (firstRepeatAt >= 0) {
+            try {
+                String pronto = HarmonyProntoConverter.preview(words, firstRepeatAt);
+                log.append("Pronto Hex candidate (experimental, unverified):\n")
+                        .append(pronto).append('\n');
+                log.append("First-frame timing pairs: ")
+                        .append((firstRepeatAt - 2) / 2).append('\n');
+                log.append("Pronto format: raw 0000, one-time sequence only; ")
+                        .append("no separate repeat sequence.\n");
+            } catch (IllegalArgumentException invalid) {
+                log.append("Pronto preview withheld: ")
+                        .append(invalid.getMessage()).append('\n');
+            }
+        } else {
+            log.append("Pronto preview withheld: no first-repeat boundary\n");
+        }
+        log.append("Diagnostic preview only: no command saved, transmitted or exported.\n");
     }
 
     static String capture(UsbDeviceConnection conn, UsbEndpoint in,
