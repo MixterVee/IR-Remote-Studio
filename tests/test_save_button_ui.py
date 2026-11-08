@@ -39,7 +39,7 @@ class SaveButtonUITests(unittest.TestCase):
             self.load_patch.stop()
 
     def test_standalone_save_confirms_without_recapturing_or_duplicating(self):
-        self.assertEqual(self.app.save_button_btn.cget("text"), "Save button")
+        self.assertEqual(self.app.save_button_btn.cget("text"), "Save")
         self.assertIn("Save & Learn another",
                       self.app.save_next_btn.cget("text"))
         self.button["pronto_hex"] = "0000 006D 0001 0000 0010 0020"

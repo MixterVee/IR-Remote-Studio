@@ -5,7 +5,7 @@
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for compatible Android phones.
 
 > **Status (November 2026):** Windows v0.1.7 is the established GitHub release.
-> **Windows v0.2.1-beta** builds on direct USB learning backends for Harmony 300/350
+> **Windows v0.2.2-beta** builds on direct USB learning backends for Harmony 300/350
 > (shared HID ID 046D:C124) and a documented Ocrustar/ElkSmart D226/D552
 > learning family (045C:02AA). Both Windows USB transports need real-device
 > validation before they can be treated as production-ready. The existing
@@ -18,13 +18,13 @@ Create devices, use custom labels for every button, capture commands from a comp
 For the tested Windows v0.1.7 release, use
 [GitHub Releases](https://github.com/MixterVee/IR-Remote-Studio/releases).
 
-For the **experimental v0.2.1-beta direct USB learner**, obtain the
+For the **experimental v0.2.2-beta direct USB learner**, obtain the
 Windows ZIP from the latest successful
 [Windows Actions build](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
 Extract the ZIP and launch the standalone \`IR-Remote-Studio.exe\`.
 Python is not required to run the packaged executable.
 
-In v0.2.1-beta the Windows learning panel provides **Save button** to
+In v0.2.2-beta the Windows learning panel provides **Save** to
 confirm the selected command is saved without starting another capture, and
 **Save & Learn another** to save and continue learning. Captures remain
 autosaved immediately after successful receiving, as in the previous version.
