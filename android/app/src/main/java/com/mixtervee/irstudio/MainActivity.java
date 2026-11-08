@@ -107,7 +107,7 @@ public class MainActivity extends Activity {
         titles.setPadding(dp(10), 0, 0, 0);
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.addView(text("IR Remote Studio", 22, WHITE, true));
-        titles.addView(text("Android USB lab · v0.1.17-alpha", 12, MUTED, false));
+        titles.addView(text("Android USB lab · v0.1.18-alpha", 12, MUTED, false));
         header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
 
