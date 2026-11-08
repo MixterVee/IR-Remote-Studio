@@ -36,6 +36,7 @@ class Studio(tk.Tk):
         self.connection_detail_var = tk.StringVar(
             value="Connect your Harmony or supported IR learner, then click Connect / Retry.")
         self._active_operation = 0
+        self._scan_in_progress = False
         self.aim_var = tk.StringVar(value="Aim the original remote at the Harmony learning receiver, about 5-10 cm away.")
         self.status_var = tk.StringVar(value=f"Library: {self.library_path}")
         self.repeat_var = tk.StringVar(value="0")
@@ -542,6 +543,8 @@ class Studio(tk.Tk):
 
     def _receiver_changed(self, event=None) -> None:
         """Changing receiver invalidates any previous handshake result."""
+        if self.running or self._scan_in_progress:
+            return
         self.connected_model = None
         self._set_connection(
             "not-connected", "Receiver selection changed. Click Connect / Retry "
@@ -594,17 +597,23 @@ class Studio(tk.Tk):
 
     def detect_learner(self):
         """Read-only enumeration; never starts USB communication or IR capture."""
-        if self.running:
+        if self.running or self._scan_in_progress:
             return
+        self._scan_in_progress = True
         self._set_connection(
             "connecting", "Scanning USB device IDs only; no commands are sent.")
         self.detect_btn.configure(state="disabled")
+        self.probe_btn.configure(state="disabled")
+        self.capture_btn.configure(state="disabled")
         self.status_var.set("Scanning supported USB IR learner IDs...")
         def job():
             h = harmony_attached()
             o = ocrustar_attached()
             def done():
+                self._scan_in_progress = False
                 self.detect_btn.configure(state="normal")
+                self.probe_btn.configure(state="normal")
+                self.capture_btn.configure(state="normal")
                 self.connected_model = None
                 if h and o:
                     self._set_connection(
@@ -632,6 +641,8 @@ class Studio(tk.Tk):
         threading.Thread(target=job, daemon=True).start()
 
     def probe(self):
+        if self._scan_in_progress:
+            return
         def done(result, error):
             self._end_background()
             if error:
@@ -655,6 +666,8 @@ class Studio(tk.Tk):
         self._background("Probe", done)
 
     def capture(self):
+        if self._scan_in_progress or self.running:
+            return
         b = self._selected_button()
         if not b:
             return messagebox.showwarning("Select button", "Choose a button before capturing")
