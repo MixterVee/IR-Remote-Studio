@@ -22,10 +22,12 @@ final class HarmonyIrCaptureProbe {
     private HarmonyIrCaptureProbe() {}
 
     private static final int REPORT_BYTES = 64;
-    private static final int MAX_PACKETS = 16;
+    private static final int MAX_PACKETS = 128;
+    private static final int MAX_IDLE_AFTER_DATA = 24;
     private static final int MAX_WORDS = 480;
     private static final long START_WAIT_MS = 10000;
     private static final long MORE_WAIT_MS = 1200;
+    private static final long MAX_CAPTURE_MS = 15000;
     private static final long EXCHANGE_WAIT_MS = 3500;
 
     static byte[] openCommand() {
@@ -195,51 +197,104 @@ final class HarmonyIrCaptureProbe {
         } else {
             out.append("unverified (").append(hz).append(" Hz)\n");
         }
-        out.append("First timing words (raw, not yet export-ready):");
-        for (int i = 0; i < Math.min(words.size(), 20); i++)
+        out.append("Captured timing words (raw, not yet export-ready, max 128 shown):");
+        for (int i = 0; i < Math.min(words.size(), 128); i++)
             out.append(i == 0 ? " " : ", ").append(words.get(i));
         out.append('\n');
         return out.toString();
     }
 
+    /**
+     * Read one bounded IR command. The remote can emit many zero-data
+     * keepalive reports; do not let 16 of them truncate a real waveform.
+     * Never issue additional USB OUT packets here.
+     */
     private static void readOneButton(UsbDeviceConnection conn, UsbEndpoint in,
                                       StringBuilder log) {
         List<Integer> words = new ArrayList<>();
-        int packets = 0;
-        int sequence = 0x90; // Concordance uses 0x90 for MH architecture 16.
-        boolean done = false;
+        int totalReports = 0;
+        int dataReports = 0;
+        int emptyReports = 0;
+        int idleAfterData = 0;
+        int sequence = 0x90; // Concordance starts MH arch 16 learning at 0x90.
+        boolean endMarker = false;
+        String reason = "maximum 128 IR reports reached";
+        long start = SystemClock.elapsedRealtime();
+        long deadline = start + MAX_CAPTURE_MS;
+
         for (int i = 0; i < MAX_PACKETS; i++) {
-            byte[] report = nextReport(conn, in,
-                    packets == 0 ? START_WAIT_MS : MORE_WAIT_MS);
+            long remaining = deadline - SystemClock.elapsedRealtime();
+            if (remaining <= 0) {
+                reason = "15-second receive deadline";
+                break;
+            }
+            byte[] report = nextReport(conn, in, Math.min(remaining,
+                    totalReports == 0 ? START_WAIT_MS : MORE_WAIT_MS));
             if (report == null) {
-                log.append(packets == 0
-                        ? "No IR data within 10 seconds\n"
-                        : "IR data stream ended after timeout\n");
+                reason = words.isEmpty()
+                        ? "no IR timing data before USB read timeout"
+                        : "USB read timeout after last IR packet";
                 break;
             }
             int type = report[0] & 0xF0;
             if (type == 0xF0) {
-                done = true;
+                endMarker = true;
+                reason = "remote end marker";
                 break;
             }
             if (type != 0x90 || report.length != REPORT_BYTES) {
-                log.append("Unexpected IR report type or size; stopped\n");
+                reason = "unexpected IR report type or length";
+                log.append("Unexpected IR report first byte: 0x")
+                        .append(String.format(Locale.ROOT, "%02X",
+                                report[0] & 0xFF)).append('\n');
                 break;
             }
             if ((report[1] & 0xFF) != sequence) {
-                log.append("Unexpected IR sequence number; stopped\n");
+                reason = "unexpected IR sequence number";
+                log.append("Expected IR sequence 0x")
+                        .append(String.format(Locale.ROOT, "%02X", sequence))
+                        .append(", got 0x")
+                        .append(String.format(Locale.ROOT, "%02X",
+                                report[1] & 0xFF)).append('\n');
                 break;
             }
+            int wordsBefore = words.size();
             if (!appendSignalWords(report, words)) {
-                log.append("Malformed IR timing packet; stopped\n");
+                reason = "malformed IR timing packet or word limit";
                 break;
             }
-            packets++;
+            totalReports++;
             sequence = (sequence + 0x10) & 0xFF;
+
+            if (words.size() == wordsBefore) {
+                emptyReports++;
+                if (!words.isEmpty()) {
+                    idleAfterData++;
+                    if (idleAfterData >= MAX_IDLE_AFTER_DATA) {
+                        reason = "24 consecutive empty IR reports after timing data";
+                        break;
+                    }
+                }
+            } else {
+                dataReports++;
+                idleAfterData = 0;
+            }
         }
-        log.append("IR data packets received: ").append(packets).append('\n');
-        log.append("IR end marker received: ").append(done).append('\n');
+        long duration = SystemClock.elapsedRealtime() - start;
+        log.append("IR reports consumed: ").append(totalReports)
+                .append(" (with timing data: ").append(dataReports)
+                .append(", empty: ").append(emptyReports).append(")\n");
+        log.append("IR end marker received: ").append(endMarker).append('\n');
+        log.append("Receive termination: ").append(reason).append('\n');
+        log.append("Receive elapsed: ").append(duration).append(" ms\n");
         log.append(summary(words));
+        if (words.size() >= 3) {
+            log.append("Waveform status: timing data received; ")
+                    .append(endMarker
+                            ? "end marker observed"
+                            : "capture completeness unverified")
+                    .append('\n');
+        }
         log.append("Diagnostic only: no command saved or exported.\n");
     }
 
