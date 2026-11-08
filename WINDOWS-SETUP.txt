@@ -252,3 +252,10 @@ AUTOMATIC SOFABATON U1 DISCOVERY & CONNECTION (0.3.1-BETA)
 Only Bluetooth identity inquiries and optional user-approved stored-IR
 reads are supported. This does not initiate new IR learning, change
 stored U1 profiles or write firmware.
+
+INLINE BLUETOOTH DISCONNECT (WINDOWS 0.3.2-BETA)
+------------------------------------------------
+Disconnect U1 now appears next to the green connected U1 device name,
+not at the far-right side of the main window. The button uses a red
+background and white text for contrast and only appears when a live
+U1 Bluetooth connection exists. No Bluetooth protocol changes.
