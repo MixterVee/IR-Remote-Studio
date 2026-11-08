@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.13-alpha
+# IR Remote Studio for Android — v0.1.14-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -258,3 +258,31 @@ Unit tests now specifically verify full-length zero-padding for the ACK and
 session close, and that the already-full 64-byte read request stays identical.
 The Android debug APK remains experimental: no IR capture, configuration,
 flash, firmware or persistent device writes are attempted.
+
+
+## Harmony MH IR receiving test — v0.1.14-alpha
+
+With the Harmony 300 connected by USB to the Android phone and batteries
+installed, the earlier v0.1.13 diagnostic successfully read the complete
+289-byte `/sys/sysinfo` file, including firmware `1.4.0`, architecture
+`0x10`, and a clean 64-byte close packet.
+
+This build adds a **separate, explicitly confirmed** `Test IR receiving
+(experimental)` action under Harmony USB discovery. After the verified MH
+session handshake it attempts Concordance's transient `/ir/ir_cap` receive
+sequence for architecture 16: an open/read packet, capture acknowledgement,
+up to 10 seconds to press one button on another IR remote, followed by
+explicit STOP (0x06) and sequence CLOSE (0x07) packets. The STOP/CLOSE
+cleanup runs even when receiving fails after a confirmed open. All OUT
+reports are 64-byte zero-padded HID messages.
+
+The first version is **diagnostic only**. It reports packets, unprocessed
+timing words and an estimated carrier frequency. It deliberately does not
+store, transmit, replay, export, or reprogram any captured command. The
+receiver listens only for a single press and caps the duration and number
+of IR packets. No firmware, flash, configuration, or persistent writes are
+attempted. If a test fails, disconnect USB and briefly remove/reinstall
+the batteries before trying again; avoid repeated rapid test attempts.
+
+This new functionality is independent of the existing **Read Harmony identity**
+action, which remains available and unchanged.

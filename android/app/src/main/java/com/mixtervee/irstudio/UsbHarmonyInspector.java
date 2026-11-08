@@ -250,6 +250,19 @@ public final class UsbHarmonyInspector {
             });
         }
 
+        // Optional one-button learning diagnostic; separate from identity read.
+        // User must explicitly confirm each attempt.
+        if (accessibleHarmony != null) {
+            UsbDevice captureTarget = accessibleHarmony;
+            Button capture = new Button(context);
+            capture.setAllCaps(false);
+            capture.setText("Test IR receiving (experimental)");
+            body.addView(capture, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, dp(context, 52)));
+            capture.setOnClickListener(v ->
+                    startCapture(context, manager, captureTarget, dialog, capture));
+        }
+
         ScrollView scroll = new ScrollView(context);
         scroll.setFillViewport(false);
         TextView contents = new TextView(context);
@@ -282,6 +295,47 @@ public final class UsbHarmonyInspector {
             }
         });
         dialog.show();
+    }
+
+    private static void startCapture(Activity context, UsbManager manager,
+                                     UsbDevice harmony, AlertDialog parent,
+                                     Button button) {
+        new AlertDialog.Builder(context)
+                .setTitle("Experimental Harmony IR receiver")
+                .setMessage("This test temporarily enables the Harmony 300's "
+                        + "IR-learning receiver. After tapping Start, point "
+                        + "another IR remote at the Harmony and press one "
+                        + "button once within 10 seconds. The test stops the "
+                        + "receiver afterwards, even on an error. No learned "
+                        + "command is saved or transmitted, and the Harmony's "
+                        + "stored programming and firmware are not modified.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Start IR test", (d, w) -> {
+                    button.setEnabled(false);
+                    button.setText("Listening for IR...");
+                    new Thread(() -> {
+                        String result = HarmonyMhProbe.runCapture(manager, harmony);
+                        context.runOnUiThread(() -> {
+                            if (context.isFinishing() || context.isDestroyed()) return;
+                            parent.dismiss();
+                            new AlertDialog.Builder(context)
+                                    .setTitle("Harmony IR receive results")
+                                    .setMessage(result)
+                                    .setPositiveButton("Close", (d1, w1) -> {})
+                                    .setNeutralButton("Copy result", (d1, w1) -> {
+                                        ClipboardManager clip = (ClipboardManager)
+                                                context.getSystemService(
+                                                        Context.CLIPBOARD_SERVICE);
+                                        if (clip != null) {
+                                            clip.setPrimaryClip(ClipData.newPlainText(
+                                                    "Harmony IR receive", result));
+                                            Toast.makeText(context, "IR report copied",
+                                                    Toast.LENGTH_SHORT).show();
+                                        }
+                                    }).show();
+                        });
+                    }, "HarmonyMHIRReceive").start();
+                }).show();
     }
 
     private static int dp(Context context, int dp) {
