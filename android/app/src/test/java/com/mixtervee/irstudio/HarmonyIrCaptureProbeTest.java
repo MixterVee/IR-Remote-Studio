@@ -72,6 +72,26 @@ public class HarmonyIrCaptureProbeTest {
         assertEquals(3, words.size());
     }
 
+    @Test public void waitsForSignalBeforeTreatingEmptyKeepaliveAsEnd() {
+        assertFalse(HarmonyIrCaptureProbe.idleLimitReached(0, 24));
+        assertFalse(HarmonyIrCaptureProbe.idleLimitReached(0, 128));
+        assertFalse(HarmonyIrCaptureProbe.idleLimitReached(33, 23));
+        assertTrue(HarmonyIrCaptureProbe.idleLimitReached(33, 24));
+        assertTrue(HarmonyIrCaptureProbe.idleLimitReached(1, 25));
+    }
+
+    @Test public void fullTimingSummaryIncludesWordsBeyondFirstTwenty() {
+        List<Integer> words = new ArrayList<>();
+        words.add(10);
+        words.add(4008);
+        words.add(153);
+        for (int i = 3; i < 33; i++) words.add(600 + i);
+        String summary = HarmonyIrCaptureProbe.summary(words);
+        assertTrue(summary.contains("Captured timing words: 33"));
+        assertTrue(summary.contains("38173 Hz"));
+        assertTrue(summary.contains("632"));
+    }
+
     private static byte[] prefix(byte[] bytes, int size) {
         byte[] result = new byte[size];
         System.arraycopy(bytes, 0, result, 0, size);
