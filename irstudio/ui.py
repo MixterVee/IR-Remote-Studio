@@ -68,7 +68,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.2.6-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.2.7-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -143,16 +143,39 @@ class Studio(tk.Tk):
         panels.add(right, weight=3)
 
         ttk.Label(left, text="Devices", font=("Segoe UI Semibold", 13)).pack(anchor="w", pady=(0, 8))
-        self.device_list = tk.Listbox(left, borderwidth=1, relief="solid", activestyle="none", exportselection=False)
-        self.device_list.pack(fill="both", expand=True)
-        self.device_list.bind("<<ListboxSelect>>", self._select_device)
-        dl = ttk.Frame(left)
-        dl.pack(fill="x", pady=(10, 0))
+        self.device_actions = ttk.Frame(left)
+        dl = self.device_actions
+        dl.pack(side="bottom", fill="x", pady=(10, 0))
         ttk.Button(dl, text="+ Add", command=self.add_device).pack(side="left", expand=True, fill="x")
         ttk.Button(dl, text="Edit", command=self.edit_device).pack(side="left", expand=True, fill="x", padx=3)
         ttk.Button(dl, text="Delete", command=self.delete_device).pack(side="left", expand=True, fill="x")
 
+        # Allocate bottom action buttons first, then give remaining space to the list.
+        self.device_list = tk.Listbox(left, borderwidth=1, relief="solid", activestyle="none", exportselection=False)
+        self.device_list.pack(fill="both", expand=True)
+        self.device_list.bind("<<ListboxSelect>>", self._select_device)
         ttk.Label(middle, text="Buttons", font=("Segoe UI Semibold", 13)).pack(anchor="w", pady=(0, 8))
+        # Bottom actions are deliberately packed before the expanding Treeview.
+        # Windows taskbar and display scaling must never hide these controls.
+        self.button_actions = ttk.Frame(middle)
+        button_actions = self.button_actions
+        button_actions.pack(side="bottom", fill="x", pady=(10, 0))
+        primary = ttk.Frame(button_actions)
+        primary.pack(fill="x")
+        for label, cmd in (("+ Add", self.add_button), ("Rename", self.rename_button),
+                           ("Delete", self.delete_button)):
+            ttk.Button(primary, text=label, command=cmd).pack(side="left", expand=True, fill="x", padx=1)
+        secondary = ttk.Frame(button_actions)
+        secondary.pack(fill="x", pady=(3, 0))
+        for label, cmd in (("Move up", lambda: self.move_button(-1)),
+                           ("Move down", lambda: self.move_button(1)),
+                           ("Layout editor...", self.edit_layout)):
+            ttk.Button(secondary, text=label, command=cmd).pack(side="left", expand=True, fill="x", padx=1)
+
+        self.button_progress = ttk.Label(middle, textvariable=self.progress_var,
+                                         foreground="#536277")
+        self.button_progress.pack(side="bottom", fill="x", pady=(5, 0))
+        self.button_tree.bind("<<TreeviewSelect>>", self._select_button)
         self.button_tree = ttk.Treeview(middle, columns=("label", "status", "count", "code"),
                                          show="headings", selectmode="browse")
         for key, caption, width, minimum in (
@@ -168,23 +191,6 @@ class Studio(tk.Tk):
         self.button_tree.tag_configure("Mismatch", foreground="#b24b22")
         self.button_tree.tag_configure("Not learned", foreground="#7a8490")
         self.button_tree.pack(fill="both", expand=True)
-        ttk.Label(middle, textvariable=self.progress_var,
-                  foreground="#536277").pack(anchor="w", pady=(5, 0))
-        self.button_tree.bind("<<TreeviewSelect>>", self._select_button)
-        button_actions = ttk.Frame(middle)
-        button_actions.pack(fill="x", pady=(10, 0))
-        primary = ttk.Frame(button_actions)
-        primary.pack(fill="x")
-        for label, cmd in (("+ Add", self.add_button), ("Rename", self.rename_button),
-                           ("Delete", self.delete_button)):
-            ttk.Button(primary, text=label, command=cmd).pack(side="left", expand=True, fill="x", padx=1)
-        secondary = ttk.Frame(button_actions)
-        secondary.pack(fill="x", pady=(3, 0))
-        for label, cmd in (("Move up", lambda: self.move_button(-1)),
-                           ("Move down", lambda: self.move_button(1)),
-                           ("Layout editor...", self.edit_layout)):
-            ttk.Button(secondary, text=label, command=cmd).pack(side="left", expand=True, fill="x", padx=1)
-
         ttk.Label(right, text="Selected button", font=("Segoe UI Semibold", 13)).pack(anchor="w", pady=(0, 8))
         # Keep capture controls visible even when the user narrows the window.
         controls = ttk.Frame(right)
