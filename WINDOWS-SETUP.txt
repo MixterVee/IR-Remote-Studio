@@ -259,3 +259,30 @@ Disconnect U1 now appears next to the green connected U1 device name,
 not at the far-right side of the main window. The button uses a red
 background and white text for contrast and only appears when a live
 U1 Bluetooth connection exists. No Bluetooth protocol changes.
+
+WINDOWS 0.3.3-BETA: RESPONSIVE BUTTONS + EXPERIMENTAL LEARNING
+-------------------------------------------------------------
+At narrower window widths the Add / Edit / Delete (Devices) and
+Add / Rename / Delete / Move / Layout editor (Buttons) actions wrap
+into two-column rows instead of clipping off the right edge.
+
+SOFABATON U1 LIVE LEARNING IS A HIGH-RISK FIRST TEST.
+It is disabled in the normal Learn IR area. Under Advanced choose
+"Experimental: learn IR in slot 8 (risk of overwrite)".
+
+This uses the captured official-app learning command for slot 8 only.
+The app first requires a valid read and timestamped local JSON backup
+of slot 8, then sends observed 0x04 start, receives 0x06/0x0d
+capture, and sends observed 0x05 finish. It does not attempt to
+program profiles or firmware. Before running, read the warning and
+type LEARN 8 to confirm.
+
+CAUTION: This MAY ERASE/REPLACE the U1's existing slot 8 code. We do
+not yet know which physical device/key the slot controls. Although
+the app saves the previously stored IR waveform to the local
+U1-Learn-Backups folder, it CANNOT restore that code to the U1.
+Do not test on a U1 with irreplaceable programming or important keys.
+
+No signal will be saved to the Windows IR Remote Studio library until
+you choose Advanced → Save to selected button. Save the successful
+capture and verify it in IRPlus on your Android device.
