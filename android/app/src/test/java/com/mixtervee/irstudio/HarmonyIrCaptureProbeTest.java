@@ -145,6 +145,15 @@ public class HarmonyIrCaptureProbeTest {
                 close, (byte)0x06));
     }
 
+    @Test public void localSaveRequiresCandidateAndVerifiedStopAndClose() {
+        String signal = "0000 006D 0001 0000 0010 0010";
+        assertTrue(HarmonyIrCaptureProbe.eligibleForLocalSave(signal, true, true));
+        assertFalse(HarmonyIrCaptureProbe.eligibleForLocalSave(signal, true, false));
+        assertFalse(HarmonyIrCaptureProbe.eligibleForLocalSave(signal, false, true));
+        assertFalse(HarmonyIrCaptureProbe.eligibleForLocalSave(null, true, true));
+        assertFalse(HarmonyIrCaptureProbe.eligibleForLocalSave("", true, true));
+    }
+
     private static byte[] prefix(byte[] bytes, int size) {
         byte[] result = new byte[size];
         System.arraycopy(bytes, 0, result, 0, size);
