@@ -94,6 +94,9 @@ class U1SaveUITests(unittest.TestCase):
 
     def test_disconnect_is_red_and_immediately_beside_connected_name(self):
         # Regression for previously far-right disconnect control.
+        # This test suite withdraws Studio by default. Geometry measurements
+        # are meaningless until the window is actually mapped to the display.
+        self.app.deiconify()
         self.app.geometry("1490x900")
         self.app.u1_session._state(
             "CONNECTED", "SB202006231D9E", "MOCK", "Identity verified.")
