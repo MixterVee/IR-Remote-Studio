@@ -33,6 +33,17 @@ HELLO = 0x01
 BANNER = 0x02
 READ_IR = 0x0C
 IR_DATA = 0x0D
+# Single observed U1 live-learning sequence, not a general learning API.
+# These commands MAY change a U1's programmed slot. Never send without
+# explicit acknowledgment and saving a preflight backup.
+EXPERIMENT_SLOT = 8
+LEARN_START = 0x04
+LEARN_FINISH = 0x05
+LEARN_READY = 0x04
+LEARN_CAPTURED = 0x06
+LEARN_ACK = 0x03
+EXPERIMENT_START_PAYLOAD = bytes.fromhex("081802000000000000")
+EXPERIMENT_FINISH_PAYLOAD = b"\x01"
 MAX_FRAGMENTS = 80
 MAX_SAMPLES = 4096
 ALLOWED_SLOTS = tuple(range(1, 9))
@@ -186,6 +197,77 @@ async def read_connected_ir(client, inbox: asyncio.Queue[bytes],
         f"Received {fragments.next_fragment-1} of "
         f"{fragments.expected or '?'} fragment(s). "
         "Use a slot containing an existing learned IR command.")
+
+
+async def experimental_learn_connected_ir(client, inbox: asyncio.Queue[bytes],
+                                          slot: int = EXPERIMENT_SLOT,
+                                          timeout: float = 25) -> IrRead:
+    """One explicit, high-risk experimental learn using the recorded slot-8 frames.
+
+    WARNING: May overwrite the remote's slot 8. Must not be called until
+    a local backup has been written AND the user explicitly accepts that
+    the remote's original programming may not be recoverable.
+
+    Sends only the observed 0x04 start and 0x05 finish/exit, not the
+    associated unverified 0x07/0x08/0x14 configuration transactions.
+    Requires 0x04 ready, 0x06 completion and valid 0x0D fragments.
+    """
+    if slot != EXPERIMENT_SLOT:
+        raise ValueError("Experimental learning is limited to recorded slot 8.")
+    if not client.is_connected:
+        raise U1ReadError("Bluetooth connection lost before learning.")
+    if not 8 <= timeout <= 40:
+        raise ValueError("Invalid learn timeout.")
+    while not inbox.empty():
+        inbox.get_nowait()
+
+    started = False
+    result = None
+    ready = False
+    learned = False
+    assembler = IrAssembler(slot)
+    try:
+        await client.write_gatt_char(
+            WRITE, encode_frame(LEARN_START, EXPERIMENT_START_PAYLOAD),
+            response=False)
+        started = True
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + timeout
+        while loop.time() < deadline:
+            if not client.is_connected:
+                raise U1ReadError("U1 disconnected during experimental learning.")
+            try:
+                raw = await asyncio.wait_for(
+                    inbox.get(), timeout=max(.05, deadline-loop.time()))
+            except asyncio.TimeoutError:
+                break
+            command, payload = decode_frame(raw)
+            if command == LEARN_READY and payload == b"":
+                ready = True
+            elif command == LEARN_CAPTURED and payload == b"\x00":
+                if not ready:
+                    raise U1ReadError("Learning completed without ready indication.")
+                learned = True
+            elif command == IR_DATA and learned:
+                result = assembler.add(payload)
+                if result:
+                    result.model = "SofaBaton U1 — live IR (experimental)"
+                    break
+        if result is None:
+            raise U1ReadError(
+                "No complete validated live IR arrived. "
+                f"Ready: {ready}; captured: {learned}; "
+                f"fragments: {assembler.next_fragment-1}. "
+                "The app will attempt the observed finish command.")
+    finally:
+        if started and client.is_connected:
+            # The official app sent 0x05 [01] after the 0x0D capture.
+            # On a timeout we try the same finish/exit to avoid leaving
+            # the U1 armed. Do not send any profile/configuration writes.
+            await client.write_gatt_char(
+                WRITE, encode_frame(LEARN_FINISH, EXPERIMENT_FINISH_PAYLOAD),
+                response=False)
+    return result
 
 
 async def _read_ir_async(address: str, slot: int,
