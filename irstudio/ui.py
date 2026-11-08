@@ -16,6 +16,7 @@ from irstudio.harmony import invoke_harmony
 from irstudio.receivers import AUTO, BACKENDS, invoke_receiver, harmony_attached, ocrustar_attached
 from irstudio.layout_preview import LayoutDialog
 from irstudio.branding import install_icon
+from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
 
 
 class Studio(tk.Tk):
@@ -67,7 +68,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.2.4-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.2.5-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -110,6 +111,10 @@ class Studio(tk.Tk):
         self.detect_btn = ttk.Button(
             connection_top, text="Refresh USB", command=self.detect_learner)
         self.detect_btn.pack(side="left", padx=(10, 0), ipadx=8, ipady=7)
+        self.sofabaton_ble_btn = ttk.Button(
+            connection_top, text="SofaBaton U1 Bluetooth...",
+            command=self.open_sofabaton_ble)
+        self.sofabaton_ble_btn.pack(side="left", padx=(10, 0), ipady=7)
 
         connection_info = ttk.Frame(connection)
         connection_info.pack(fill="x", pady=(12, 0))
@@ -207,6 +212,10 @@ class Studio(tk.Tk):
                                background="#f5f6f8", foreground="#222222", padx=12, pady=12)
         self.details.pack(fill="both", expand=True)
 
+
+    def open_sofabaton_ble(self):
+        """Opt-in experimental scan, NOT a supported IR learning receiver."""
+        SofaBatonBleDialog(self)
 
     def _selected_device(self):
         for d in self.library["devices"]:
