@@ -230,8 +230,11 @@ final class HarmonyIrCaptureProbe {
     }
 
     static boolean isIrDoneReport(byte[] report) {
-        return report != null && report.length >= 1
-                && (report[0] & 0xF0) == 0xF0;
+        // MH control frames start with FF and must not be confused with
+        // the observed F0 70 IR-capture DONE marker.
+        return report != null && report.length >= 2
+                && (report[0] & 0xFF) == 0xF0
+                && (report[1] & 0xFF) == 0x70;
     }
 
     static boolean isCloseAcknowledgement(byte[] report, byte parameter) {
@@ -353,7 +356,7 @@ final class HarmonyIrCaptureProbe {
                 break;
             }
             int type = report[0] & 0xF0;
-            if (type == 0xF0) {
+            if (isIrDoneReport(report)) {
                 endMarker = true;
                 reason = "remote end marker";
                 break;
