@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.17-alpha
+# IR Remote Studio for Android — v0.1.18-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -363,3 +363,32 @@ available when the initial MH handshake fails.
 No configuration/firmware writes, automatic reprogramming or saving/
 exporting of captured commands. Disconnect the Harmony's USB and briefly
 remove/reinstall batteries if stale replies persist across tests.
+
+
+## Experimental Pronto Hex candidate — v0.1.18-alpha
+
+The v0.1.17-alpha test successfully collected a 57-word sample on the
+Harmony 300: ~38,183 Hz, a probable repeat boundary at word 54, and a
+verified IR STOP end marker and CLOSE response. The raw word stream
+contains a complete-looking first frame before the repeated leading burst.
+
+The app now optionally **previews a one-shot raw Pronto Hex (0000) code**
+in the capture report only when the probable repeat frame boundary is
+found and all marks/spaces are structurally valid. It takes only the first
+frame before the repeat, converts the first mark+carrier-cycle count into
+a Pronto frequency divider, turns each MH mark+total-period pair into
+individual mark and space durations, and rounds the durations to carrier
+cycle counts. The resulting code is validated by the app's existing
+`IrplusCodec.decodePronto` before it appears in the report.
+
+**This is an unverified candidate, not an automatically saved remote
+command.** The capture results still require real device replay testing
+before the signal is treated as reliable. Nothing is automatically
+transmitted, written to Harmony, installed in its configuration, or
+added to the IR Remote Studio library. Users can copy the diagnostic
+text containing the candidate code.
+
+Tests use the actual 57-word sample (26 timing pairs, Pronto frequency
+divider 006D), and reject malformed frames, missing repeat boundaries,
+and implausible carrier frequencies. The USB handshake, IR receiver
+start/ACK, STOP and CLOSE implementation are unchanged.
