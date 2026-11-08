@@ -92,6 +92,33 @@ class U1SaveUITests(unittest.TestCase):
         self.assertEqual(str(self.app.connection_heading.cget("foreground")), "#bc2525")
         self.assertEqual(self.app.u1_disconnect_btn.winfo_manager(), "")
 
+    def test_disconnect_is_red_and_immediately_beside_connected_name(self):
+        # Regression for previously far-right disconnect control.
+        self.app.geometry("1490x900")
+        self.app.u1_session._state(
+            "CONNECTED", "SB202006231D9E", "MOCK", "Identity verified.")
+        self.app._refresh_u1_status()
+        self.app.update()
+        button = self.app.u1_disconnect_btn
+        heading = self.app.connection_heading
+        self.assertEqual(button.cget("background"), "#b42318")
+        self.assertEqual(button.cget("foreground"), "#ffffff")
+        self.assertEqual(str(button.cget("state")), "normal")
+        self.assertEqual(button.winfo_manager(), "pack")
+        horizontal_gap = button.winfo_rootx() - (
+            heading.winfo_rootx() + heading.winfo_width())
+        self.assertGreaterEqual(horizontal_gap, 8)
+        self.assertLessEqual(horizontal_gap, 24)
+        # The button shares the heading's row, not a right-aligned column.
+        self.assertLessEqual(
+            abs(button.winfo_rooty() + button.winfo_height() / 2 -
+                heading.winfo_rooty() - heading.winfo_height() / 2), 12)
+        self.app.u1_session._state(
+            "LOST", "SB202006231D9E", "MOCK", "Link dropped.")
+        self.app._refresh_u1_status()
+        self.app.update()
+        self.assertEqual(button.winfo_manager(), "")
+
     def test_usb_verified_is_green_when_bluetooth_is_not_connected(self):
         self.app.connected_model = "Harmony 300/350 (direct HID)"
         self.app._set_connection("ready", "USB handshake verified.")
