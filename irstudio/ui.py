@@ -68,7 +68,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.2.5-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.2.6-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -82,7 +82,7 @@ class Studio(tk.Tk):
         heading = ttk.Frame(identity)
         heading.pack(side="left", fill="x", expand=True)
         ttk.Label(heading, text="IR Remote Studio", font=("Segoe UI Semibold", 20)).pack(anchor="w")
-        ttk.Label(heading, text="Create devices, label buttons, learn IR with compatible Harmony remotes, and export .irplus remotes.",
+        ttk.Label(heading, text="Create remotes, capture IR by USB, read saved SofaBaton U1 codes via Bluetooth, and export .irplus.",
                   foreground="#505b69").pack(anchor="w", pady=(2, 0))
 
         toolbar = ttk.Frame(self, padding=(16, 10, 16, 10))
@@ -214,8 +214,38 @@ class Studio(tk.Tk):
 
 
     def open_sofabaton_ble(self):
-        """Opt-in experimental scan, NOT a supported IR learning receiver."""
+        """Opt-in U1 BLE diagnostics and stored-IR read-back; not live learning."""
         SofaBatonBleDialog(self)
+
+    def store_external_capture(self, carrier: int, timings: list[int],
+                               source: str) -> str:
+        """Save independently verified BLE IR capture to the selected button.
+
+        A failed disk write rolls back the in-memory addition. No U1
+        programming is performed; the only mutation is the local library.
+        """
+        device = self._selected_device()
+        button = self._selected_button()
+        if not device or not button:
+            raise ValueError(
+                "Select a destination device and button in the main window first.")
+        if self.running:
+            raise RuntimeError("Finish the current IR learning operation first.")
+        cap = core.make_capture(carrier, timings, source)
+        previous = button.get("selected", 0)
+        button["captures"].append(cap)
+        button["selected"] = core.best_capture_index(button)
+        try:
+            self._save()
+        except Exception:
+            button["captures"].pop()
+            button["selected"] = previous
+            raise
+        self._reload_buttons(button["id"])
+        self.status_var.set(
+            f"Saved Bluetooth IR to '{button['label']}' "
+            f"({carrier:,} Hz, {len(timings)} timings). Export .irplus to test.")
+        return button["label"]
 
     def _selected_device(self):
         for d in self.library["devices"]:
