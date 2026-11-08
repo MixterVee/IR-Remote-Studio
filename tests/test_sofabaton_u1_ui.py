@@ -97,7 +97,7 @@ class U1SaveUITests(unittest.TestCase):
         self.app._set_connection("ready", "USB handshake verified.")
         self.assertEqual(
             self.app.connection_state_var.get(),
-            "CONNECTED — Harmony 300/350 (direct HID) (USB)")
+            "CONNECTED — Harmony 300/350 (direct HID)")
         self.assertEqual(str(self.app.connection_heading.cget("foreground")), "#147b3b")
         # An unexpected U1 disconnect must not erase verified USB readiness.
         self.app.u1_session._state("LOST", "SB-Test", "MOCK", "Disconnected.")
