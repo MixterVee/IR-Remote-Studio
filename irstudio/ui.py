@@ -521,10 +521,12 @@ class Studio(tk.Tk):
                         or any(name in details for name in ("Ocrustar", "libusb", "WinUSB")))
         recovery = (
             "Unable to communicate with the IR learning receiver.\n\n"
-            "1. Disconnect the receiver from USB, then reconnect it.\n"
-            "2. If that fails, try a different USB port directly on your PC.\n"
-            "3. Click Refresh USB, then Connect / Retry.\n"
-            "4. Close any other Harmony or IR-learning software.\n"
+            "1. Make sure the Harmony and original remote have working "
+            "batteries, if battery-powered.\n"
+            "2. Disconnect the receiver from USB, then reconnect it.\n"
+            "3. If that fails, try a different USB port directly on your PC.\n"
+            "4. Click Refresh USB, then Connect / Retry.\n"
+            "5. Close any other Harmony or IR-learning software.\n"
         )
         if is_ocrustar:
             recovery += (
