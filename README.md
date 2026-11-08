@@ -5,7 +5,7 @@
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for compatible Android phones.
 
 > **Status (November 2026):** Windows v0.1.7 is the established GitHub release.
-> **Windows v0.2.7-beta** builds on direct USB learning backends for Harmony 300/350
+> **Windows v0.2.8-beta** builds on direct USB learning backends for Harmony 300/350
 > (shared HID ID 046D:C124) and a documented Ocrustar/ElkSmart D226/D552
 > learning family (045C:02AA). Both Windows USB transports need real-device
 > validation before they can be treated as production-ready. The existing
@@ -18,13 +18,13 @@ Create devices, use custom labels for every button, capture commands from a comp
 For the tested Windows v0.1.7 release, use
 [GitHub Releases](https://github.com/MixterVee/IR-Remote-Studio/releases).
 
-For the **experimental v0.2.7-beta direct USB learner**, obtain the
+For the **experimental v0.2.8-beta direct USB learner**, obtain the
 Windows ZIP from the latest successful
 [Windows Actions build](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
 Extract the ZIP and launch the standalone \`IR-Remote-Studio.exe\`.
 Python is not required to run the packaged executable.
 
-In v0.2.7-beta the Windows learning panel provides **Save** to
+In v0.2.8-beta the Windows learning panel provides **Save** to
 confirm the selected command is saved without starting another capture, and
 **Save & Learn another** to save and continue learning. Captures remain
 autosaved immediately after successful receiving, as in the previous version.
@@ -61,7 +61,7 @@ official Bluetooth-connected app. In November 2026, a Pixel HCI capture
 revealed its proprietary A5 5A packet framing and allowed reconstruction
 of two infrared recordings which successfully played in IRPlus.
 
-In Windows v0.2.7-beta, **SofaBaton U1 Bluetooth...** offers:
+In Windows v0.2.8-beta, **SofaBaton U1 Bluetooth...** offers:
 
 - BLE scanning and read-only GATT structure inspection (same as v0.2.5).
 - **Read stored IR (test)**: for a positively identified U1, query a
@@ -241,10 +241,27 @@ standalone learning backend** are equal priorities. The Android USB detector
 is an experimental read-only diagnostic; it is not yet a learning feature.
 See [the engineering milestones](docs/ENGINEERING_PRIORITIES.md).
 
-### Laptop display layout fix (Windows 0.2.7-beta)
+### Laptop display layout fix (Windows 0.2.8-beta)
 
 On shorter laptop screens or Windows desktops with a visible taskbar,
 the main window reserves bottom space for Devices and Buttons action
 controls rather than letting the list/tree consume the remaining area.
 Likewise, the Layout Editor pins Save/Cancel and width controls above
 the work area. CI tests these controls at 610px / 540px viewport heights.
+
+### Windows 0.2.8-beta: U1 Bluetooth connection and readiness
+
+Use **SofaBaton U1 Bluetooth... → Scan Bluetooth → Connect U1**.
+The application verifies the real U1 FFF0 BLE service and its identity
+response before closing the dialog and displaying **green CONNECTED —
+READY (SB...)** on the Windows main window. Read stored IR (test) reuses
+this active link if you reopen the dialog, rather than disconnecting
+and reconnecting for each read. The main window offers **Disconnect
+U1**; unexpected BLE loss immediately clears the connected state.
+USB readiness is shown separately from Bluetooth readiness.
+
+Windows OS pairing is optional and OFF by default because this tested
+U1 supports direct connection without pairing. A **Request Windows
+pairing (only if needed)** checkbox is available during Connect; use
+only after normal connection fails. Pairing can prompt for user input.
+There is no U1 firmware/profile programming, nor new live IR learning.
