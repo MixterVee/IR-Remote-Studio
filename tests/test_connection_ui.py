@@ -35,13 +35,13 @@ class ConnectionIndicatorTests(unittest.TestCase):
         self.assertEqual(self.app.probe_btn.cget("text"), "Connect / Retry")
         self.assertEqual(self.app.detect_btn.cget("text"), "Refresh USB")
         self.assertEqual(self.app.connection_state_var.get(), "NOT CONNECTED")
-        self.assertEqual(self.app.connection_heading.cget("foreground"),
+        self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#bc2525")
 
     def test_usb_detection_only_is_amber_not_connected(self):
         self.app._set_connection("detected", "Device found; handshake not checked")
         self.assertIn("USB DETECTED", self.app.connection_state_var.get())
-        self.assertEqual(self.app.connection_heading.cget("foreground"),
+        self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#9a6300")
         self.assertNotIn("READY", self.app.connection_state_var.get())
 
@@ -53,7 +53,7 @@ class ConnectionIndicatorTests(unittest.TestCase):
             self.app.probe()
         self.assertEqual(self.app.connection_state_var.get(),
                          "READY — CONNECTION VERIFIED")
-        self.assertEqual(self.app.connection_heading.cget("foreground"),
+        self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#147b3b")
         self.assertIn("session is closed",
                       self.app.connection_detail_var.get())
@@ -65,7 +65,7 @@ class ConnectionIndicatorTests(unittest.TestCase):
             self.app.probe()
         self.assertEqual(self.app.connection_state_var.get(),
                          "CONNECTION FAILED — RETRY")
-        self.assertEqual(self.app.connection_heading.cget("foreground"),
+        self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#bc2525")
         self.assertIn("Unplug and reconnect",
                       self.app.connection_detail_var.get())
@@ -78,7 +78,7 @@ class ConnectionIndicatorTests(unittest.TestCase):
         self.app._capture_ready(7)
         self.assertEqual(self.app.connection_state_var.get(),
                          "READY — PRESS A BUTTON NOW")
-        self.assertEqual(self.app.connection_heading.cget("foreground"),
+        self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#147b3b")
         self.app.running = False
         self.app._set_connection("captured", "Save complete")
@@ -91,7 +91,7 @@ class ConnectionIndicatorTests(unittest.TestCase):
         self.app._receiver_changed()
         self.assertIsNone(self.app.connected_model)
         self.assertEqual(self.app.connection_state_var.get(), "NOT CONNECTED")
-        self.assertEqual(self.app.connection_heading.cget("foreground"),
+        self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#bc2525")
 
 
