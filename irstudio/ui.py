@@ -13,6 +13,7 @@ from tkinter import filedialog, font as tkfont, messagebox, simpledialog, ttk
 from irstudio import __version__
 from irstudio import core
 from irstudio.harmony import invoke_harmony
+from irstudio.receivers import AUTO, BACKENDS, invoke_receiver, harmony_attached, ocrustar_attached
 from irstudio.layout_preview import LayoutDialog
 from irstudio.branding import install_icon
 
@@ -30,6 +31,7 @@ class Studio(tk.Tk):
         self.active_button = None
         self.running = False
         self.connected_model = None
+        self.receiver_var = tk.StringVar(value=AUTO)
         self.aim_var = tk.StringVar(value="Aim the original remote at the Harmony learning receiver, about 5-10 cm away.")
         self.status_var = tk.StringVar(value=f"Library: {self.library_path}")
         self.repeat_var = tk.StringVar(value="0")
@@ -60,7 +62,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.1.7\n\nCompatible Harmony remotes use the installed Concordance libconcord DLL through a separate x86 PowerShell process.\n\nCapture reads IR only; it does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.2.0-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -79,8 +81,9 @@ class Studio(tk.Tk):
 
         toolbar = ttk.Frame(self, padding=(16, 10, 16, 10))
         toolbar.pack(fill="x")
-        self.probe_btn = ttk.Button(toolbar, text="Check Harmony IR learner", command=self.probe)
+        self.probe_btn = ttk.Button(toolbar, text="Check IR learning device", command=self.probe)
         self.probe_btn.pack(side="left")
+
         ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=12)
         ttk.Button(toolbar, text="Import IR Capture (.json)", command=self.import_capture).pack(side="left", padx=(0, 6))
         ttk.Button(toolbar, text="Import Device (.irplus)", command=self.import_irplus).pack(side="left")
@@ -88,6 +91,17 @@ class Studio(tk.Tk):
         ttk.Label(toolbar, text="NEC repeat frames:").pack(side="right", padx=(15, 6))
         ttk.Combobox(toolbar, textvariable=self.repeat_var, values=("0", "1", "2"),
                      width=4, state="readonly").pack(side="right")
+
+        receiver_strip = ttk.Frame(self, padding=(16, 0, 16, 8))
+        receiver_strip.pack(fill="x")
+        ttk.Label(receiver_strip, text="IR learning hardware:").pack(side="left")
+        receiver_picker = ttk.Combobox(receiver_strip, textvariable=self.receiver_var,
+            values=BACKENDS, state="readonly", width=43)
+        receiver_picker.pack(side="left", padx=(10, 8))
+        ttk.Button(receiver_strip, text="Detect attached learner",
+                   command=self.detect_learner).pack(side="left")
+        ttk.Label(receiver_strip, text="Unknown dongles are never sent commands.",
+                  foreground="#536277").pack(side="left", padx=(12, 0))
 
         # Reserve status space before the expandable work area.
         status = ttk.Frame(self, padding=(16, 6, 16, 12))
@@ -157,6 +171,8 @@ class Studio(tk.Tk):
         self.capture_btn.pack(fill="x", ipady=7)
         capture_tools = ttk.Frame(controls)
         capture_tools.pack(fill="x", pady=(6, 0))
+        ttk.Button(controls, text="Save & Learn another button...",
+                   command=self.learn_another).pack(fill="x", pady=(5, 0))
         for label, cmd in (("Review captures...", self.browse_samples),
                            ("Use best match", self.choose_best),
                            ("Remove last", self.remove_capture)):
@@ -473,7 +489,11 @@ class Studio(tk.Tk):
         if "libconcord error 11" in error or "USB connection failed" in error:
             error = ("USB connection unsuccessful. Check that the Harmony has batteries, "
                      "try a known-good data cable and USB port, and close other Harmony software.\n\n" + error)
-        messagebox.showerror("Harmony connection", error)
+        if "Ocrustar" in error or "libusb" in error or "WinUSB" in error:
+            error += ("\n\nOcrustar may need a suitable Windows USB driver. "
+                      "Do not change drivers until the exact device ID and "
+                      "interfaces have been checked.")
+        messagebox.showerror("IR learning device", error)
 
     def _background(self, mode, complete):
         if self.running:
@@ -481,12 +501,17 @@ class Studio(tk.Tk):
         self.running = True
         self.probe_btn.configure(state="disabled")
         self.capture_btn.configure(state="disabled")
-        self.status_var.set("Checking Harmony USB..." if mode == "Probe"
-                            else "Listening: press the original remote's button once now...")
+        chosen_receiver = self.receiver_var.get()
+        self.status_var.set("Identifying IR learning hardware..." if mode == "Probe"
+                            else ("Press the source remote once during Concordance capture."
+                                  if chosen_receiver == BACKENDS[3] else
+                                  "Connecting to IR learner... wait for READY."))
 
         def job():
             try:
-                result = invoke_harmony(mode, self.folder / "Logs")
+                result = invoke_receiver(chosen_receiver, mode, self.folder / "Logs",
+                    on_ready=lambda: self.after(0, lambda:
+                        self.status_var.set("READY — press and release the source IR button NOW!")))
                 self.after(0, lambda: complete(result, None))
             except Exception as exc:
                 error = str(exc)
@@ -497,6 +522,28 @@ class Studio(tk.Tk):
         self.running = False
         self.probe_btn.configure(state="normal")
         self.capture_btn.configure(state="normal")
+
+    def detect_learner(self):
+        """Read-only enumeration; never starts USB communication or IR capture."""
+        if self.running:
+            return
+        self.status_var.set("Scanning supported USB IR learner IDs...")
+        def job():
+            h = harmony_attached()
+            o = ocrustar_attached()
+            def done():
+                if h and o:
+                    self.status_var.set("Harmony 300/350 AND Ocrustar detected. Select the receiver explicitly.")
+                elif h:
+                    self.receiver_var.set(BACKENDS[1])
+                    self.status_var.set("Detected Harmony 300/350 USB HID (046D:C124).")
+                elif o:
+                    self.receiver_var.set(BACKENDS[2])
+                    self.status_var.set("Detected Ocrustar/ElkSmart USB (045C:02AA). Windows USB driver access still needs testing.")
+                else:
+                    self.status_var.set("No supported direct learner found. Check USB and Windows drivers. Unlisted dongles need individual adapters.")
+            self.after(0, done)
+        threading.Thread(target=job, daemon=True).start()
 
     def probe(self):
         def done(result, error):
@@ -543,6 +590,34 @@ class Studio(tk.Tk):
             desc = decoded["bytes"] if decoded else "raw signal (unidentified protocol)"
             self.status_var.set(f"Saved {target['label']}: {cap['carrier_hz']:,} Hz, {len(cap['timings_us'])} values, {desc}; matching captures {match}/{count}.")
         self._background("Capture", done)
+
+    def learn_another(self):
+        """Add a named button to the active remote and start another capture."""
+        if self.running:
+            return
+        device = self._selected_device()
+        if not device:
+            return messagebox.showwarning("Select device", "Choose or create a device first.")
+        label = simpledialog.askstring("Learn another button",
+            "Name the new button (Power, Volume Up, Input...):", parent=self)
+        if not label or not label.strip():
+            return
+        try:
+            button = core.new_button(label)
+        except ValueError as error:
+            return messagebox.showerror("Button", str(error))
+        if any(b["label"].casefold() == button["label"].casefold()
+               for b in device["buttons"]):
+            return messagebox.showwarning("Duplicate name",
+                                          "A button with that name already exists.")
+        device["buttons"].append(button)
+        try:
+            self._save()
+        except Exception as error:
+            device["buttons"].remove(button)
+            return messagebox.showerror("Save", str(error))
+        self._reload_buttons(button["id"])
+        self.capture()
 
     def choose_best(self):
         b = self._selected_button()

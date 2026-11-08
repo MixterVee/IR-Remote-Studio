@@ -1,60 +1,89 @@
-IR Remote Studio v0.1.7 - Windows 11 x64
-========================================
+IR Remote Studio 0.2.0-beta — Windows 11 x64
+================================================
 
-1. Extract the ZIP artifact from GitHub Actions onto your Windows computer.
-2. Keep the official/unofficial Concordance v1.5.0.2 install at:
-   C:\Program Files (x86)\Concordance\libconcord-6.dll
-3. Connect a compatible Harmony IR-learning remote to a working USB port.
-4. Close Concordance and any other application accessing the Harmony.
-5. Double-click IR-Remote-Studio.exe.
-6. Add a device and a custom-labeled button, then choose Check Harmony IR learner.
-7. Select the button, click Capture, point original IR remote at the
-   Harmony learning receiver (5-10 cm) and press the button briefly.
-8. Capture again for confidence, then Export .irplus.
-9. Import the .irplus file in irplus on your compatible phone.
+FIRST STANDALONE LEARNER TEST
+-----------------------------
+This beta adds direct USB learning WITHOUT requiring Concordance for
+supported Harmony 300/350 and an experimental Ocrustar/ElkSmart dongle
+adapter. Previous Windows features and the Concordance backend remain.
 
-Existing Xflyee captures: File > Import capture JSON. The previously
-verified Xflyee .irplus file can also be imported directly.
+1. Download the v0.2.0-beta Windows x64 ZIP from GitHub Actions.
+2. Extract the files and launch IR-Remote-Studio.exe.
+3. Connect ONE supported USB IR learning device.
+4. From "IR learning hardware", choose one of:
+   • Auto detect supported learner
+   • Harmony 300/350 — standalone HID
+   • Ocrustar / ElkSmart — USB bulk (experimental)
+   • Concordance — legacy DLL
+5. Use "Detect attached learner" to list supported USB IDs. It does
+   not send any configuration or learning commands.
+6. Choose "Check Harmony IR learner" (in this beta, this button checks
+   the selected USB IR learner, including Ocrustar). This performs only
+   the selected adapter's handshake, NOT an IR capture.
+7. Select/create a device and button; choose "Capture selected button."
+8. WAIT for READY; point a source remote at your learner, quickly press
+   and release one source button. The result is saved to the local app
+   library only after a valid waveform and completed cleanup.
+9. Export .irplus to test the button on the known-working Android phone
+   or in IRPlus. The app also provides a "Save & Learn another" option.
 
-Capture uses 32-bit Windows PowerShell in a separate process, so a native
-DLL problem cannot terminate the GUI. It doesn't rewrite the Harmony.
+SUPPORTED STANDALONE BACKENDS
+-----------------------------
+Harmony 300/350 (USB VID:PID 046D:C124)
+   Shared direct-HID learning protocol with 64-byte MH reports. Tested
+   successfully on Android Harmony 300; Windows HID transport and the
+   Harmony 350 device still require physical verification.
 
-Your device library is stored in:
+Ocrustar/ElkSmart D226/D552 (USB VID:PID 045C:02AA)
+   Experimental bulk USB learner. This research protocol supplies
+   timing data WITHOUT the carrier frequency, so the app assumes 38 kHz.
+   Replaying on the real device is mandatory before treating it as
+   a reliable command. Your newly ordered Ocrustar unit may differ;
+   verify its actual USB VID/PID and interface before sending learning
+   commands. Do not replace USB drivers before inspecting the device.
+
+Other USB IR dongles
+   Not automatically compatible. Hardware detection/learning requires
+   an adapter matching the exact USB protocol and capabilities.
+   Never send Harmony or Ocrustar commands to an unknown dongle.
+   Some IR adapters transmit only and cannot learn IR codes.
+
+WINDOWS USB DRIVER CAUTION
+--------------------------
+HID Harmony devices should use their normal Windows HID driver.
+The Ocrustar bulk protocol may require WinUSB/libusb access; some
+Windows drivers block the PyUSB backend. DO NOT automatically replace
+a device driver or use Zadig until its precise USB identity has been
+verified and you understand the effects on the original software.
+A failed driver access returns a diagnostic rather than changing USB
+configuration.
+
+LEGACY CONCORDANCE OPTION
+-------------------------
+Select "Concordance — legacy DLL" for the previous separate x86
+PowerShell/Concordance learning worker, useful for other documented
+Harmony models. That backend requires an existing local installation:
+  C:\Program Files (x86)\Concordance\libconcord-6.dll
+IR Remote Studio does not distribute or install libconcord.
+
+LIBRARY & TEST LOGS
+-------------------
+Library (normal update preserves existing data):
   %USERPROFILE%\Documents\IR Remote Studio\library.json
+Logs:
+  %USERPROFILE%\Documents\IR Remote Studio\Logs
 
-This is an early Windows beta. The capture interface has been tested
-previously with a Harmony 350, but this newly packaged application
-requires user hardware testing. Android application is a later milestone.
+Before using this beta, File > Back up library JSON is recommended.
+Layout editor, capture comparison, import/export, restore and backup
+remain available.
+
+SAFETY
+------
+The direct backends only use the known transient IR-receiver commands
+for recognized devices. They do NOT modify Harmony firmware or existing
+button programming, and do NOT transmit IR automatically.
+Do not run Concordance and the direct receiver simultaneously.
+If detection/handshake fails, send the exact error and associated
+direct-*.log or ocrustar-*.log file for diagnosis.
 
 Project: https://github.com/MixterVee/IR-Remote-Studio
-
-Supported Harmony devices: see README.md and irstudio/harmony_models.json.
-The Harmony 700/700i are experimental. Models without documented IR learning
-capability are blocked; remote identification alone is insufficient.
-
-New in v0.1.7: File > Restore library backup (creates automatic safety backup),
-Review captures to select one for export, and Layout editor to set button widths.
-A Harmony USB error 11 may indicate missing batteries, unsuitable USB cable,
-or a failed USB port. Try known-good hardware before changing drivers.
-
-Layout fix in v0.1.7: re-export .irplus files to add explicit row spacer
-entries and prevent narrow buttons from overflowing beside wide buttons.
-
-NEW IN v0.1.7
-==============
-Open a device, click Layout editor and select Phone Preview or Grid Preview.
-Change button width (2/3/4/6/12 columns), then Save layout and Export Device (.irplus).
-Phone preview supports Small/Normal/Large screen and text sizes and Dark/Light
-appearance. Only buttons with captured/imported IR codes appear in the preview.
-The exported layout rows are shared with the preview; actual phone typography
-may differ. Capture status reports Verified only for 2+ matching samples.
-
-Branding in v0.1.7: the approved remote-and-brush logo is bundled with the
-application and used as its window, taskbar and executable icon.
-
-OFFICIAL DOWNLOAD
-=================
-The versioned beta ZIP is available under GitHub Releases:
-https://github.com/MixterVee/IR-Remote-Studio/releases/tag/v0.1.7
-The separate Concordance native DLL is not redistributed by this project.
-See THIRD_PARTY_NOTICES.md for dependency licensing.
