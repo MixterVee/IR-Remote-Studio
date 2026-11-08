@@ -326,3 +326,12 @@ choose blindly: select the correct device and use **Connect U1**.
 If no device is found or the link fails, follow the visible instructions
 and choose **Scan again**. Reopening the popup while already connected
 does not rescan; **Advanced** remains available for stored-code reads.
+
+### Windows 0.3.2-beta: disconnect button immediately beside U1 status
+
+The main window places the **Disconnect U1** button just to the right of the
+single green **CONNECTED — SofaBaton U1 (SB...)** line, rather than pushing it
+to the far right edge. The button now uses a contrasting red background and
+white label. It disappears when the BLE link is no longer connected. This is
+a visual-only change; BLE pairing, reading stored IR and USB capture remain
+unchanged.
