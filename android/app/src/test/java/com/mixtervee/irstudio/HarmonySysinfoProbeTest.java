@@ -45,6 +45,35 @@ public class HarmonySysinfoProbeTest {
         }, close);
     }
 
+    @Test public void padsEightByteAckToFullHidReport() {
+        byte[] prefix = HarmonySysinfoProbe.ackRequest(289, (byte)0x06);
+        assertEquals(8, prefix.length);
+        byte[] report = HarmonySysinfoProbe.paddedHidReport(prefix);
+        assertEquals(64, report.length);
+        for (int i = 0; i < 8; i++) assertEquals(prefix[i], report[i]);
+        for (int i = 8; i < 64; i++) assertEquals(0, report[i]);
+    }
+
+    @Test public void padsSixByteCloseToFullHidReport() {
+        byte[] prefix = HarmonySysinfoProbe.closeRequest((byte)0x06);
+        assertEquals(6, prefix.length);
+        byte[] report = HarmonySysinfoProbe.paddedHidReport(prefix);
+        assertEquals(64, report.length);
+        for (int i = 0; i < 6; i++) assertEquals(prefix[i], report[i]);
+        for (int i = 6; i < 64; i++) assertEquals(0, report[i]);
+    }
+
+    @Test public void preservesFullLengthReadRequest() {
+        byte[] prefix = HarmonySysinfoProbe.readRequest();
+        assertEquals(64, prefix.length);
+        assertArrayEquals(prefix, HarmonySysinfoProbe.paddedHidReport(prefix));
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void rejectsOversizedHidCommand() {
+        HarmonySysinfoProbe.paddedHidReport(new byte[65]);
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void disallowsExcessiveAckFileSizes() {
         HarmonySysinfoProbe.ackRequest(1001, (byte) 0x01);
