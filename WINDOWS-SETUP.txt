@@ -227,3 +227,28 @@ USB: 'Connected' indicates a successful receiver handshake and ready
 to start capture (the temporary USB probe handle closes between
 operations); unplugging requires Refresh USB to update the display.
 No changes to IR capture, Bluetooth safety checks or stored profiles.
+
+AUTOMATIC SOFABATON U1 DISCOVERY & CONNECTION (0.3.1-BETA)
+----------------------------------------------------------
+1. Put working batteries in your SofaBaton U1 and enable Bluetooth on
+   Windows. Close the official SofaBaton app on your phone.
+2. Click SofaBaton U1 Bluetooth... in IR Remote Studio. The popup
+   immediately displays how to enter pairing mode: hold - and E on
+   the U1 until Pairing appears.
+3. BLE scan starts automatically. With exactly one advertising U1
+   whose name begins SB and includes a serial identifier, Windows
+   connects automatically and verifies U1 identity.
+4. A successful connection closes the popup and returns to the main
+   window, showing a SINGLE green CONNECTED — SofaBaton U1 (SB...).
+5. Windows OS-level pairing is normally unnecessary. If the U1
+   specifically rejects access for lack of authentication, an
+   automatic Windows pairing retry may show a Windows prompt.
+6. Multiple matching U1s require manual selection (never connect
+   ambiguously); no candidate or a failed connection leaves Scan
+   again / Connect U1 available with troubleshooting guidance.
+7. Reopen the popup while connected to use Advanced stored-code read.
+   No auto-rescan interrupts a healthy connection.
+
+Only Bluetooth identity inquiries and optional user-approved stored-IR
+reads are supported. This does not initiate new IR learning, change
+stored U1 profiles or write firmware.

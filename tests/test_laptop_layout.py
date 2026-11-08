@@ -97,7 +97,7 @@ class LaptopControlsTests(unittest.TestCase):
             try:
                 app.geometry("1160x610")
                 app.update()
-                dialog = SofaBatonBleDialog(app)
+                dialog = SofaBatonBleDialog(app, auto_scan=False)
                 dialog.geometry("850x610")
                 dialog.toggle_advanced()
                 # Simulate Windows maximized work area minus taskbar.

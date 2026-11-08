@@ -61,7 +61,7 @@ official Bluetooth-connected app. In November 2026, a Pixel HCI capture
 revealed its proprietary A5 5A packet framing and allowed reconstruction
 of two infrared recordings which successfully played in IRPlus.
 
-In Windows v0.3.0-beta, **SofaBaton U1 Bluetooth...** offers:
+In Windows v0.3.1-beta, **SofaBaton U1 Bluetooth...** offers:
 
 - BLE scanning and read-only GATT structure inspection (same as v0.2.5).
 - **Advanced → Read stored IR (test)**: for a positively identified U1, query a
@@ -266,7 +266,7 @@ pairing (only if needed)** checkbox is available during Connect; use
 only after normal connection fails. Pairing can prompt for user input.
 There is no U1 firmware/profile programming, nor new live IR learning.
 
-### Windows 0.3.0-beta: simplified SofaBaton connection screen
+### Windows 0.3.1-beta: simplified SofaBaton connection screen
 
 The normal U1 window now focuses on **Scan Bluetooth**, **Connect U1**,
 **Disconnect**, a high-contrast connected indicator and the identified
@@ -282,7 +282,7 @@ reads continue to use the persistent connected session. Main-window USB
 capture is labeled **(USB)**, separately from the U1 Bluetooth status.
 All U1 programming and firmware writes remain disabled.
 
-### Windows 0.3.0-beta: one connection indicator
+### Windows 0.3.1-beta: one connection indicator
 
 The main window now uses a **single compact connection line** below the
 receiver controls. It displays **red NOT CONNECTED** when no learner is
@@ -299,3 +299,30 @@ verification is a successful handshake; the USB handle closes between
 learn operations and reopens when capture begins. As before, a hot
 unplug requires Refresh USB / Connect to update that state. Protocols
 and stored IR behavior are unchanged.
+
+### Windows 0.3.1-beta: automatic U1 discovery and connection
+
+Click **SofaBaton U1 Bluetooth...** from the main window. The popup
+immediately shows the pairing-mode instructions (fit batteries; press
+and hold **-** and **E** until **Pairing** appears; close the official
+SofaBaton phone app), then **starts BLE scanning automatically**.
+
+When exactly one advertisement has an U1-style `SB<hex serial>` name,
+the app selects it, opens a persistent BLE connection, checks the
+expected FFF0/FFF1/FFF2 GATT interface, sends only the previously
+verified identity inquiry, and automatically closes the popup to
+return to the main window with green **CONNECTED — SofaBaton U1 (...)**.
+
+For an ordinary connect, Windows OS bonding is not necessary and is
+not requested, retaining the known-working U1 path. If the device
+explicitly requires Bluetooth authentication, the app automatically
+retries using Windows pairing, which may show a Windows confirmation
+dialog. Auto-connection never sends U1 IR learning/programming writes.
+A matching name alone is insufficient to report connected: GATT and
+the U1 identity response must both verify first.
+
+If multiple candidate U1 advertisements are found, the app does not
+choose blindly: select the correct device and use **Connect U1**.
+If no device is found or the link fails, follow the visible instructions
+and choose **Scan again**. Reopening the popup while already connected
+does not rescan; **Advanced** remains available for stored-code reads.

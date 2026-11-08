@@ -118,7 +118,7 @@ class U1SaveUITests(unittest.TestCase):
 
     def test_explicit_connect_prompt_does_not_pair_when_cancelled(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
-        dlg = SofaBatonBleDialog(self.app)
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
         dlg.withdraw()
         try:
             self.assertFalse(dlg.pair_var.get())
@@ -140,7 +140,7 @@ class U1SaveUITests(unittest.TestCase):
     def test_simple_screen_hides_slot_and_diagnostics_by_default(self):
         """Normal users only see Connect / Disconnect and Learn IR status."""
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
-        dialog = SofaBatonBleDialog(self.app)
+        dialog = SofaBatonBleDialog(self.app, auto_scan=False)
         dialog.withdraw()
         try:
             self.assertEqual(dialog.advanced_panel.winfo_manager(), "")
@@ -168,7 +168,7 @@ class U1SaveUITests(unittest.TestCase):
 
     def test_advanced_read_controls_track_verified_session(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
-        dialog = SofaBatonBleDialog(self.app)
+        dialog = SofaBatonBleDialog(self.app, auto_scan=False)
         dialog.withdraw()
         try:
             device = BleEntry(
@@ -190,9 +190,102 @@ class U1SaveUITests(unittest.TestCase):
         finally:
             dialog.destroy()
 
+    def test_open_starts_scan_without_prompting_for_connection(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        svc = "0000fff0-0000-1000-8000-00805f9b34fb"
+        target = BleEntry("SB202006231D9E", "U1-ADDRESS", -51, (svc,), True)
+        other = BleEntry("Other-device", "OTHER", -20, (), False)
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        self.assertIn(
+            "Hold the - and E buttons",
+            dlg.winfo_children()[0].winfo_children()[1].cget("text"))
+        def connected(address, name, pair):
+            self.app.u1_session._state(
+                "CONNECTED", name, address, "U1 identity verified.")
+            return self.app.u1_session.snapshot()
+        with patch("irstudio.sofabaton_ble_ui.ble.scan_ble",
+                   return_value=[other, target]) as scan, \
+             patch.object(self.app.u1_session, "connect",
+                          side_effect=connected) as connect, \
+             patch.object(dlg, "_run",
+                          side_effect=lambda name, task, complete: complete(task())), \
+             patch("irstudio.sofabaton_ble_ui.messagebox.askokcancel") as popup:
+            dlg.scan()
+        scan.assert_called_once_with(7.0)
+        connect.assert_called_once_with(
+            "U1-ADDRESS", "SB202006231D9E", pair=False)
+        popup.assert_not_called()
+        self.assertFalse(dlg.winfo_exists())
+        self.assertEqual(
+            self.app.connection_state_var.get(),
+            "CONNECTED — SofaBaton U1 (SB202006231D9E)")
+
+    def test_auto_scan_on_open_skips_redundant_scan_if_connected(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            with patch.object(dlg, "scan") as scan:
+                dlg._auto_scan_on_open()
+                scan.assert_called_once()
+                self.app.u1_session._state(
+                    "CONNECTED", "SB202006231D9E", "U1", "identity verified")
+                dlg._auto_scan_on_open()
+                scan.assert_called_once()
+        finally:
+            if dlg.winfo_exists():
+                dlg.destroy()
+
+    def test_multiple_sb_devices_remain_manual_without_auto_connect(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        svc = ("0000fff0-0000-1000-8000-00805f9b34fb",)
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            devices = [
+                BleEntry("SB202006231D9E", "ONE", -51, svc, True),
+                BleEntry("SB202006231D9F", "TWO", -49, svc, True)]
+            with patch("irstudio.sofabaton_ble_ui.ble.scan_ble",
+                       return_value=devices), \
+                 patch.object(self.app.u1_session, "connect") as connect, \
+                 patch.object(dlg, "_run",
+                              side_effect=lambda name, task, complete: complete(task())):
+                dlg.scan()
+            connect.assert_not_called()
+            self.assertTrue(dlg.winfo_exists())
+            self.assertIn("More than one U1", dlg.status_var.get())
+        finally:
+            dlg.destroy()
+
+    def test_auto_connection_retries_windows_pairing_only_on_auth_error(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        svc = ("0000fff0-0000-1000-8000-00805f9b34fb",)
+        device = BleEntry("SB202006231D9E", "U1", -51, svc, True)
+        calls = []
+        def connect(address, name, pair):
+            calls.append(pair)
+            if not pair:
+                raise RuntimeError("GATT authentication required")
+            self.app.u1_session._state(
+                "CONNECTED", name, address, "Identity verified")
+            return self.app.u1_session.snapshot()
+        with patch.object(self.app.u1_session, "connect",
+                          side_effect=connect), \
+             patch.object(dlg, "_run",
+                          side_effect=lambda name, task, complete: complete(task())):
+            dlg._connect_device(device, automatic=True)
+        self.assertEqual(calls, [False, True])
+        self.assertEqual(
+            self.app.connection_state_var.get(),
+            "CONNECTED — SofaBaton U1 (SB202006231D9E)")
+        self.assertFalse(dlg.winfo_exists())
+
     def test_u1_reader_action_prompts_before_queries(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
-        dialog = SofaBatonBleDialog(self.app)
+        dialog = SofaBatonBleDialog(self.app, auto_scan=False)
         dialog.withdraw()
         try:
             self.assertEqual(dialog.read_button.cget("text"), "Read stored IR (test)")

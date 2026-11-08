@@ -10,7 +10,7 @@ from irstudio import sofabaton_u1_read as u1
 
 
 class SofaBatonBleDialog(tk.Toplevel):
-    def __init__(self, parent):
+    def __init__(self, parent, *, auto_scan=True):
         super().__init__(parent)
         self.title("SofaBaton U1 — Bluetooth")
         self.minsize(710, 430)
@@ -24,7 +24,7 @@ class SofaBatonBleDialog(tk.Toplevel):
         self._last_link = None
         self.advanced_open = False
         self.status_var = tk.StringVar(
-            value="Scan for your U1, select it, then click Connect U1.")
+            value="Searching for your SofaBaton U1 automatically...")
         self.protocol("WM_DELETE_WINDOW", self.destroy)
 
         outer = ttk.Frame(self, padding=(16, 14))
@@ -33,8 +33,10 @@ class SofaBatonBleDialog(tk.Toplevel):
                   font=("Segoe UI Semibold", 17)).pack(anchor="w")
         ttk.Label(
             outer,
-            text="Connect your U1 over Bluetooth. The connection stays active "
-                 "when you return to IR Remote Studio.",
+            text="Put batteries in the U1. Hold the - and E buttons together "
+                 "until Pairing appears on its screen. Keep the official "
+                 "SofaBaton phone app closed. Scanning and connection start "
+                 "automatically; Windows Bluetooth must be enabled.",
             foreground="#536277", wraplength=790, justify="left"
         ).pack(anchor="w", pady=(5, 9))
 
@@ -45,7 +47,7 @@ class SofaBatonBleDialog(tk.Toplevel):
         toolbar = ttk.Frame(outer)
         toolbar.pack(fill="x", pady=(11, 6))
         self.scan_button = ttk.Button(
-            toolbar, text="Scan Bluetooth", command=self.scan)
+            toolbar, text="Scan again", command=self.scan)
         self.scan_button.pack(side="left", ipadx=9, ipady=5)
         self.connect_button = ttk.Button(
             toolbar, text="Connect U1", command=self.connect_u1,
@@ -141,8 +143,10 @@ class SofaBatonBleDialog(tk.Toplevel):
             "SofaBaton U1 Bluetooth — diagnostics\n"
             "1. Fit batteries, close the SofaBaton phone app, put the U1 "
             "in app pairing mode (- and E).\n"
-            "2. Scan, select your identified U1 and click Connect U1.\n"
-            "3. When connected, the main window shows green CONNECTED — READY.\n"
+            "2. Bluetooth scan starts automatically when opened. The app\n"
+            "   auto-connects one positively identified SB<serial> U1.\n"
+            "3. Connection verifies U1 service and identity before main\n"
+            "   window displays green CONNECTED. No extra click needed.\n"
             "4. Advanced: optionally read a stored IR code (slot 1–8), "
             "then Save to selected button in the main library.\n"
             "5. New Bluetooth IR learning is NOT implemented yet. "
@@ -161,6 +165,18 @@ class SofaBatonBleDialog(tk.Toplevel):
                 "end", f"{snap.name} — CONNECTED — {snap.address}")
             self.device_list.selection_set(0)
         self._poll_connection()
+        # Schedule after construction so controls, lists and callbacks exist.
+        # Do not scan when reopening an already connected session: users may
+        # be opening Advanced to read an existing stored IR command.
+        if auto_scan and not snap.connected:
+            self.after(250, self._auto_scan_on_open)
+
+    def _auto_scan_on_open(self):
+        if not self.winfo_exists() or self._busy:
+            return
+        if self.master.u1_session.snapshot().connected:
+            return
+        self.scan()
 
     def toggle_advanced(self):
         """Reveal protocol-specific controls only when explicitly requested."""
@@ -252,7 +268,18 @@ class SofaBatonBleDialog(tk.Toplevel):
                 self.scan_button.configure(state="normal")
                 self._select_device()
                 if error is not None:
-                    self.status_var.set(name + " failed. See report.")
+                    if name == "Connecting U1":
+                        self.status_var.set(
+                            "Could not connect to the U1. Keep it in Pairing "
+                            "mode, check the batteries, and select Scan again. "
+                            "For Windows pairing, expand Advanced. "
+                            f"Details: {error[:160]}")
+                    elif name == "Scanning":
+                        self.status_var.set(
+                            "Bluetooth scan failed. Check Windows Bluetooth "
+                            "and press Scan again. " + error[:140])
+                    else:
+                        self.status_var.set(name + " failed. See report.")
                     self._append(name + " FAILED: " + error + "\n")
                 else:
                     complete(result)
@@ -277,12 +304,36 @@ class SofaBatonBleDialog(tk.Toplevel):
                 candidate = "  [Possible SofaBaton]" if d.likely_sofabaton else ""
                 self.device_list.insert(
                     "end", f"{d.name} — {quality} — {d.address}{candidate}")
-            self.status_var.set(
-                f"Found {len(devices)} BLE device(s). "
-                "Select your identified SofaBaton U1 and click Connect U1."
-                if devices else
-                "No Bluetooth devices found. Check U1 batteries, pairing mode "
-                "and the PC's Bluetooth adapter.")
+            candidate = ble.auto_connect_candidate(devices)
+            if candidate is not None:
+                index = devices.index(candidate)
+                self.device_list.selection_clear(0, "end")
+                self.device_list.selection_set(index)
+                self.device_list.see(index)
+                self._select_device()
+                self._append(
+                    f"Found U1 {candidate.name} ({candidate.address}); "
+                    "connecting automatically without prompting...\n")
+                self.status_var.set(
+                    f"Found {candidate.name}. Connecting automatically...")
+                # Reuse exactly the verified, persistent BLE connection path.
+                self._connect_device(candidate, automatic=True)
+            else:
+                sb_count = sum(
+                    bool(ble.auto_connect_candidate([d])) for d in devices)
+                if sb_count > 1:
+                    self.status_var.set(
+                        "More than one U1 was found. Select yours and click "
+                        "Connect U1; automatic selection was skipped.")
+                elif devices:
+                    self.status_var.set(
+                        f"Found {len(devices)} Bluetooth devices, but no unique "
+                        "SB-prefixed U1. Keep the remote in Pairing mode and "
+                        "press Scan again, or manually select it and Connect U1.")
+                else:
+                    self.status_var.set(
+                        "No Bluetooth devices found. Check the U1 batteries, "
+                        "hold - and E until Pairing, then press Scan again.")
             self._append(f"BLE scan: {len(devices)} advertising device(s).\n")
             for d in devices:
                 self._append(f"  {d.name} / {d.address} / "
@@ -293,43 +344,86 @@ class SofaBatonBleDialog(tk.Toplevel):
         self._run("Scanning", lambda: ble.scan_ble(7.0), complete)
 
     def connect_u1(self):
+        """Manual fallback after scanning, for atypical U1 advertisements."""
         selection = self.device_list.curselection()
         if not selection or self._busy:
             return
-        device = self._devices[selection[0]]
-        if not (device.likely_sofabaton or any(
+        self._connect_device(self._devices[selection[0]], automatic=False)
+
+    @staticmethod
+    def _authentication_required(error: Exception) -> bool:
+        """Retry Windows bonding only for explicit Bluetooth auth failures."""
+        text = str(error).casefold()
+        return any(term in text for term in (
+            "insufficient authentication", "authentication required",
+            "pairing required", "not paired", "bond required",
+            "insufficient encryption"))
+
+    def _connect_device(self, device, *, automatic: bool):
+        """Auto-connect a recognized SB ID; manually confirm other candidates.
+
+        Normal connect does not request an unnecessary Windows OS bond,
+        because the tested U1 works without one. An explicit BLE
+        authentication-required error can trigger the Windows pairing
+        procedure as part of the user's requested automatic workflow.
+        The U1 identity is always verified before reporting connected.
+        """
+        if self._busy:
+            return
+        if automatic:
+            if ble.auto_connect_candidate([device]) is None:
+                self.status_var.set(
+                    "Auto-connect skipped: device is not a verified "
+                    "SB-prefixed U1 advertising candidate.")
+                return
+        elif not (device.likely_sofabaton or any(
                 uuid.lower() == u1.SVC for uuid in device.advertised_services)):
             messagebox.showwarning(
                 "Identify the U1",
-                "Select the identified SofaBaton U1 (for example SB...). "
-                "Connecting to unknown BLE devices is disabled.",
+                "Select your identified SofaBaton U1 (for example SB...). "
+                "Connecting to unknown Bluetooth devices is disabled.",
                 parent=self)
             return
-        pair = bool(self.pair_var.get())
-        if not messagebox.askokcancel(
+        pair = bool(self.pair_var.get()) if not automatic else False
+        if not automatic and not messagebox.askokcancel(
             "Connect to SofaBaton U1?",
             f"Connect to {device.name} over Bluetooth?\n\n"
-            + ("Windows pairing will be requested. You may need to confirm on "
-               "the remote or Windows.\n\n" if pair else
-               "No Windows pairing will be requested unless you enable the "
-               "pairing option.\n\n")
-            + "The connection will remain active in the main window until "
-              "you choose Disconnect U1 or close the app. "
-              "Only device-identification inquiries will be sent.",
+            + ("Windows pairing will be requested. You may need to confirm "
+               "on Windows.\n\n" if pair else
+               "Windows bonding is usually unnecessary.\n\n")
+            + "The connection stays active on the main screen. "
+              "Only identity inquiries are sent.",
             parent=self):
             return
         self._append(
-            f"Connecting to {device.name} ({device.address}), "
-            f"request Windows pairing: {pair}...\n")
+            f"Connecting to {device.name} ({device.address}); "
+            f"Windows bonding requested: {pair}.\n")
+
+        def work():
+            try:
+                return self.master.u1_session.connect(
+                    device.address, device.name, pair=pair)
+            except Exception as exc:
+                if automatic and self._authentication_required(exc):
+                    self._append_on_ui(
+                        "U1 requested authentication; trying Windows "
+                        "pairing automatically. A Windows prompt may appear.\n")
+                    return self.master.u1_session.connect(
+                        device.address, device.name, pair=True)
+                raise
 
         def complete(snapshot):
-            self._append("U1 identity verified; session remains connected.\n")
+            self._append("U1 identity verified; Bluetooth remains connected.\n")
             self.master._refresh_u1_status()
-            # Return to main UI as requested; reopen the dialog to read codes.
+            # Connection succeeded. Return to the main Windows app as requested.
             self.destroy()
-        self._run("Connecting U1",
-                  lambda: self.master.u1_session.connect(
-                      device.address, device.name, pair=pair), complete)
+        self._run("Connecting U1", work, complete)
+
+    def _append_on_ui(self, message: str):
+        try:
+            self.after(0, lambda: self._append(message))
+        except (RuntimeError, tk.TclError):
+            pass
 
     def disconnect_u1(self):
         if self._busy or not self.master.u1_session.snapshot().connected:
