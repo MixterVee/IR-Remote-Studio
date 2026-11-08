@@ -32,7 +32,7 @@ class Studio(tk.Tk):
         self.running = False
         self.connected_model = None
         self.receiver_var = tk.StringVar(value=AUTO)
-        self.connection_state_var = tk.StringVar(value="NOT VERIFIED")
+        self.connection_state_var = tk.StringVar(value="NOT CONNECTED")
         self.connection_detail_var = tk.StringVar(
             value="Connect your Harmony or supported IR learner, then click Connect / Retry.")
         self._active_operation = 0
@@ -114,7 +114,7 @@ class Studio(tk.Tk):
         connection_info.pack(fill="x", pady=(12, 0))
         self.connection_heading = ttk.Label(
             connection_info, textvariable=self.connection_state_var,
-            font=("Segoe UI Semibold", 14), foreground="#a35b00")
+            font=("Segoe UI Semibold", 14), foreground="#bc2525")
         self.connection_heading.pack(anchor="w")
         self.connection_description = ttk.Label(
             connection_info, textvariable=self.connection_detail_var,
@@ -519,12 +519,56 @@ class Studio(tk.Tk):
                       "interfaces have been checked.")
         messagebox.showerror("IR learning device", error)
 
+    def _set_connection(self, state: str, detail: str) -> None:
+        """High-contrast status independent of the general activity log.
+
+        A successful probe is a completed handshake, not an always-open
+        USB connection. Live READY only occurs after capture receiver ACK.
+        """
+        colors = {
+            "not-connected": ("NOT CONNECTED", "#bc2525"),
+            "detected": ("USB DETECTED — CONNECT TO VERIFY", "#9a6300"),
+            "connecting": ("CONNECTING...", "#9a6300"),
+            "ready": ("READY — CONNECTION VERIFIED", "#147b3b"),
+            "armed": ("READY — PRESS A BUTTON NOW", "#147b3b"),
+            "captured": ("CAPTURE COMPLETE", "#147b3b"),
+            "failed": ("CONNECTION FAILED — RETRY", "#bc2525"),
+            "capture-failed": ("CAPTURE FAILED — RETRY", "#bc2525"),
+        }
+        title, color = colors[state]
+        self.connection_state_var.set(title)
+        self.connection_detail_var.set(detail)
+        self.connection_heading.configure(foreground=color)
+
+    def _receiver_changed(self, event=None) -> None:
+        """Changing receiver invalidates any previous handshake result."""
+        self.connected_model = None
+        self._set_connection(
+            "not-connected", "Receiver selection changed. Click Connect / Retry "
+            "to verify the selected hardware before learning.")
+
+    def _capture_ready(self, operation_id: int) -> None:
+        # Ignore queued READY callbacks that arrived after capture completed.
+        if operation_id != self._active_operation or not self.running:
+            return
+        self._set_connection(
+            "armed", "Receiver is armed. Aim the source remote at the learner "
+            "and briefly press and release one button.")
+        self.status_var.set("READY — press and release the source IR button NOW!")
+
     def _background(self, mode, complete):
         if self.running:
             return
         self.running = True
+        self._active_operation += 1
+        operation_id = self._active_operation
         self.probe_btn.configure(state="disabled")
         self.capture_btn.configure(state="disabled")
+        self.detect_btn.configure(state="disabled")
+        self._set_connection(
+            "connecting", "Verifying hardware handshake..." if mode == "Probe"
+            else "Opening a fresh USB receive session. Wait for READY before "
+                 "pressing the source remote.")
         chosen_receiver = self.receiver_var.get()
         self.status_var.set("Identifying IR learning hardware..." if mode == "Probe"
                             else ("Press the source remote once during Concordance capture."
@@ -535,7 +579,7 @@ class Studio(tk.Tk):
             try:
                 result = invoke_receiver(chosen_receiver, mode, self.folder / "Logs",
                     on_ready=lambda: self.after(0, lambda:
-                        self.status_var.set("READY — press and release the source IR button NOW!")))
+                        self._capture_ready(operation_id)))
                 self.after(0, lambda: complete(result, None))
             except Exception as exc:
                 error = str(exc)
@@ -546,25 +590,43 @@ class Studio(tk.Tk):
         self.running = False
         self.probe_btn.configure(state="normal")
         self.capture_btn.configure(state="normal")
+        self.detect_btn.configure(state="normal")
 
     def detect_learner(self):
         """Read-only enumeration; never starts USB communication or IR capture."""
         if self.running:
             return
+        self._set_connection(
+            "connecting", "Scanning USB device IDs only; no commands are sent.")
+        self.detect_btn.configure(state="disabled")
         self.status_var.set("Scanning supported USB IR learner IDs...")
         def job():
             h = harmony_attached()
             o = ocrustar_attached()
             def done():
+                self.detect_btn.configure(state="normal")
+                self.connected_model = None
                 if h and o:
+                    self._set_connection(
+                        "detected", "Two supported USB learners found. Choose one "
+                        "in Receiver, then click Connect / Retry.")
                     self.status_var.set("Harmony 300/350 AND Ocrustar detected. Select the receiver explicitly.")
                 elif h:
                     self.receiver_var.set(BACKENDS[1])
+                    self._set_connection(
+                        "detected", "Harmony 300/350 detected (046D:C124). "
+                        "Click Connect / Retry to verify communication.")
                     self.status_var.set("Detected Harmony 300/350 USB HID (046D:C124).")
                 elif o:
                     self.receiver_var.set(BACKENDS[2])
+                    self._set_connection(
+                        "detected", "Ocrustar/ElkSmart detected (045C:02AA). "
+                        "Click Connect / Retry to verify communication.")
                     self.status_var.set("Detected Ocrustar/ElkSmart USB (045C:02AA). Windows USB driver access still needs testing.")
                 else:
+                    self._set_connection(
+                        "not-connected", "No supported USB learner found. "
+                        "Try unplugging and reconnecting it, then Refresh USB.")
                     self.status_var.set("No supported direct learner found. Check USB and Windows drivers. Unlisted dongles need individual adapters.")
             self.after(0, done)
         threading.Thread(target=job, daemon=True).start()
@@ -573,13 +635,23 @@ class Studio(tk.Tk):
         def done(result, error):
             self._end_background()
             if error:
-                self.status_var.set("Harmony check failed. See the error message.")
+                self.connected_model = None
+                self._set_connection(
+                    "failed", "Could not verify the selected receiver. "
+                    "Unplug and reconnect USB, then click Connect / Retry. "
+                    "No Harmony programming was changed.")
+                self.status_var.set("IR learner handshake failed. See the error message.")
                 self._harmony_error(error)
             else:
                 caveat = " (experimental IR learning; please verify captures)" if result.get("compatibility") == "experimental" else ""
                 self.connected_model = result.get("model")
-                self.aim_var.set("Aim the original remote at the Harmony learning receiver, about 5-10 cm away.")
-                self.status_var.set(f"Connected: {result.get('model', 'Harmony remote')}{caveat}. Ready for capture.")
+                self.aim_var.set("Aim the source remote at the USB IR learning receiver, about 5–10 cm away.")
+                self._set_connection(
+                    "ready", f"{self.connected_model} handshake succeeded. "
+                    "The verification USB session is closed; a new session "
+                    "will open when you click Capture.")
+                self.status_var.set(
+                    f"Handshake verified: {self.connected_model}{caveat}. Ready to capture.")
         self._background("Probe", done)
 
     def capture(self):
@@ -591,6 +663,10 @@ class Studio(tk.Tk):
         def done(result, error):
             self._end_background()
             if error:
+                self._set_connection(
+                    "capture-failed", "No usable capture was saved. "
+                    "Check the receiver or source remote and use Connect / Retry "
+                    "if USB communication has been interrupted.")
                 self.status_var.set("Capture failed - no changes were saved.")
                 self._harmony_error(error)
                 return
@@ -598,6 +674,9 @@ class Studio(tk.Tk):
                 cap = core.make_capture(int(result["carrier_hz"]), result["timings_us"],
                                         source=result.get("model") or "Harmony IR learner")
             except Exception as exc:
+                self._set_connection(
+                    "capture-failed", "Received an incomplete IR signal. "
+                    "Retry with a short, firm press; the USB session has ended.")
                 self.status_var.set("Incomplete capture rejected. Retry with a short, firm press.")
                 messagebox.showwarning("Incomplete capture", str(exc))
                 return
@@ -609,6 +688,10 @@ class Studio(tk.Tk):
             target["selected"] = core.best_capture_index(target)
             self._save()
             self._reload_buttons(button_id)
+            self._set_connection(
+                "captured", f"Saved {target['label']} successfully. "
+                "The USB capture session has closed. "
+                "Choose Save or Save & Learn another.")
             match, count = core.match_count(target)
             decoded = cap["decoded"]
             desc = decoded["bytes"] if decoded else "raw signal (unidentified protocol)"
