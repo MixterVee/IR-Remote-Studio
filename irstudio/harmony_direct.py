@@ -1,9 +1,9 @@
-"""Experimental standalone Harmony 300 MH IR learning via Windows HIDAPI.
+"""Experimental standalone Harmony 300/350 MH IR learning via Windows HIDAPI.
 
 Ported from the successfully tested Android receiver, but the Windows HID
 transport and 0x00 report-ID framing MUST be validated on real Windows hardware.
 
-Only the exact USB VID:PID 046D:C124 is supported in this direct backend.
+Only the shared Harmony 300/350 USB VID:PID 046D:C124 is supported here.
 No Harmony configuration, firmware, persistent storage or playback writes.
 The existing Concordance PowerShell capture backend remains available.
 """
@@ -189,7 +189,7 @@ def learn_from_transport(bus: ReportTransport,
     if mode not in ("Probe", "Capture"):
         raise ValueError("Invalid direct Harmony operation.")
     trace: list[str] = []
-    result = {"success": False, "mode": mode, "model": "Harmony 300 (direct HID)",
+    result = {"success": False, "mode": mode, "model": "Harmony 300/350 (direct HID)",
               "compatibility": "experimental", "backend": "Standalone Windows HID",
               "carrier_hz": 0, "timings_us": [], "message": "", "trace": trace}
     opened = False
@@ -202,7 +202,7 @@ def learn_from_transport(bus: ReportTransport,
         _handshake(bus, trace)
         if mode == "Probe":
             result["success"] = True
-            result["message"] = "Harmony 300 MH session handshake succeeded without Concordance."
+            result["message"] = "Harmony 300/350 MH session handshake succeeded without Concordance."
             return result
         opened_reply = _exchange(bus, IR_OPEN, "Open /ir/ir_cap")
         trace.append("IR open reply: " + opened_reply[:8].hex(" ").upper())
@@ -305,14 +305,14 @@ class HidApiTransport:
 
 def open_harmony_transport() -> HidApiTransport:
     if os.name != "nt":
-        raise RuntimeError("Standalone HID learning is supported on Windows only.")
+        raise RuntimeError("Standalone Harmony HID learning is supported on Windows only.")
     try:
         import hid
     except ImportError as error:
         raise RuntimeError("Bundled HIDAPI backend unavailable. Reinstall the Windows app.") from error
     matches = hid.enumerate(VID, PID)
     if not matches:
-        raise RuntimeError("No Harmony 300 HID device (046D:C124) found. Check USB.")
+        raise RuntimeError("No Harmony 300/350 HID device (046D:C124) found. Check USB.")
     if len(matches) != 1:
         raise RuntimeError(f"Found {len(matches)} matching HID interfaces. "
                            "Not choosing a potentially wrong interface automatically.")
