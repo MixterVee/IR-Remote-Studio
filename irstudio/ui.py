@@ -649,6 +649,11 @@ class Studio(tk.Tk):
         if snap.connected:
             label = f"CONNECTED — SofaBaton U1 ({snap.name})"
             color = "#147b3b"
+        elif self._usb_connection_state == "armed" and self.running:
+            # A USB capture receiver can be actively armed even when the
+            # user skipped a separate pre-capture probe.
+            label = f"CONNECTED — {self.connected_model or 'USB IR learner'}"
+            color = "#147b3b"
         elif usb_ready:
             label = f"CONNECTED — {self.connected_model}"
             color = "#147b3b"
