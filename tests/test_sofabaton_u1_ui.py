@@ -118,7 +118,7 @@ class U1SaveUITests(unittest.TestCase):
 
     def test_explicit_connect_prompt_does_not_pair_when_cancelled(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
-        dlg = SofaBatonBleDialog(self.app)
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
         dlg.withdraw()
         try:
             self.assertFalse(dlg.pair_var.get())
@@ -140,7 +140,7 @@ class U1SaveUITests(unittest.TestCase):
     def test_simple_screen_hides_slot_and_diagnostics_by_default(self):
         """Normal users only see Connect / Disconnect and Learn IR status."""
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
-        dialog = SofaBatonBleDialog(self.app)
+        dialog = SofaBatonBleDialog(self.app, auto_scan=False)
         dialog.withdraw()
         try:
             self.assertEqual(dialog.advanced_panel.winfo_manager(), "")
@@ -168,7 +168,7 @@ class U1SaveUITests(unittest.TestCase):
 
     def test_advanced_read_controls_track_verified_session(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
-        dialog = SofaBatonBleDialog(self.app)
+        dialog = SofaBatonBleDialog(self.app, auto_scan=False)
         dialog.withdraw()
         try:
             device = BleEntry(
@@ -192,7 +192,7 @@ class U1SaveUITests(unittest.TestCase):
 
     def test_u1_reader_action_prompts_before_queries(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
-        dialog = SofaBatonBleDialog(self.app)
+        dialog = SofaBatonBleDialog(self.app, auto_scan=False)
         dialog.withdraw()
         try:
             self.assertEqual(dialog.read_button.cget("text"), "Read stored IR (test)")
