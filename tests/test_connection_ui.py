@@ -79,6 +79,7 @@ class ConnectionIndicatorTests(unittest.TestCase):
         title, message = popup.call_args.args[:2]
         self.assertEqual(title, "IR Learner — Connection Failed")
         self.assertIn("Disconnect the receiver from USB", message)
+        self.assertIn("working batteries", message)
         self.assertIn("different USB port", message)
         self.assertIn("Refresh USB, then Connect / Retry", message)
         self.assertIn("USB read timeout", message)
