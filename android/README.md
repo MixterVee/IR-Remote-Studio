@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.14-alpha
+# IR Remote Studio for Android — v0.1.15-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -286,3 +286,25 @@ the batteries before trying again; avoid repeated rapid test attempts.
 
 This new functionality is independent of the existing **Read Harmony identity**
 action, which remains available and unchanged.
+
+
+## Longer bounded Harmony IR receiving diagnostic — v0.1.15-alpha
+
+The v0.1.14-alpha hardware test successfully captured an estimated **38,173 Hz**
+carrier and 33 raw IR timing words from another remote. The capture stopped at
+the prototype's 16-report cap without seeing a capture-end marker. Because
+some incoming IR reports can contain no additional timing words, that cap
+cannot establish whether the command waveform was complete.
+
+This release distinguishes USB IR reports **with timing data** from zero-word
+reports and extends the cap to 128 reports, with an overall 15-second deadline.
+After receiving timing data, 24 consecutive empty reports also end listening.
+No automatic USB command retries are sent. The diagnostic records exactly
+why listening stopped, elapsed time, data/empty report counts, and up to 128
+raw timing words. It explicitly labels timing capture as unverified when no
+end marker is seen.
+
+The start, ACK, STOP and CLOSE packets remain unchanged; STOP/CLOSE are always
+attempted after opening the transient IR receive session. As before,
+no captured command is saved, replayed, exported or sent to the Harmony's
+persistent storage.
