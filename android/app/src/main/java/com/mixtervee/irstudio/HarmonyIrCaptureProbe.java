@@ -204,6 +204,11 @@ final class HarmonyIrCaptureProbe {
         return out.toString();
     }
 
+    /** Ignore idle keepalives until timing data has actually arrived. */
+    static boolean idleLimitReached(int capturedWords, int consecutiveEmpty) {
+        return capturedWords > 0 && consecutiveEmpty >= MAX_IDLE_AFTER_DATA;
+    }
+
     /**
      * Read one bounded IR command. The remote can emit many zero-data
      * keepalive reports; do not let 16 of them truncate a real waveform.
@@ -270,7 +275,7 @@ final class HarmonyIrCaptureProbe {
                 emptyReports++;
                 if (!words.isEmpty()) {
                     idleAfterData++;
-                    if (idleAfterData >= MAX_IDLE_AFTER_DATA) {
+                    if (idleLimitReached(words.size(), idleAfterData)) {
                         reason = "24 consecutive empty IR reports after timing data";
                         break;
                     }
