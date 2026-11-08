@@ -76,7 +76,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.3.1-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.3.2-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -132,10 +132,18 @@ class Studio(tk.Tk):
         self.connection_heading = ttk.Label(
             connection_info, textvariable=self.connection_state_var,
             font=("Segoe UI Semibold", 13), foreground="#bc2525")
-        self.connection_heading.pack(side="left", fill="x", expand=True)
-        self.u1_disconnect_btn = ttk.Button(
+        # Let the heading occupy only its measured text width so Disconnect
+        # sits directly alongside it, not at the far edge of the window.
+        self.connection_heading.pack(side="left")
+        self.u1_disconnect_btn = tk.Button(
             connection_info, text="Disconnect U1",
-            command=self.disconnect_u1, state="disabled")
+            command=self.disconnect_u1, state="disabled",
+            background="#b42318", foreground="#ffffff",
+            activebackground="#912018", activeforeground="#ffffff",
+            disabledforeground="#e2b4b0",
+            font=("Segoe UI Semibold", 10),
+            padx=12, pady=5, borderwidth=0, highlightthickness=0,
+            cursor="hand2")
         # The Disconnect button only appears when the U1 is actually connected.
 
         # Reserve status space before the expandable work area.
@@ -670,7 +678,7 @@ class Studio(tk.Tk):
         if snap.connected:
             self.u1_disconnect_btn.configure(state="normal")
             if not self.u1_disconnect_btn.winfo_manager():
-                self.u1_disconnect_btn.pack(side="right")
+                self.u1_disconnect_btn.pack(side="left", padx=(14, 0))
         else:
             self.u1_disconnect_btn.configure(state="disabled")
             if self.u1_disconnect_btn.winfo_manager():
