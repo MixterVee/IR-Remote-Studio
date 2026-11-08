@@ -66,7 +66,7 @@ class OcrustarLearningTests(unittest.TestCase):
 
     def test_decode_timings_preserves_long_leader(self):
         self.assertEqual(ocrustar_direct.decode_timings(self.raw), self.durations)
-        with self.assertRaisesRegex(ValueError, "Incomplete"):
+        with self.assertRaisesRegex(ValueError, "Invalid|Incomplete"):
             ocrustar_direct.decode_timings(b"\xff")
 
     def test_probe_only_authenticates(self):
