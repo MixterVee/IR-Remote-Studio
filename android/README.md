@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.2.0-alpha
+# IR Remote Studio for Android — v0.2.1-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -431,3 +431,16 @@ receiver; NO commands to modify its existing stored button mapping,
 flash, firmware or persistent configuration. Code can be saved to the
 phone only after successful protocol cleanup and explicit user action.
 Replay requires a separate manual test or tapping a saved button.
+
+
+## Save & Learn Another — v0.2.1-alpha
+
+The verified capture preview now includes a prominent
+**Save & Learn Another Button** action. It uses the exact same
+local-library validation/persistence path as **Save button**. If the
+button name or remote name is missing, duplicates an existing name, or
+fails to save, the preview stays open and no new USB session starts.
+After a successful save, it closes the preview and launches the normal
+user-confirmed Harmony IR learning flow for the next button, while the
+saved remote remains selected. No automatic IR capture, transmission,
+firmware write or persistent Harmony configuration change.
