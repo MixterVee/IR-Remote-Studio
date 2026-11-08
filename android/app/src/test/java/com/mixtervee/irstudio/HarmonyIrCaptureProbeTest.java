@@ -132,6 +132,9 @@ public class HarmonyIrCaptureProbeTest {
         };
         assertFalse(HarmonyIrCaptureProbe.isIrDoneReport(staleIrPacket));
         assertTrue(HarmonyIrCaptureProbe.isIrDoneReport(done));
+        assertFalse(HarmonyIrCaptureProbe.isIrDoneReport(close));
+        assertFalse(HarmonyIrCaptureProbe.isIrDoneReport(
+                new byte[]{(byte)0xFF, 0x06, (byte)0x82}));
         assertFalse(HarmonyIrCaptureProbe.isCloseAcknowledgement(
                 staleIrPacket, (byte)0x0C));
         assertFalse(HarmonyIrCaptureProbe.isCloseAcknowledgement(
