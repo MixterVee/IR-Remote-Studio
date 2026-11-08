@@ -12,6 +12,7 @@ The U1's app-level IR learning protocol remains to be reverse-engineered.
 from __future__ import annotations
 
 import asyncio
+import re
 from dataclasses import dataclass
 
 
@@ -46,6 +47,27 @@ def normalize_discoveries(discovered: dict) -> list[BleEntry]:
         -(x.rssi if x.rssi is not None else -150),
         x.address))
     return results
+
+
+
+def auto_connect_candidate(devices: list[BleEntry]) -> BleEntry | None:
+    """Identify a single SB<serial> device for user-requested auto-connect.
+
+    Only unique SB-prefixed hexadecimal IDs (the U1's observed advertising
+    form) qualify. If a UUID is advertised, it must include the observed
+    U1 FFF0 service. Missing advertised UUIDs are allowed because some BLE
+    adapters omit them; the connection backend must still verify FFF0/FFF1/
+    FFF2 and the U1 application identity before showing green.
+    If multiple candidates exist, require manual selection instead.
+    """
+    candidates = [
+        device for device in devices
+        if re.fullmatch(r"SB[0-9a-f]{6,20}", device.name.strip(), flags=re.I)
+        and (not device.advertised_services or
+             "0000fff0-0000-1000-8000-00805f9b34fb" in {
+                 str(uuid).lower() for uuid in device.advertised_services})
+    ]
+    return candidates[0] if len(candidates) == 1 else None
 
 
 def scan_ble(seconds: float = 7.0) -> list[BleEntry]:
