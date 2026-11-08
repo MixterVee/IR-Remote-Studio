@@ -70,6 +70,52 @@ class U1SaveUITests(unittest.TestCase):
         self.assertIn("CONNECTION LOST", self.app.u1_state_var.get())
         self.assertEqual(str(self.app.u1_disconnect_btn.cget("state")), "disabled")
 
+    def test_one_connection_indicator_prefers_active_u1_over_usb_warning(self):
+        # Connecting U1 must hide an unused USB receiver's red warning.
+        self.assertEqual(self.app.connection_state_var.get(), "NOT CONNECTED")
+        self.assertEqual(str(self.app.connection_heading.cget("foreground")), "#bc2525")
+        self.app._set_connection("failed", "USB handshake failed.")
+        self.app.u1_session._state(
+            "CONNECTED", "SB202006231D9E", "MOCK", "U1 identity verified.")
+        self.app._refresh_u1_status()
+        self.assertEqual(
+            self.app.connection_state_var.get(),
+            "CONNECTED — SofaBaton U1 (SB202006231D9E)")
+        self.assertEqual(str(self.app.connection_heading.cget("foreground")), "#147b3b")
+        self.assertEqual(self.app.u1_disconnect_btn.winfo_manager(), "pack")
+        # A fresh USB failure must not overwrite a healthy Bluetooth link.
+        self.app._set_connection("not-connected", "No supported USB learner.")
+        self.assertIn("CONNECTED — SofaBaton U1", self.app.connection_state_var.get())
+        self.app.u1_session._state("LOST", "SB202006231D9E", "MOCK", "Dropped.")
+        self.app._refresh_u1_status()
+        self.assertEqual(self.app.connection_state_var.get(), "NOT CONNECTED")
+        self.assertEqual(str(self.app.connection_heading.cget("foreground")), "#bc2525")
+        self.assertEqual(self.app.u1_disconnect_btn.winfo_manager(), "")
+
+    def test_usb_verified_is_green_when_bluetooth_is_not_connected(self):
+        self.app.connected_model = "Harmony 300/350 (direct HID)"
+        self.app._set_connection("ready", "USB handshake verified.")
+        self.assertEqual(
+            self.app.connection_state_var.get(),
+            "CONNECTED — Harmony 300/350 (direct HID) (USB)")
+        self.assertEqual(str(self.app.connection_heading.cget("foreground")), "#147b3b")
+        # An unexpected U1 disconnect must not erase verified USB readiness.
+        self.app.u1_session._state("LOST", "SB-Test", "MOCK", "Disconnected.")
+        self.app._refresh_u1_status()
+        self.assertIn("Harmony 300/350", self.app.connection_state_var.get())
+        self.app.connected_model = None
+        self.app._set_connection("not-connected", "USB unplugged.")
+        self.assertEqual(self.app.connection_state_var.get(), "NOT CONNECTED")
+
+    def test_main_window_has_one_visible_connection_banner(self):
+        # Not two competing banners and not an always-visible BLE detail.
+        self.assertFalse(hasattr(self.app, "u1_connection_label"))
+        self.assertFalse(hasattr(self.app, "connection_description"))
+        self.assertFalse(hasattr(self.app, "u1_connection_description"))
+        self.assertFalse(hasattr(self.app, "connection_detail_var"))
+        self.assertEqual(str(self.app.connection_heading.cget("textvariable")),
+                         str(self.app.connection_state_var))
+
     def test_explicit_connect_prompt_does_not_pair_when_cancelled(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
         dlg = SofaBatonBleDialog(self.app)
