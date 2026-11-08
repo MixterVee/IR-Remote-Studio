@@ -44,6 +44,17 @@ class LayoutDialog(tk.Toplevel):
                   font=("Segoe UI", 15, "bold")).pack(anchor="w")
         ttk.Label(outer, text="Set button widths and preview the exported .irplus layout. Only buttons with IR codes appear in the preview.",
                   wraplength=800).pack(anchor="w", pady=(3, 10))
+        # Keep Save/Cancel reserved at the bottom when maximized on a laptop.
+        self.footer = ttk.Frame(outer)
+        footer = self.footer
+        footer.pack(side="bottom", fill="x", pady=(10, 0))
+        ttk.Label(footer, text="Preview is illustrative; final font and chrome depend on the phone and irplus.",
+                  foreground="#59677b").pack(side="left")
+        ttk.Button(footer, text="Save layout",
+                   command=self._save).pack(side="right")
+        ttk.Button(footer, text="Cancel",
+                   command=self.destroy).pack(side="right", padx=8)
+
         body = ttk.PanedWindow(outer, orient="horizontal")
         body.pack(fill="both", expand=True)
 
@@ -53,6 +64,19 @@ class LayoutDialog(tk.Toplevel):
         body.add(right, weight=3)
 
         ttk.Label(left, text="Buttons", font=("Segoe UI", 11, "bold")).pack(anchor="w")
+        self.width_bar = ttk.Frame(left)
+        width_bar = self.width_bar
+        width_bar.pack(side="bottom", fill="x", pady=(8, 0))
+        ttk.Label(width_bar, text="Selected width").pack(side="left")
+        self.width_combo = ttk.Combobox(width_bar, textvariable=self.chosen_span,
+                                         values=("2", "3", "4", "6", "12"),
+                                         width=5, state="readonly")
+        self.width_combo.pack(side="left", padx=(10, 5))
+        ttk.Button(width_bar, text="Apply width",
+                   command=self._apply_width).pack(side="left")
+        ttk.Label(left, text="Use Move up / Move down in the main window to reorder buttons.",
+                  wraplength=290, foreground="#586579").pack(side="bottom", fill="x", pady=(8, 0))
+
         self.tree = ttk.Treeview(left, columns=("label", "width", "state"),
                                  show="headings", height=14, selectmode="browse")
         for key, heading, width in (
@@ -67,18 +91,6 @@ class LayoutDialog(tk.Toplevel):
                              values=(b["label"], self.working[b["id"]],
                                      core.capture_status(b)))
         self.tree.bind("<<TreeviewSelect>>", self._select)
-
-        width_bar = ttk.Frame(left)
-        width_bar.pack(fill="x")
-        ttk.Label(width_bar, text="Selected width").pack(side="left")
-        self.width_combo = ttk.Combobox(width_bar, textvariable=self.chosen_span,
-                                         values=("2", "3", "4", "6", "12"),
-                                         width=5, state="readonly")
-        self.width_combo.pack(side="left", padx=(10, 5))
-        ttk.Button(width_bar, text="Apply width",
-                   command=self._apply_width).pack(side="left")
-        ttk.Label(left, text="Use Move up / Move down in the main window to reorder buttons.",
-                  wraplength=290, foreground="#586579").pack(anchor="w", pady=(8, 0))
 
         ttk.Label(right, text="Preview", font=("Segoe UI", 11, "bold")).pack(anchor="w")
         toolbar = ttk.Frame(right)
@@ -97,6 +109,9 @@ class LayoutDialog(tk.Toplevel):
             combo.pack()
             combo.bind("<<ComboboxSelected>>", lambda _e: self._render())
 
+        ttk.Label(right, textvariable=self.preview_info, wraplength=400,
+                  foreground="#536177").pack(side="bottom", fill="x", pady=(6, 0))
+
         canvas_holder = ttk.Frame(right)
         canvas_holder.pack(fill="both", expand=True)
         self.canvas = tk.Canvas(canvas_holder, bg="#e9edf3",
@@ -110,17 +125,6 @@ class LayoutDialog(tk.Toplevel):
         self.canvas.bind("<MouseWheel>", self._wheel)
         self.canvas.bind("<Button-4>", lambda _e: self.canvas.yview_scroll(-3, "units"))
         self.canvas.bind("<Button-5>", lambda _e: self.canvas.yview_scroll(3, "units"))
-        ttk.Label(right, textvariable=self.preview_info, wraplength=400,
-                  foreground="#536177").pack(fill="x", pady=(6, 0))
-
-        footer = ttk.Frame(outer)
-        footer.pack(fill="x", pady=(10, 0))
-        ttk.Label(footer, text="Preview is illustrative; final font and chrome depend on the phone and irplus.",
-                  foreground="#59677b").pack(side="left")
-        ttk.Button(footer, text="Save layout",
-                   command=self._save).pack(side="right")
-        ttk.Button(footer, text="Cancel",
-                   command=self.destroy).pack(side="right", padx=8)
         if self.device["buttons"]:
             first = self.device["buttons"][0]["id"]
             self.tree.selection_set(first)
