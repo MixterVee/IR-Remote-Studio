@@ -76,7 +76,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.3.2-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.3.3-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -152,22 +152,32 @@ class Studio(tk.Tk):
         ttk.Separator(status).pack(fill="x", pady=(0, 7))
         ttk.Label(status, textvariable=self.status_var, wraplength=1080).pack(anchor="w")
 
-        panels = ttk.PanedWindow(self, orient="horizontal")
+        # tk.PanedWindow supports per-pane minimum widths; ttk.PanedWindow
+        # only supports weights and otherwise squeezes a pane to less than
+        # a button's label width at ordinary laptop window sizes.
+        panels = tk.PanedWindow(
+            self, orient="horizontal", sashwidth=4, borderwidth=0,
+            sashrelief="flat", showhandle=False)
         panels.pack(fill="both", expand=True, padx=16, pady=(0, 8))
         left = ttk.Frame(panels, padding=8)
         middle = ttk.Frame(panels, padding=8)
         right = ttk.Frame(panels, padding=8)
-        panels.add(left, weight=2)
-        panels.add(middle, weight=4)
-        panels.add(right, weight=3)
+        # Total minimums (900px) fit within 960px application minimum.
+        # Users can resize columns with the sash but cannot hide controls.
+        panels.add(left, minsize=210, stretch="always")
+        panels.add(middle, minsize=310, stretch="always")
+        panels.add(right, minsize=380, stretch="always")
 
         ttk.Label(left, text="Devices", font=("Segoe UI Semibold", 13)).pack(anchor="w", pady=(0, 8))
         self.device_actions = ttk.Frame(left)
         dl = self.device_actions
         dl.pack(side="bottom", fill="x", pady=(10, 0))
-        ttk.Button(dl, text="+ Add", command=self.add_device).pack(side="left", expand=True, fill="x")
-        ttk.Button(dl, text="Edit", command=self.edit_device).pack(side="left", expand=True, fill="x", padx=3)
-        ttk.Button(dl, text="Delete", command=self.delete_device).pack(side="left", expand=True, fill="x")
+        self._device_action_buttons = [
+            ttk.Button(dl, text="+ Add", command=self.add_device),
+            ttk.Button(dl, text="Edit", command=self.edit_device),
+            ttk.Button(dl, text="Delete", command=self.delete_device),
+        ]
+        self._flow_actions(dl, self._device_action_buttons, columns=2)
 
         # Allocate bottom action buttons first, then give remaining space to the list.
         self.device_list = tk.Listbox(left, borderwidth=1, relief="solid", activestyle="none", exportselection=False)
@@ -181,15 +191,29 @@ class Studio(tk.Tk):
         button_actions.pack(side="bottom", fill="x", pady=(10, 0))
         primary = ttk.Frame(button_actions)
         primary.pack(fill="x")
-        for label, cmd in (("+ Add", self.add_button), ("Rename", self.rename_button),
-                           ("Delete", self.delete_button)):
-            ttk.Button(primary, text=label, command=cmd).pack(side="left", expand=True, fill="x", padx=1)
+        self._primary_action_buttons = [
+            ttk.Button(primary, text=label, command=cmd)
+            for label, cmd in (("+ Add", self.add_button),
+                               ("Rename", self.rename_button),
+                               ("Delete", self.delete_button))
+        ]
+        self._flow_actions(primary, self._primary_action_buttons, columns=2)
         secondary = ttk.Frame(button_actions)
         secondary.pack(fill="x", pady=(3, 0))
-        for label, cmd in (("Move up", lambda: self.move_button(-1)),
-                           ("Move down", lambda: self.move_button(1)),
-                           ("Layout editor...", self.edit_layout)):
-            ttk.Button(secondary, text=label, command=cmd).pack(side="left", expand=True, fill="x", padx=1)
+        self._secondary_action_buttons = [
+            ttk.Button(secondary, text=label, command=cmd)
+            for label, cmd in (("Move up", lambda: self.move_button(-1)),
+                               ("Move down", lambda: self.move_button(1)),
+                               ("Layout editor...", self.edit_layout))
+        ]
+        self._flow_actions(secondary, self._secondary_action_buttons, columns=2)
+        # PanedWindow panes may be quite narrow on a laptop. Switch between
+        # 3-wide and 2-wide action rows without clipping their final button.
+        left.bind("<Configure>", lambda event: self._fit_action_bars(
+            self.device_actions, event.width, (self._device_action_buttons,), 350))
+        middle.bind("<Configure>", lambda event: self._fit_action_bars(
+            self.button_actions, event.width,
+            (self._primary_action_buttons, self._secondary_action_buttons), 415))
 
         self.button_progress = ttk.Label(middle, textvariable=self.progress_var,
                                          foreground="#536277")
@@ -640,6 +664,26 @@ class Studio(tk.Tk):
             "IR Learner — Connection Failed",
             recovery + "\nTechnical details:\n" + summary,
             parent=self)
+
+    @staticmethod
+    def _flow_actions(frame, buttons, columns):
+        """Re-grid existing controls instead of truncating the last button."""
+        for button in buttons:
+            button.grid_forget()
+        for column in range(3):
+            frame.columnconfigure(column, weight=1 if column < columns else 0)
+        for index, button in enumerate(buttons):
+            button.grid(row=index // columns, column=index % columns,
+                        sticky="ew", padx=2, pady=1)
+
+    def _fit_action_bars(self, frame, available_width, groups, wide_threshold):
+        """Keep labels usable when the device/button panes are squeezed."""
+        columns = 3 if available_width >= wide_threshold else 2
+        if getattr(frame, "_action_columns", None) == columns:
+            return
+        frame._action_columns = columns
+        for group in groups:
+            self._flow_actions(group[0].master, group, columns)
 
     def _render_connection_status(self):
         """Display exactly one red/green connection state and device name.

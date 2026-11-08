@@ -2,8 +2,12 @@
 
 The optional Windows OS pairing flag is OFF by default: this U1 has
 already been proven to communicate with Windows without a pair request.
-Only the observed device-identity (0x01) and stored-code inquiry (0x0C)
-messages can be sent. This class never sends programming or learn commands.
+Normal operations use only observed device-identity (0x01) and stored-code
+inquiry (0x0C). A separately confirmed Advanced experimental learning
+operation additionally sends the observed 0x04 learn start and 0x05
+finish after read/validation and saving a slot-8 backup on disk.
+It may overwrite the U1's slot 8 and cannot restore that programming.
+No unverified profile or firmware configuration commands are sent.
 
 A dedicated asyncio thread owns the BleakClient, notification subscription,
 and received-packet queue for the entire connection lifetime. UI threads
@@ -167,6 +171,55 @@ class U1Session:
     def read_saved_ir(self, slot: int):
         """Use the already-connected BLE session; do not disconnect after reading."""
         return self._submit(self._read_async(slot)).result(timeout=25)
+
+    async def _learn_async(self, backup_folder):
+        """Read/back up slot 8 BEFORE sending the experimental learn command."""
+        async with self._busy:
+            client, inbox = self._client, self._rx
+            if not client or not client.is_connected or inbox is None:
+                raise RuntimeError("Connect the SofaBaton U1 before learning.")
+            from pathlib import Path
+            import datetime
+            import json
+            from irstudio import core
+            # Do not arm a learner unless we can verify and save the previous
+            # contents of this exact slot. We cannot program a backup into U1.
+            previous = await protocol.read_connected_ir(client, inbox, 8)
+            folder = Path(backup_folder) / "U1-Learn-Backups"
+            folder.mkdir(parents=True, exist_ok=True)
+            stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
+                "%Y%m%d_%H%M%S_%f")
+            path = folder / f"SofaBaton-U1-slot8-before-learn-{stamp}.json"
+            backup = {
+                "key": "U1 slot 8 before experimental learn",
+                "carrier_hz": previous.carrier_hz,
+                "timings_us": previous.timings_us,
+                "original_slot": 8,
+                "note": "LOCAL IRPlus-compatible capture backup. Cannot automatically "
+                        "restore SofaBaton U1 programming.",
+            }
+            # Exclusive create avoids overwriting earlier backups.
+            with path.open("x", encoding="utf-8") as stream:
+                json.dump(backup, stream, indent=2)
+                stream.write("\n")
+                stream.flush()
+                import os
+                os.fsync(stream.fileno())
+            # Test the just-written backup is importable before arming U1.
+            core.import_capture_json(path)
+            try:
+                learned = await protocol.experimental_learn_connected_ir(
+                    client, inbox, slot=8)
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Learning failed: {exc}. Previous IR was saved at "
+                    f"{path}. This file cannot restore the U1's own "
+                    "programmed slot.") from exc
+            return learned, str(path)
+
+    def learn_ir_experimental(self, backup_folder):
+        """Explicit test only, from a user-approved UI action."""
+        return self._submit(self._learn_async(backup_folder)).result(timeout=53)
 
     async def _disconnect_async(self):
         async with self._busy:

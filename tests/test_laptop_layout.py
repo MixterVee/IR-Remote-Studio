@@ -55,6 +55,54 @@ class LaptopControlsTests(unittest.TestCase):
             finally:
                 app.destroy()
 
+    def test_squeezed_window_reflows_all_delete_and_layout_controls(self):
+        """At laptop width, the final button of each action row must fit."""
+        require_display(self)
+        from irstudio.ui import Studio
+        with patch("irstudio.ui.core.load_library",
+                   return_value=core.default_library()), \
+             patch("irstudio.ui.core.save_library"):
+            app = Studio()
+            try:
+                app.geometry("1100x760")
+                app.update()
+                # Simulate the narrow individual panes shown in the screenshot.
+                app._fit_action_bars(
+                    app.device_actions, 275,
+                    (app._device_action_buttons,), 350)
+                app._fit_action_bars(
+                    app.button_actions, 350,
+                    (app._primary_action_buttons,
+                     app._secondary_action_buttons), 415)
+                app.update()
+                for group in (app._device_action_buttons,
+                              app._primary_action_buttons,
+                              app._secondary_action_buttons):
+                    self.assertEqual(group[-1].grid_info()["row"], 1)
+                    for widget in group:
+                        within_window(self, widget, app)
+                        self.assertGreaterEqual(
+                            widget.winfo_width(),
+                            widget.winfo_reqwidth() - 6,
+                            f"Clipped action {widget.cget('text')}")
+                # Expanding the window reclaims the natural single-row layout.
+                app._fit_action_bars(
+                    app.device_actions, 550,
+                    (app._device_action_buttons,), 350)
+                app._fit_action_bars(
+                    app.button_actions, 760,
+                    (app._primary_action_buttons,
+                     app._secondary_action_buttons), 415)
+                # Grid placement changes immediately. Calling app.update() on
+                # this deliberately still-narrow window re-triggers <Configure>
+                # and legitimately puts it back in two-column mode.
+                for group in (app._device_action_buttons,
+                              app._primary_action_buttons,
+                              app._secondary_action_buttons):
+                    self.assertEqual(group[-1].grid_info()["row"], 0)
+            finally:
+                app.destroy()
+
     def test_layout_editor_save_and_width_controls_at_minimum_height(self):
         require_display(self)
         import tkinter as tk
