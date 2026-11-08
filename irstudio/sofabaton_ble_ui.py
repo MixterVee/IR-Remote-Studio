@@ -275,9 +275,9 @@ class SofaBatonBleDialog(tk.Toplevel):
                     "end", f"{d.name} — {quality} — {d.address}{candidate}")
             self.status_var.set(
                 f"Found {len(devices)} BLE device(s). "
-                "Select the SofaBaton U1 and inspect its services if identified."
+                "Select your identified SofaBaton U1 and click Connect U1."
                 if devices else
-                "No BLE advertisements seen. Check U1 batteries, pairing mode "
+                "No Bluetooth devices found. Check U1 batteries, pairing mode "
                 "and the PC's Bluetooth adapter.")
             self._append(f"BLE scan: {len(devices)} advertising device(s).\n")
             for d in devices:
@@ -426,7 +426,7 @@ class SofaBatonBleDialog(tk.Toplevel):
         def complete(lines):
             self._append("\n".join(lines) + "\n\n")
             self.status_var.set(
-                f"Service metadata for {device.name} collected; "
+                f"Bluetooth service information for {device.name} collected; "
                 "BLE inspection session closed.")
         self._run("Inspecting services",
                   lambda: ble.inspect_gatt(device.address), complete)
