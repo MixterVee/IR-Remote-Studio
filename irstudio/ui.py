@@ -81,7 +81,7 @@ class Studio(tk.Tk):
 
         toolbar = ttk.Frame(self, padding=(16, 10, 16, 10))
         toolbar.pack(fill="x")
-        self.probe_btn = ttk.Button(toolbar, text="Check Harmony IR learner", command=self.probe)
+        self.probe_btn = ttk.Button(toolbar, text="Check IR learning device", command=self.probe)
         self.probe_btn.pack(side="left")
 
         ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=12)
@@ -489,7 +489,11 @@ class Studio(tk.Tk):
         if "libconcord error 11" in error or "USB connection failed" in error:
             error = ("USB connection unsuccessful. Check that the Harmony has batteries, "
                      "try a known-good data cable and USB port, and close other Harmony software.\n\n" + error)
-        messagebox.showerror("Harmony connection", error)
+        if "Ocrustar" in error or "libusb" in error or "WinUSB" in error:
+            error += ("\n\nOcrustar may need a suitable Windows USB driver. "
+                      "Do not change drivers until the exact device ID and "
+                      "interfaces have been checked.")
+        messagebox.showerror("IR learning device", error)
 
     def _background(self, mode, complete):
         if self.running:
@@ -497,9 +501,11 @@ class Studio(tk.Tk):
         self.running = True
         self.probe_btn.configure(state="disabled")
         self.capture_btn.configure(state="disabled")
-        self.status_var.set("Identifying IR learning hardware..." if mode == "Probe"
-                            else "Connecting to IR learner... wait for READY.")
         chosen_receiver = self.receiver_var.get()
+        self.status_var.set("Identifying IR learning hardware..." if mode == "Probe"
+                            else ("Press the source remote once during Concordance capture."
+                                  if chosen_receiver == BACKENDS[3] else
+                                  "Connecting to IR learner... wait for READY."))
 
         def job():
             try:
