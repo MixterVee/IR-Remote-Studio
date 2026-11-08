@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.18-alpha
+# IR Remote Studio for Android — v0.2.0-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -392,3 +392,42 @@ Tests use the actual 57-word sample (26 timing pairs, Pronto frequency
 divider 006D), and reject malformed frames, missing repeat boundaries,
 and implausible carrier frequencies. The USB handshake, IR receiver
 start/ACK, STOP and CLOSE implementation are unchanged.
+
+
+## Learn & Library workflow — v0.2.0-alpha
+
+The first successful Harmony 300 capture was decoded into a working Pronto
+command and replayed successfully from the OnePlus 15. With this proof of
+capture-to-replay, the app now offers a usable, opt-in **Learn IR Button**
+workflow on its home screen.
+
+1. Attach a supported Harmony 300/350 over USB and grant Android USB
+   permission via **Harmony USB Connection & Diagnostics**.
+2. Tap **Learn IR Button**, wait for the confirmed READY indication, then
+   briefly press and release a button on another IR remote.
+3. The app offers a validated raw Pronto 0000 candidate only when it
+   recognizes a probable first frame *and* verifies STOP/DONE and
+   CLOSE acknowledgments from the Harmony. Incomplete captures remain
+   diagnostics only and cannot be saved via the learning flow.
+4. **Test IR on target device** sends a single one-shot signal with
+   Android's public ConsumerIrManager API, where available. This action
+   is manual and does not alter the Harmony.
+5. Name the new button, select an existing remote or create a new one,
+   and tap **Save button** to persist the learned command on the
+   phone's existing private `remotes.json` library.
+6. Long-press a remote heading to rename/delete a remote, or long-press
+   a button to rename/delete it; changes are subject to confirmation.
+7. Use the existing **Export Remote** button to write an .irplus backup
+   with the newly learned buttons; import remains supported.
+
+This Android release includes a refreshed dark interface, a prominent
+Learn button and new-remote action, accessible READY indication,
+capture preview with test/copy/report controls, and rollback if a local
+library save fails. The entire existing Harmony identity and advanced
+USB diagnostic section is preserved.
+
+**Safety:** learning uses only the transient Harmony `/ir/ir_cap` read
+receiver; NO commands to modify its existing stored button mapping,
+flash, firmware or persistent configuration. Code can be saved to the
+phone only after successful protocol cleanup and explicit user action.
+Replay requires a separate manual test or tapping a saved button.
