@@ -5,7 +5,7 @@
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for compatible Android phones.
 
 > **Status (November 2026):** Windows v0.1.7 is the established GitHub release.
-> **Windows v0.2.4-beta** builds on direct USB learning backends for Harmony 300/350
+> **Windows v0.2.5-beta** builds on direct USB learning backends for Harmony 300/350
 > (shared HID ID 046D:C124) and a documented Ocrustar/ElkSmart D226/D552
 > learning family (045C:02AA). Both Windows USB transports need real-device
 > validation before they can be treated as production-ready. The existing
@@ -18,13 +18,13 @@ Create devices, use custom labels for every button, capture commands from a comp
 For the tested Windows v0.1.7 release, use
 [GitHub Releases](https://github.com/MixterVee/IR-Remote-Studio/releases).
 
-For the **experimental v0.2.4-beta direct USB learner**, obtain the
+For the **experimental v0.2.5-beta direct USB learner**, obtain the
 Windows ZIP from the latest successful
 [Windows Actions build](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
 Extract the ZIP and launch the standalone \`IR-Remote-Studio.exe\`.
 Python is not required to run the packaged executable.
 
-In v0.2.4-beta the Windows learning panel provides **Save** to
+In v0.2.5-beta the Windows learning panel provides **Save** to
 confirm the selected command is saved without starting another capture, and
 **Save & Learn another** to save and continue learning. Captures remain
 autosaved immediately after successful receiving, as in the previous version.
@@ -53,6 +53,26 @@ Use the **IR learning hardware** selector to choose:
 own verified adapters; no learning commands are sent to unrecognized
 hardware. Windows USB driver installation/replacement is never performed
 automatically. Follow \`WINDOWS-SETUP.txt\` and keep a library backup.
+
+## SofaBaton U1 Bluetooth (Windows diagnostic beta)
+
+The U1 is known to support learning IR from another remote via its
+official Bluetooth-connected SofaBaton phone app. The U1's proprietary
+Bluetooth command protocol has not been identified.
+
+Windows v0.2.5-beta adds **SofaBaton U1 Bluetooth...** to the IR learner
+connection panel. This **research-only** lab can scan BLE advertisements,
+list discovered devices and, only after you explicitly select a device
+and confirm, briefly inspect its GATT service/characteristic UUIDs.
+It does **not** learn, read, transmit, or program IR commands, pair
+Bluetooth automatically, read characteristic values or send any
+device-specific writes. It does not claim full U1 integration.
+
+To test, put the U1 into the SofaBaton app's Pairing mode with **- and E**,
+close the official phone app if connected, open the diagnostic window,
+scan, and inspect only a device you can positively identify. Save the
+resulting report locally; review/redact addresses before sharing. This
+evidence can guide an eventual U1-specific learning driver.
 
 ## Android Learn & Library (v0.2.1-alpha)
 

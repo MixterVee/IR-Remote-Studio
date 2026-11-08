@@ -1,4 +1,4 @@
-IR Remote Studio 0.2.4-beta — Windows 11 x64
+IR Remote Studio 0.2.5-beta — Windows 11 x64
 ================================================
 
 FIRST STANDALONE LEARNER TEST
@@ -7,7 +7,7 @@ This beta adds direct USB learning WITHOUT requiring Concordance for
 supported Harmony 300/350 and an experimental Ocrustar/ElkSmart dongle
 adapter. Previous Windows features and the Concordance backend remain.
 
-1. Download the v0.2.4-beta Windows x64 ZIP from GitHub Actions.
+1. Download the v0.2.5-beta Windows x64 ZIP from GitHub Actions.
 2. Extract the files and launch IR-Remote-Studio.exe.
 3. Connect ONE supported USB IR learning device.
 4. From "IR learning hardware", choose one of:
@@ -98,3 +98,30 @@ If detection/handshake fails, send the exact error and associated
 direct-*.log or ocrustar-*.log file for diagnosis.
 
 Project: https://github.com/MixterVee/IR-Remote-Studio
+
+SOFABATON U1 BLUETOOTH RESEARCH (EXPERIMENTAL)
+----------------------------------------------
+The separate "SofaBaton U1 Bluetooth..." button in the Windows IR learner
+connection panel opens a safe diagnostic window. It does NOT yet allow
+IR learning, reading/saving the U1's commands, or programming the U1.
+
+1. Turn on Bluetooth on the Windows PC and install working AA batteries
+   in the SofaBaton U1.
+2. Close the official SofaBaton app if it is connected to the remote.
+3. On the U1, hold the "-" and "E" buttons to display "Pairing".
+4. Open "SofaBaton U1 Bluetooth..." and click "Scan Bluetooth".
+5. Examine the names (including unnamed BLE devices). Only if you can
+   identify your U1, select it and choose "Inspect selected (read-only)".
+6. Approve the explicit confirmation. The app temporarily connects to
+   enumerate GATT service/characteristic UUID metadata and disconnects.
+   It never reads characteristic values, subscribes to notifications,
+   writes commands, changes profiles, or initiates Bluetooth pairing.
+7. Click "Copy report" or "Save report...". Review it before sharing:
+   it may contain local Bluetooth addresses for nearby devices.
+
+This is BLE protocol research only. The U1's proprietary BLE commands and
+IR-learning workflow have NOT been identified. Classic Bluetooth controls
+and the SofaBaton X-series hub protocols are not interchangeable with
+U1 app configuration. The existing Harmony/Ocrustar/Concordance backends
+are unaffected. Windows BLE scanning may require suitable PC Bluetooth
+hardware and Windows permissions.
