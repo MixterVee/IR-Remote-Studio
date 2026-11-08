@@ -38,11 +38,11 @@ class ConnectionIndicatorTests(unittest.TestCase):
         self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#bc2525")
 
-    def test_usb_detection_only_is_amber_not_connected(self):
+    def test_usb_detection_stays_red_until_verified(self):
         self.app._set_connection("detected", "Device found; handshake not checked")
-        self.assertIn("USB DETECTED", self.app.connection_state_var.get())
+        self.assertEqual(self.app.connection_state_var.get(), "NOT CONNECTED")
         self.assertEqual(str(self.app.connection_heading.cget("foreground")),
-                         "#9a6300")
+                         "#bc2525")
         self.assertNotIn("READY", self.app.connection_state_var.get())
 
     def test_successful_handshake_is_green_and_does_not_claim_live_open(self):
@@ -52,11 +52,11 @@ class ConnectionIndicatorTests(unittest.TestCase):
                           side_effect=lambda mode, done: done(fake_result, None)):
             self.app.probe()
         self.assertEqual(self.app.connection_state_var.get(),
-                         "READY — CONNECTION VERIFIED")
+                         "CONNECTED — Harmony 300/350 (direct HID)")
         self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#147b3b")
         self.assertIn("session is closed",
-                      self.app.connection_detail_var.get())
+                      self.app._usb_connection_detail)
 
     def test_failed_probe_is_red_and_reconnect_guidance_is_visible(self):
         with patch.object(self.app, "_background",
@@ -64,11 +64,11 @@ class ConnectionIndicatorTests(unittest.TestCase):
              patch.object(self.app, "_harmony_error"):
             self.app.probe()
         self.assertEqual(self.app.connection_state_var.get(),
-                         "CONNECTION FAILED — RETRY")
+                         "NOT CONNECTED")
         self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#bc2525")
         self.assertIn("Unplug and reconnect",
-                      self.app.connection_detail_var.get())
+                      self.app._usb_connection_detail)
 
     def test_connection_failure_popup_shows_unplug_and_other_port_steps(self):
         with patch.object(self.app, "_background",
@@ -85,7 +85,7 @@ class ConnectionIndicatorTests(unittest.TestCase):
         self.assertIn("USB read timeout", message)
         self.assertIs(popup.call_args.kwargs["parent"], self.app)
         self.assertEqual(self.app.connection_state_var.get(),
-                         "CONNECTION FAILED — RETRY")
+                         "NOT CONNECTED")
 
     def test_ocrustar_failure_popup_has_driver_caution(self):
         self.app.receiver_var.set("Ocrustar / ElkSmart — USB bulk (experimental)")
@@ -101,13 +101,14 @@ class ConnectionIndicatorTests(unittest.TestCase):
         self.assertEqual(self.app.connection_state_var.get(), "NOT CONNECTED")
         self.app._capture_ready(7)
         self.assertEqual(self.app.connection_state_var.get(),
-                         "READY — PRESS A BUTTON NOW")
+                         "CONNECTED — USB IR learner")
         self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#147b3b")
         self.app.running = False
         self.app._set_connection("captured", "Save complete")
         self.app._capture_ready(7)
-        self.assertEqual(self.app.connection_state_var.get(), "CAPTURE COMPLETE")
+        self.assertEqual(self.app.connection_state_var.get(), "NOT CONNECTED")
+        self.assertEqual(self.app._usb_connection_state, "captured")
 
     def test_switching_receiver_invalidates_old_green_state(self):
         self.app._set_connection("ready", "Harmony handshake completed")
