@@ -27,7 +27,7 @@ final class HarmonySysinfoProbe {
         byte[] data = new byte[REPORT_SIZE];
         data[0] = (byte) 0xFF;
         data[1] = 0x01;
-        data[2] = 0x00; // Concordance ReadFile starts at sequence zero
+        data[2] = 0x03; // CRemoteMH::GetIdentity invokes ReadFile with start_seq=0x03
         data[3] = 0x02;
         data[4] = (byte) 0x80;
         System.arraycopy(path, 0, data, 5, path.length);
@@ -49,21 +49,21 @@ final class HarmonySysinfoProbe {
         return (int) length;
     }
 
-    /** Concordance ReadFile sequence: read=0, ACK=1, close=2. */
+    /** GetIdentity's /sys/sysinfo transfer uses start_seq=3: read=3, ACK=4, close=5. */
     static byte[] ackRequest(int length, byte parameter) {
         if (length < 1 || length > MAX_SYSINFO_SIZE)
             throw new IllegalArgumentException("Invalid sysinfo size");
         int packets = (length + 61) / 62;
         int count = Math.min(packets + 1, 0x33);
         return new byte[] {
-                (byte) 0xFF, 0x04, 0x01, 0x02, 0x01, parameter,
+                (byte) 0xFF, 0x04, 0x04, 0x02, 0x01, parameter,
                 0x01, (byte) count
         };
     }
 
     static byte[] closeRequest(byte parameter) {
         return new byte[] {
-                (byte) 0xFF, 0x07, 0x02, 0x01, 0x01, parameter
+                (byte) 0xFF, 0x07, 0x05, 0x01, 0x01, parameter
         };
     }
 
@@ -218,7 +218,7 @@ final class HarmonySysinfoProbe {
         byte parameter = header[5];
         byte[] ack = ackRequest(length, parameter);
         log.append("sysinfo expected data packets: ").append(dataPackets)
-                .append("; ACK sequence: 01; packet count + 1: ")
+                .append("; ACK sequence: 04; packet count + 1: ")
                 .append(ack[7] & 0xFF).append('\n');
         boolean transferStarted = false;
         try {
@@ -258,7 +258,7 @@ final class HarmonySysinfoProbe {
                 byte[] reset = closeRequest(parameter);
                 byte[] resetResponse = exchange(connection, in, out, reset,
                         log, "sysinfo sequence close");
-                log.append("sysinfo session sequence close (02): ")
+                log.append("sysinfo session sequence close (05): ")
                         .append(resetResponse != null ? "reply received" : "unconfirmed")
                         .append('\n');
             }
