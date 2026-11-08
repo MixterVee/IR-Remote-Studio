@@ -36,7 +36,7 @@ jobs:
       - name: Upload downloadable Windows application
         uses: actions/upload-artifact@v4
         with:
-          name: IR-Remote-Studio-v0.2.5-beta-Windows-x64
+          name: IR-Remote-Studio-v0.2.6-beta-Windows-x64
           path: |
             dist/IR-Remote-Studio.exe
             dist/WINDOWS-SETUP.txt
