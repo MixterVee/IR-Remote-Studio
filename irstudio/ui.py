@@ -240,8 +240,6 @@ class Studio(tk.Tk):
         new_state = (snapshot.state, snapshot.name, snapshot.address, snapshot.detail)
         if new_state != self._u1_last_status:
             self._u1_last_status = new_state
-            color = ("#147b3b" if snapshot.connected else
-                     "#9a6300" if snapshot.state == "CONNECTING" else "#bc2525")
             self.u1_state_var.set(
                 f"CONNECTED — READY ({snapshot.name})" if snapshot.connected
                 else "BLUETOOTH — CONNECTING..." if snapshot.state == "CONNECTING"
@@ -652,7 +650,7 @@ class Studio(tk.Tk):
             label = f"CONNECTED — SofaBaton U1 ({snap.name})"
             color = "#147b3b"
         elif usb_ready:
-            label = f"READY — {self.connected_model} (USB)"
+            label = f"CONNECTED — {self.connected_model} (USB)"
             color = "#147b3b"
         elif snap.state == "CONNECTING" or self._usb_connection_state == "connecting":
             label = "CONNECTING..."
