@@ -62,7 +62,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.2.0-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.2.1-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -169,10 +169,16 @@ class Studio(tk.Tk):
                   justify="left").pack(fill="x", pady=(6, 8))
         self.capture_btn = ttk.Button(controls, text="Capture selected button", command=self.capture)
         self.capture_btn.pack(fill="x", ipady=7)
+        save_actions = ttk.Frame(controls)
+        save_actions.pack(fill="x", pady=(6, 0))
+        self.save_button_btn = ttk.Button(save_actions, text="Save button",
+                                          command=self.save_current_button)
+        self.save_button_btn.pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=5)
+        self.save_next_btn = ttk.Button(save_actions, text="Save & Learn another",
+                                         command=self.learn_another)
+        self.save_next_btn.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=5)
         capture_tools = ttk.Frame(controls)
         capture_tools.pack(fill="x", pady=(6, 0))
-        ttk.Button(controls, text="Save & Learn another button...",
-                   command=self.learn_another).pack(fill="x", pady=(5, 0))
         for label, cmd in (("Review captures...", self.browse_samples),
                            ("Use best match", self.choose_best),
                            ("Remove last", self.remove_capture)):
@@ -588,16 +594,52 @@ class Studio(tk.Tk):
             match, count = core.match_count(target)
             decoded = cap["decoded"]
             desc = decoded["bytes"] if decoded else "raw signal (unidentified protocol)"
-            self.status_var.set(f"Saved {target['label']}: {cap['carrier_hz']:,} Hz, {len(cap['timings_us'])} values, {desc}; matching captures {match}/{count}.")
+            self.status_var.set(f"Captured and autosaved {target['label']}: "
+                f"{cap['carrier_hz']:,} Hz, {len(cap['timings_us'])} values, "
+                f"{desc}; matching captures {match}/{count}. "
+                "Choose Save button to finish or Save & Learn another to continue.")
         self._background("Capture", done)
+
+    def save_current_button(self) -> bool:
+        """Confirm durable storage of one learned button; never starts learning.
+
+        Successful captures are already autosaved for safety. This explicit
+        action flushes the library again and gives a clear finished status.
+        It cannot duplicate a capture or create another button.
+        """
+        if self.running:
+            self.status_var.set("IR capture still in progress; finish it before saving.")
+            return False
+        device = self._selected_device()
+        button = self._selected_button()
+        if not device or not button:
+            messagebox.showwarning("Save button", "Select a device and a button first.")
+            return False
+        if not button.get("captures") and not button.get("pronto_hex"):
+            messagebox.showwarning("Save button",
+                                   "This button has no IR command yet. Capture or import one first.")
+            return False
+        try:
+            self._save()
+        except Exception as error:
+            messagebox.showerror("Save button", f"Could not save the library:\n{error}")
+            self.status_var.set("Save unsuccessful; previous library not replaced.")
+            return False
+        self.status_var.set(
+            f"Saved {button['label']} to {device['name']}. "
+            "Finished — no new capture started. You can export this remote as .irplus."
+        )
+        return True
 
     def learn_another(self):
         """Add a named button to the active remote and start another capture."""
         if self.running:
             return
+        # Same save path as the standalone Save button; abort if this
+        # capture cannot be saved. Never duplicate an already saved sample.
+        if not self.save_current_button():
+            return
         device = self._selected_device()
-        if not device:
-            return messagebox.showwarning("Select device", "Choose or create a device first.")
         label = simpledialog.askstring("Learn another button",
             "Name the new button (Power, Volume Up, Input...):", parent=self)
         if not label or not label.strip():
