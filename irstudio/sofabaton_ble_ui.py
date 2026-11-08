@@ -6,16 +6,19 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 
 from irstudio import sofabaton_ble as ble
+from irstudio import sofabaton_u1_read as u1
 
 
 class SofaBatonBleDialog(tk.Toplevel):
     def __init__(self, parent):
         super().__init__(parent)
-        self.title("SofaBaton U1 — Bluetooth Diagnostics")
+        self.title("SofaBaton U1 — Bluetooth / Saved IR")
         self.minsize(710, 465)
         self.geometry("830x600")
         self._busy = False
         self._devices: list[ble.BleEntry] = []
+        self._capture: u1.IrRead | None = None
+        self.slot_var = tk.StringVar(value="8")
         self.status_var = tk.StringVar(
             value="Scan first. Only Bluetooth metadata is inspected; no IR commands are sent.")
         self.protocol("WM_DELETE_WINDOW", self.destroy)
@@ -27,8 +30,8 @@ class SofaBatonBleDialog(tk.Toplevel):
         ttk.Label(
             outer,
             text=("Research mode only: BLE discovery and GATT metadata. "
-                  "No IR learning, command programming, writes, pairing, "
-                  "or firmware changes."),
+                  "Discovery is read-only. Optional stored-code read sends only "
+                  "verified inquiry commands; no new learning or programming."),
             wraplength=775, justify="left").pack(anchor="w", pady=(7, 12))
 
         toolbar = ttk.Frame(outer)
@@ -40,6 +43,21 @@ class SofaBatonBleDialog(tk.Toplevel):
             toolbar, text="Inspect selected (read-only)",
             command=self.inspect, state="disabled")
         self.inspect_button.pack(side="left", padx=(9, 0), ipadx=7, ipady=5)
+        # The stored-code reader is distinct from live IR learning.
+        read_row = ttk.Frame(outer)
+        read_row.pack(fill="x", pady=(12, 3))
+        ttk.Label(read_row, text="Existing U1 IR slot:").pack(side="left")
+        ttk.Combobox(
+            read_row, textvariable=self.slot_var, values=[str(i) for i in u1.ALLOWED_SLOTS],
+            state="readonly", width=4).pack(side="left", padx=(8, 12))
+        self.read_button = ttk.Button(
+            read_row, text="Read stored IR (test)",
+            command=self.read_ir, state="disabled")
+        self.read_button.pack(side="left", ipadx=8, ipady=5)
+        self.save_capture_button = ttk.Button(
+            read_row, text="Save to selected button",
+            command=self.save_capture, state="disabled")
+        self.save_capture_button.pack(side="left", padx=(10, 0), ipadx=8, ipady=5)
         ttk.Button(toolbar, text="Save report...", command=self.save).pack(side="right")
         ttk.Button(toolbar, text="Copy report", command=self.copy).pack(
             side="right", padx=(0, 8))
@@ -53,7 +71,7 @@ class SofaBatonBleDialog(tk.Toplevel):
         self.device_list.pack(fill="x", pady=(4, 10))
         self.device_list.bind("<<ListboxSelect>>", self._select_device)
 
-        ttk.Label(outer, text="Read-only diagnostic report:").pack(anchor="w")
+        ttk.Label(outer, text="Bluetooth session / diagnostic report:").pack(anchor="w")
         report_frame = ttk.Frame(outer)
         report_frame.pack(fill="both", expand=True, pady=(5, 0))
         self.report = tk.Text(
@@ -70,6 +88,10 @@ class SofaBatonBleDialog(tk.Toplevel):
             "3. Close the official SofaBaton phone app if it owns the session.\n"
             "4. Scan Bluetooth. Choose the U1 by its advertised name.\n"
             "5. Optional: Inspect selected (read-only) to list GATT UUIDs.\n"
+            "6. Optional: select a known occupied U1 slot, then choose\n"
+            "   Read stored IR (test). This sends status + read inquiries,\n"
+            "   NOT a new learning or programming command.\n"
+            "7. Select a device/button in the main app, then Save to selected button.\n"
             "The U1 may advertise under an unexpected name; do not connect\n"
             "to unknown devices without identifying them first.\n\n"
         )
@@ -81,8 +103,11 @@ class SofaBatonBleDialog(tk.Toplevel):
             self.report.see("end")
 
     def _select_device(self, event=None):
-        self.inspect_button.configure(
-            state="normal" if not self._busy and self.device_list.curselection()
+        selected = bool(self.device_list.curselection()) and not self._busy
+        self.inspect_button.configure(state="normal" if selected else "disabled")
+        self.read_button.configure(state="normal" if selected else "disabled")
+        self.save_capture_button.configure(
+            state="normal" if self._capture is not None and not self._busy
             else "disabled")
 
     def _run(self, name, task, complete):
@@ -91,6 +116,8 @@ class SofaBatonBleDialog(tk.Toplevel):
         self._busy = True
         self.scan_button.configure(state="disabled")
         self.inspect_button.configure(state="disabled")
+        self.read_button.configure(state="disabled")
+        self.save_capture_button.configure(state="disabled")
         self.status_var.set(name + "...")
 
         def job():
@@ -120,6 +147,8 @@ class SofaBatonBleDialog(tk.Toplevel):
         threading.Thread(target=job, daemon=True).start()
 
     def scan(self):
+        self._capture = None
+        self.save_capture_button.configure(state="disabled")
         self._devices = []
         self.device_list.delete(0, "end")
         self._append("Scanning BLE advertisements (7 seconds)...\n")
@@ -145,6 +174,69 @@ class SofaBatonBleDialog(tk.Toplevel):
                              f"{', '.join(d.advertised_services) or '(none)'}\n")
             self._append("\n")
         self._run("Scanning", lambda: ble.scan_ble(7.0), complete)
+
+    def read_ir(self):
+        """Opt-in query of IR already stored in the selected U1 slot."""
+        selected = self.device_list.curselection()
+        if not selected or self._busy:
+            return
+        device = self._devices[selected[0]]
+        slot = int(self.slot_var.get())
+        if not (device.likely_sofabaton or any(
+                uuid.lower() == u1.SVC for uuid in device.advertised_services)):
+            messagebox.showwarning(
+                "Identify the U1",
+                "Select a positively identified SofaBaton U1 (for example SB...). "
+                "Other BLE devices are not eligible for IR queries.",
+                parent=self)
+            return
+        if not messagebox.askokcancel(
+            "Read stored U1 infrared code?",
+            f"Read the IR code already stored in slot {slot} of {device.name}?\n\n"
+            "Experimental: sends only observed device-info (0x01) and "
+            "read-code (0x0C) requests. No new learning, profile updates "
+            "or firmware commands are sent.\n\n"
+            "Only proceed if this really is your SofaBaton U1. "
+            "Disconnect the SofaBaton phone app first.",
+            parent=self):
+            return
+        self._capture = None
+        self.save_capture_button.configure(state="disabled")
+        self._append(f"Reading stored U1 slot {slot} from {device.name}...\n")
+
+        def complete(result):
+            self._capture = result
+            self._select_device()
+            self._append(
+                f"Verified stored U1 slot {result.slot}: "
+                f"{result.carrier_hz:,} Hz, "
+                f"{len(result.timings_us)} timing values, "
+                f"{result.fragments} ordered fragments.\n"
+                "No new learning or U1 programming performed.\n\n")
+            self.status_var.set(
+                f"Stored IR read succeeded ({result.carrier_hz:,} Hz). "
+                "Choose a device and button in the main window, "
+                "then Save to selected button.")
+        self._run("Reading stored IR",
+                  lambda: u1.read_saved_ir(device.address, slot), complete)
+
+    def save_capture(self):
+        if self._busy or self._capture is None:
+            return
+        try:
+            label = self.master.store_external_capture(
+                self._capture.carrier_hz,
+                self._capture.timings_us,
+                f"{self._capture.model}, slot {self._capture.slot}")
+        except ValueError as error:
+            messagebox.showwarning("Select a button", str(error), parent=self)
+            return
+        except Exception as error:
+            messagebox.showerror("Save failed", str(error), parent=self)
+            return
+        self._append(f"Saved U1 slot {self._capture.slot} to '{label}' "
+                     "in IR Remote Studio library.\n")
+        self.status_var.set(f"Saved to {label}; ready for .irplus export.")
 
     def inspect(self):
         selection = self.device_list.curselection()
