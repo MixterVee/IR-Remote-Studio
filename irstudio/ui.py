@@ -17,6 +17,7 @@ from irstudio.receivers import AUTO, BACKENDS, invoke_receiver, harmony_attached
 from irstudio.layout_preview import LayoutDialog
 from irstudio.branding import install_icon
 from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+from irstudio.sofabaton_u1_session import U1Session
 
 
 class Studio(tk.Tk):
@@ -32,6 +33,11 @@ class Studio(tk.Tk):
         self.active_button = None
         self.running = False
         self.connected_model = None
+        self.u1_session = U1Session()
+        self.u1_state_var = tk.StringVar(value="BLUETOOTH — NOT CONNECTED")
+        self.u1_detail_var = tk.StringVar(value="Scan and select U1, then Connect U1.")
+        self._u1_last_status = None
+        self._u1_poll_after = None
         self.receiver_var = tk.StringVar(value=AUTO)
         self.connection_state_var = tk.StringVar(value="NOT CONNECTED")
         self.connection_detail_var = tk.StringVar(
@@ -45,6 +51,7 @@ class Studio(tk.Tk):
         self.brand_image = install_icon(self)
         self._make_ui()
         self._reload_devices()
+        self._refresh_u1_status()
         self.protocol("WM_DELETE_WINDOW", self._close)
 
     def _make_ui(self):
@@ -68,7 +75,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.2.7-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.2.8-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -126,6 +133,24 @@ class Studio(tk.Tk):
             connection_info, textvariable=self.connection_detail_var,
             wraplength=990, justify="left", foreground="#536277")
         self.connection_description.pack(anchor="w", pady=(4, 0))
+
+        # USB readiness and Bluetooth readiness are intentionally separate:
+        # a red USB status must not invalidate a verified green U1 BLE link.
+        u1_row = ttk.Frame(connection)
+        u1_row.pack(fill="x", pady=(9, 0))
+        ttk.Label(u1_row, text="SofaBaton U1:").pack(side="left", padx=(0, 10))
+        self.u1_connection_label = ttk.Label(
+            u1_row, textvariable=self.u1_state_var,
+            font=("Segoe UI Semibold", 11), foreground="#bc2525")
+        self.u1_connection_label.pack(side="left")
+        self.u1_disconnect_btn = ttk.Button(
+            u1_row, text="Disconnect U1",
+            command=self.disconnect_u1, state="disabled")
+        self.u1_disconnect_btn.pack(side="right")
+        self.u1_connection_description = ttk.Label(
+            connection, textvariable=self.u1_detail_var,
+            foreground="#536277", wraplength=950)
+        self.u1_connection_description.pack(fill="x", pady=(3, 0))
 
         # Reserve status space before the expandable work area.
         status = ttk.Frame(self, padding=(16, 6, 16, 12))
@@ -220,8 +245,44 @@ class Studio(tk.Tk):
 
 
     def open_sofabaton_ble(self):
-        """Opt-in U1 BLE diagnostics and stored-IR read-back; not live learning."""
+        """Opt-in U1 connection/pairing and previously saved IR read-back."""
         SofaBatonBleDialog(self)
+
+    def _refresh_u1_status(self):
+        """Only the Tk main thread updates UI; snapshot is thread-safe."""
+        snapshot = self.u1_session.snapshot()
+        new_state = (snapshot.state, snapshot.name, snapshot.address, snapshot.detail)
+        if new_state != self._u1_last_status:
+            self._u1_last_status = new_state
+            color = ("#147b3b" if snapshot.connected else
+                     "#9a6300" if snapshot.state == "CONNECTING" else "#bc2525")
+            self.u1_state_var.set(
+                f"CONNECTED — READY ({snapshot.name})" if snapshot.connected
+                else "BLUETOOTH — CONNECTING..." if snapshot.state == "CONNECTING"
+                else "BLUETOOTH — CONNECTION LOST" if snapshot.state == "LOST"
+                else "BLUETOOTH — CONNECTION FAILED" if snapshot.state == "FAILED"
+                else "BLUETOOTH — NOT CONNECTED")
+            self.u1_detail_var.set(snapshot.detail)
+            self.u1_connection_label.configure(foreground=color)
+            self.u1_disconnect_btn.configure(
+                state="normal" if snapshot.connected else "disabled")
+        self._u1_poll_after = self.after(400, self._refresh_u1_status)
+
+    def disconnect_u1(self):
+        """Disconnect on a worker so Bluetooth cleanup never freezes Tk."""
+        if not self.u1_session.snapshot().connected:
+            return
+        self.u1_disconnect_btn.configure(state="disabled")
+
+        def work():
+            try:
+                self.u1_session.disconnect()
+            except Exception as exc:
+                self.u1_session._state(
+                    "FAILED", detail=f"Disconnect failed: {exc}")
+            # The regular status poll handles foreground updates.
+
+        threading.Thread(target=work, daemon=True).start()
 
     def store_external_capture(self, carrier: int, timings: list[int],
                                source: str) -> str:
@@ -941,6 +1002,10 @@ class Studio(tk.Tk):
             if not messagebox.askyesno("Capture in progress", "A USB operation is still running. Close the app anyway?"):
                 return
         self._save()
+        if self._u1_poll_after is not None:
+            self.after_cancel(self._u1_poll_after)
+            self._u1_poll_after = None
+        self.u1_session.shutdown()
         self.destroy()
 
 
