@@ -189,3 +189,23 @@ This release still DOES NOT initiate new U1 infrared learning.
 Bluetooth writes are limited to the official-app identity inquiry
 (0x01) and previously learned code read inquiry (0x0C), with
 explicit permission. No firmware or remote-profile changes.
+
+SOFABATON U1 — SIMPLE CONNECTION SCREEN (0.2.9)
+-----------------------------------------------
+The normal Bluetooth window shows Scan Bluetooth, Connect U1,
+Disconnect, connected status, and a clearly disabled Learn IR control.
+Direct U1 learning is NOT available yet; this version does not initiate
+a learning session or modify U1 profiles. U1 stored-command read-back
+remains available only in Advanced.
+
+Advanced (collapsed by default):
+- Existing U1 IR slot 1–8 / Read stored IR (test)
+- Save to selected button (saves into local Windows library only)
+- Optional Windows OS pairing, only if normal connection fails
+- Inspect services, Copy report, Save report
+
+Normal workflow: scan, select your U1, click Connect U1. Windows shows
+green CONNECTED — READY only after the verified Bluetooth handshake.
+To read an EXISTING previously learned command, reopen the Bluetooth
+window, expand Advanced, choose the slot and Read stored IR, then save.
+USB capture in the main window is separately identified as USB.

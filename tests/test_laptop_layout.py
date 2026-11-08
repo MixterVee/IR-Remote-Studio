@@ -85,5 +85,34 @@ class LaptopControlsTests(unittest.TestCase):
             root.destroy()
 
 
+    def test_u1_advanced_buttons_remain_visible_on_short_laptop(self):
+        require_display(self)
+        from irstudio.ui import Studio
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        with patch("irstudio.ui.core.load_library",
+                   return_value=core.default_library()), \
+             patch("irstudio.ui.core.save_library"):
+            app = Studio()
+            dialog = None
+            try:
+                app.geometry("1160x610")
+                app.update()
+                dialog = SofaBatonBleDialog(app)
+                dialog.geometry("850x610")
+                dialog.toggle_advanced()
+                # Simulate Windows maximized work area minus taskbar.
+                dialog.geometry("850x610")
+                dialog.update()
+                for widget in (dialog.advanced_toggle_button,
+                               dialog.read_button,
+                               dialog.save_capture_button,
+                               dialog.inspect_button):
+                    within_window(self, widget, dialog)
+            finally:
+                if dialog is not None and dialog.winfo_exists():
+                    dialog.destroy()
+                app.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()

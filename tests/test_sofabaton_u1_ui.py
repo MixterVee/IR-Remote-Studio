@@ -91,6 +91,59 @@ class U1SaveUITests(unittest.TestCase):
         finally:
             dlg.destroy()
 
+    def test_simple_screen_hides_slot_and_diagnostics_by_default(self):
+        """Normal users only see Connect / Disconnect and Learn IR status."""
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        dialog = SofaBatonBleDialog(self.app)
+        dialog.withdraw()
+        try:
+            self.assertEqual(dialog.advanced_panel.winfo_manager(), "")
+            self.assertFalse(dialog.advanced_open)
+            self.assertEqual(str(dialog.learn_button.cget("state")), "disabled")
+            self.assertEqual(str(dialog.learn_button.cget("text")), "Learn IR")
+            self.assertEqual(str(dialog.connect_button.cget("text")), "Connect U1")
+            self.assertEqual(str(dialog.disconnect_button.cget("text")), "Disconnect")
+            # Neither slot selection nor optional Windows pairing belongs
+            # in the normal user-facing Bluetooth connection workflow.
+            self.assertEqual(dialog.slot_combo.master, dialog.read_button.master)
+            self.assertNotEqual(dialog.pair_check.master, dialog)
+            with patch.object(self.app.u1_session, "connect") as connect, \
+                 patch.object(self.app.u1_session, "read_saved_ir") as read:
+                dialog.toggle_advanced()
+                self.assertTrue(dialog.advanced_open)
+                self.assertEqual(dialog.advanced_panel.winfo_manager(), "pack")
+                dialog.toggle_advanced()
+                self.assertFalse(dialog.advanced_open)
+                self.assertEqual(dialog.advanced_panel.winfo_manager(), "")
+                connect.assert_not_called()
+                read.assert_not_called()
+        finally:
+            dialog.destroy()
+
+    def test_advanced_read_controls_track_verified_session(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        dialog = SofaBatonBleDialog(self.app)
+        dialog.withdraw()
+        try:
+            device = BleEntry(
+                name="SB-TEST", address="TEST", rssi=-40,
+                advertised_services=("0000fff0-0000-1000-8000-00805f9b34fb",),
+                likely_sofabaton=True)
+            dialog._devices = [device]
+            dialog.device_list.insert("end", "SB-TEST")
+            dialog.device_list.selection_set(0)
+            dialog._select_device()
+            self.assertEqual(str(dialog.read_button.cget("state")), "disabled")
+            self.app.u1_session._state(
+                "CONNECTED", "SB-TEST", "TEST", "Identity verified.")
+            dialog._poll_connection()
+            self.assertEqual(str(dialog.read_button.cget("state")), "normal")
+            self.app.u1_session._state("LOST", "SB-TEST", "TEST", "Dropped.")
+            dialog._poll_connection()
+            self.assertEqual(str(dialog.read_button.cget("state")), "disabled")
+        finally:
+            dialog.destroy()
+
     def test_u1_reader_action_prompts_before_queries(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
         dialog = SofaBatonBleDialog(self.app)

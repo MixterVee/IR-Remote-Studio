@@ -44,7 +44,7 @@ class Studio(tk.Tk):
             value="Connect your Harmony or supported IR learner, then click Connect / Retry.")
         self._active_operation = 0
         self._scan_in_progress = False
-        self.aim_var = tk.StringVar(value="Aim the original remote at the Harmony learning receiver, about 5-10 cm away.")
+        self.aim_var = tk.StringVar(value="USB capture: aim the original remote at the Harmony receiver, about 5–10 cm away.")
         self.status_var = tk.StringVar(value=f"Library: {self.library_path}")
         self.repeat_var = tk.StringVar(value="0")
         self.progress_var = tk.StringVar(value="No buttons yet")
@@ -75,7 +75,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.2.8-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.2.9-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -102,7 +102,7 @@ class Studio(tk.Tk):
                      width=4, state="readonly").pack(side="right")
 
         # Make USB connectivity a first-class workflow, not a toolbar detail.
-        connection = ttk.LabelFrame(self, text="IR LEARNER CONNECTION", padding=(16, 12))
+        connection = ttk.LabelFrame(self, text="USB IR LEARNER / BLUETOOTH U1", padding=(16, 12))
         connection.pack(fill="x", padx=16, pady=(2, 11))
         connection_top = ttk.Frame(connection)
         connection_top.pack(fill="x")
@@ -222,7 +222,7 @@ class Studio(tk.Tk):
         controls.pack(side="bottom", fill="x")
         ttk.Label(controls, textvariable=self.aim_var, wraplength=280,
                   justify="left").pack(fill="x", pady=(6, 8))
-        self.capture_btn = ttk.Button(controls, text="Capture selected button", command=self.capture)
+        self.capture_btn = ttk.Button(controls, text="Capture selected button (USB)", command=self.capture)
         self.capture_btn.pack(fill="x", ipady=7)
         save_actions = ttk.Frame(controls)
         save_actions.pack(fill="x", pady=(6, 0))
