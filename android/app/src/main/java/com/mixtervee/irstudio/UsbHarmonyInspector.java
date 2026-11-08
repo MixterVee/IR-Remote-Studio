@@ -304,17 +304,25 @@ public final class UsbHarmonyInspector {
                 .setTitle("Experimental Harmony IR receiver")
                 .setMessage("This test temporarily enables the Harmony 300's "
                         + "IR-learning receiver. After tapping Start, point "
-                        + "another IR remote at the Harmony and tap then release "
-                        + "one button promptly within 10 seconds. The test stops the "
+                        + "another IR remote at the Harmony. WAIT for the "
+                        + "READY message, then tap and release one button "
+                        + "within 10 seconds. The test stops the "
                         + "receiver afterwards, even on an error. No learned "
                         + "command is saved or transmitted, and the Harmony's "
                         + "stored programming and firmware are not modified.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Start IR test", (d, w) -> {
                     button.setEnabled(false);
-                    button.setText("Listening for IR...");
+                    button.setText("Connecting to Harmony...");
                     new Thread(() -> {
-                        String result = HarmonyMhProbe.runCapture(manager, harmony);
+                        String result = HarmonyMhProbe.runCapture(manager, harmony,
+                                () -> context.runOnUiThread(() -> {
+                                    if (context.isFinishing() || context.isDestroyed()) return;
+                                    button.setText("READY — press source remote NOW");
+                                    Toast.makeText(context,
+                                            "Harmony IR receiver ready. Press one button now!",
+                                            Toast.LENGTH_LONG).show();
+                                }));
                         context.runOnUiThread(() -> {
                             if (context.isFinishing() || context.isDestroyed()) return;
                             parent.dismiss();

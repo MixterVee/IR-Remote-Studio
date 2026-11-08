@@ -222,6 +222,13 @@ public final class HarmonyMhProbe {
                 && (bytes[4] & 0xFF) == 0x7D;
     }
 
+    /** Only an exact, unexpected stage-one duplicate qualifies for ONE extra IN read.
+     * Never infer a successful continuation from a duplicate alone.
+     */
+    static boolean mayReadOneMoreContinuationReply(byte[] reply, boolean outComplete) {
+        return outComplete && matchesObservedStageOne(reply);
+    }
+
     /** Stage two exchanges only the documented FF 00 02 session message.
      *  Identity reading, if enabled by a matching reply, is a separate step.
      */
@@ -260,6 +267,7 @@ public final class HarmonyMhProbe {
                     .append(writeCompleted && command.position() == 64
                             ? "64 bytes sent" : "not confirmed").append('\n');
             boolean stageTwo = false;
+            boolean firstReplyWasDuplicate = false;
             if (readCompleted) {
                 int count = response.position();
                 response.flip();
@@ -270,10 +278,53 @@ public final class HarmonyMhProbe {
                 log.append("(The FF FF 81 prefix check above applies to stage one only.)\n");
                 stageTwo = writeCompleted && command.position() == 64
                         && matchesObservedStageTwo(bytes);
+                firstReplyWasDuplicate = mayReadOneMoreContinuationReply(
+                        bytes, writeCompleted && command.position() == 64);
                 log.append("Observed stage-two reply pattern: ")
                         .append(stageTwo ? "MATCH" : "DIFFERENT").append('\n');
             } else {
                 log.append("MH continuation IN: none within 4 seconds\n");
+            }
+            if (!stageTwo && readCompleted && writeCompleted
+                    && command.position() == 64) {
+                // Some sessions have returned another stage-one ACK here.
+                // Check *one* additional IN message without resending any
+                // handshake command; still require the exact stage-two ACK.
+                // response was flipped/consumed above, so use a fresh buffer.
+                // Re-queue only if the previous response was the duplicate.
+                // The exact copy is checked from the captured response.
+                if (firstReplyWasDuplicate) {
+                    log.append("Unexpected duplicate stage-one reply on continuation; ")
+                            .append("checking ONE further IN report without USB OUT\n");
+                    ByteBuffer secondResponse = ByteBuffer.allocateDirect(64);
+                    if (reader.queue(secondResponse)) {
+                        long remaining = deadline - SystemClock.elapsedRealtime();
+                        if (remaining > 0) {
+                            UsbRequest completed = null;
+                            try {
+                                completed = conn.requestWait(remaining);
+                            } catch (TimeoutException ignored) {
+                                log.append("Additional continuation reply timed out\n");
+                            }
+                            if (completed == reader && secondResponse.position() == 64) {
+                                secondResponse.flip();
+                                byte[] next = new byte[64];
+                                secondResponse.get(next);
+                                log.append("Additional continuation reply:\n")
+                                        .append(responseSummary(next, 64)).append('\n');
+                                stageTwo = matchesObservedStageTwo(next);
+                            } else {
+                                log.append("No complete additional continuation reply\n");
+                            }
+                        } else {
+                            log.append("No remaining handshake time for extra IN report\n");
+                        }
+                    } else {
+                        log.append("Unable to queue additional continuation IN\n");
+                    }
+                    log.append("Additional continuation gate: ")
+                            .append(stageTwo ? "MATCH" : "FAIL").append('\n');
+                }
             }
             // The caller selects identity-only vs. opt-in IR receiving.
             return stageTwo;
@@ -286,16 +337,21 @@ public final class HarmonyMhProbe {
     }
 
     public static String run(UsbManager manager, UsbDevice device) {
-        return runInternal(manager, device, false);
+        return runInternal(manager, device, false, null);
     }
 
     /** A separate opt-in diagnostic that receives one IR button press. */
     public static String runCapture(UsbManager manager, UsbDevice device) {
-        return runInternal(manager, device, true);
+        return runCapture(manager, device, null);
+    }
+
+    public static String runCapture(UsbManager manager, UsbDevice device,
+                                    Runnable onReceiverReady) {
+        return runInternal(manager, device, true, onReceiverReady);
     }
 
     private static String runInternal(UsbManager manager, UsbDevice device,
-                                      boolean captureIr) {
+                                      boolean captureIr, Runnable onReceiverReady) {
         StringBuilder log = new StringBuilder();
         log.append(captureIr
                 ? "IR Remote Studio — Harmony 300 IR capture diagnostic"
@@ -361,7 +417,8 @@ public final class HarmonyMhProbe {
             if (exchangeFinal(conn, in, out, log)) {
                 if (exchangeContinuation(conn, in, out, log)) {
                     if (captureIr) {
-                        log.append(HarmonyIrCaptureProbe.capture(conn, in, out));
+                        log.append(HarmonyIrCaptureProbe.capture(conn, in, out,
+                                onReceiverReady));
                     } else {
                         HarmonySysinfoProbe.readIdentity(conn, in, out, log);
                         log.append("No IR learning or configuration access attempted.\n");

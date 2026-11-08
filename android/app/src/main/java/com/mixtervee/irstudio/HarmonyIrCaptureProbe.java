@@ -424,7 +424,7 @@ final class HarmonyIrCaptureProbe {
     }
 
     static String capture(UsbDeviceConnection conn, UsbEndpoint in,
-                          UsbEndpoint out) {
+                          UsbEndpoint out, Runnable onReceiverReady) {
         StringBuilder log = new StringBuilder();
         log.append("\nHarmony MH IR receive test (experimental)\n");
         log.append("Arch 0x10; one button press; maximum 10-second start wait\n");
@@ -445,6 +445,14 @@ final class HarmonyIrCaptureProbe {
                         || (ack[1] & 0xFF) != 0x04) {
                     log.append("IR receive ACK not confirmed\n");
                 } else {
+                    log.append("IR receiver armed: press a source-remote button now\n");
+                    if (onReceiverReady != null) {
+                        try {
+                            onReceiverReady.run();
+                        } catch (RuntimeException ignored) {
+                            log.append("Could not display ready prompt; capture continues\n");
+                        }
+                    }
                     readOneButton(conn, in, log);
                 }
             }

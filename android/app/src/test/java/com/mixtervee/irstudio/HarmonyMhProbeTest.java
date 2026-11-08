@@ -86,4 +86,34 @@ public class HarmonyMhProbeTest {
         assertTrue(result.contains("wait timeout=false"));
     }
 
+    @Test public void duplicateFirstStageAllowsOneAdditionalReadNotCapture() {
+        byte[] duplicate = new byte[64];
+        duplicate[0] = (byte)0xFF;
+        duplicate[1] = (byte)0xFF;
+        duplicate[2] = (byte)0x81;
+        duplicate[4] = (byte)0x81;
+        assertTrue(HarmonyMhProbe.mayReadOneMoreContinuationReply(duplicate, true));
+        assertFalse(HarmonyMhProbe.matchesObservedStageTwo(duplicate));
+        assertFalse(HarmonyMhProbe.mayReadOneMoreContinuationReply(duplicate, false));
+    }
+
+    @Test public void unexpectedReplyNeverEnablesExtraReadOrCapture() {
+        byte[] response = new byte[64];
+        response[0] = (byte)0xFF;
+        response[1] = (byte)0x00;
+        response[2] = (byte)0x83;
+        assertFalse(HarmonyMhProbe.mayReadOneMoreContinuationReply(response, true));
+        assertFalse(HarmonyMhProbe.matchesObservedStageTwo(response));
+    }
+
+    @Test public void genuineContinuationDoesNotNeedAdditionalRead() {
+        byte[] response = new byte[64];
+        response[0] = (byte)0xFF;
+        response[1] = (byte)0x00;
+        response[2] = (byte)0x82;
+        response[4] = (byte)0x7D;
+        assertTrue(HarmonyMhProbe.matchesObservedStageTwo(response));
+        assertFalse(HarmonyMhProbe.mayReadOneMoreContinuationReply(response, true));
+    }
+
 }
