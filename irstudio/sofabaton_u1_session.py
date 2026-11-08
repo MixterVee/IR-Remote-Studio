@@ -2,8 +2,12 @@
 
 The optional Windows OS pairing flag is OFF by default: this U1 has
 already been proven to communicate with Windows without a pair request.
-Only the observed device-identity (0x01) and stored-code inquiry (0x0C)
-messages can be sent. This class never sends programming or learn commands.
+Normal operations use only observed device-identity (0x01) and stored-code
+inquiry (0x0C). A separately confirmed Advanced experimental learning
+operation additionally sends the observed 0x04 learn start and 0x05
+finish after read/validation and saving a slot-8 backup on disk.
+It may overwrite the U1's slot 8 and cannot restore that programming.
+No unverified profile or firmware configuration commands are sent.
 
 A dedicated asyncio thread owns the BleakClient, notification subscription,
 and received-packet queue for the entire connection lifetime. UI threads
