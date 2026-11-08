@@ -313,7 +313,7 @@ class SofaBatonBleDialog(tk.Toplevel):
                 self._select_device()
                 self._append(
                     f"Found U1 {candidate.name} ({candidate.address}); "
-                    "connecting automatically without prompting...\\n")
+                    "connecting automatically without prompting...\n")
                 self.status_var.set(
                     f"Found {candidate.name}. Connecting automatically...")
                 # Reuse exactly the verified, persistent BLE connection path.
@@ -387,17 +387,17 @@ class SofaBatonBleDialog(tk.Toplevel):
         pair = bool(self.pair_var.get()) if not automatic else False
         if not automatic and not messagebox.askokcancel(
             "Connect to SofaBaton U1?",
-            f"Connect to {device.name} over Bluetooth?\\n\\n"
+            f"Connect to {device.name} over Bluetooth?\n\n"
             + ("Windows pairing will be requested. You may need to confirm "
-               "on Windows.\\n\\n" if pair else
-               "Windows bonding is usually unnecessary.\\n\\n")
+               "on Windows.\n\n" if pair else
+               "Windows bonding is usually unnecessary.\n\n")
             + "The connection stays active on the main screen. "
               "Only identity inquiries are sent.",
             parent=self):
             return
         self._append(
             f"Connecting to {device.name} ({device.address}); "
-            f"Windows bonding requested: {pair}.\\n")
+            f"Windows bonding requested: {pair}.\n")
 
         def work():
             try:
@@ -407,13 +407,13 @@ class SofaBatonBleDialog(tk.Toplevel):
                 if automatic and self._authentication_required(exc):
                     self._append_on_ui(
                         "U1 requested authentication; trying Windows "
-                        "pairing automatically. A Windows prompt may appear.\\n")
+                        "pairing automatically. A Windows prompt may appear.\n")
                     return self.master.u1_session.connect(
                         device.address, device.name, pair=True)
                 raise
 
         def complete(snapshot):
-            self._append("U1 identity verified; Bluetooth remains connected.\\n")
+            self._append("U1 identity verified; Bluetooth remains connected.\n")
             self.master._refresh_u1_status()
             # Connection succeeded. Return to the main Windows app as requested.
             self.destroy()
