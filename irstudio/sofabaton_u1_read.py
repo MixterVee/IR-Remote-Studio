@@ -1,23 +1,17 @@
-"""Experimental SofaBaton U1 Bluetooth *read-back* of an existing IR command.
+"""SofaBaton U1 Bluetooth stored-code reader and guarded live learning test.
 
-The protocol was derived from the user's official-app BLE HCI recording and
-validated against two identical, successfully replayed IRPlus waveforms.
+The protocol is derived from the official-app BLE HCI recording.
+The read-back path has already been verified on the user's physical U1.
 
 LIMITED SAFETY SCOPE:
-- Connects only after explicit selection in the Bluetooth diagnostics UI.
-- Verifies the U1's observed proprietary GATT 0xFFF0 service/characteristics.
-- Sends only official-app observed inquiry frames:
-    0x01 []        device-info handshake
-    0x0C [slot,FF] read stored IR code for an existing slot
-- Does NOT send learning start (0x04), learning finish (0x05), or any
-  configuration-write commands (0x07, 0x08, 0x14).
-- Does not modify saved U1 remote programming or firmware intentionally.
-- Validates every received frame, fragment ordering, assembled checksum,
-  carrier frequency, and actual IR durations before returning any capture.
-- Supports both the original one-shot read and a persistent, verified U1 session.
-
-Reading a saved command is a stepping stone to future direct IR learning.
-It is NOT live IR capture, and BLE interoperability requires field testing.
+- Requires an identity-verified U1 FFF0/FFF1/FFF2 Bluetooth session.
+- Normal read operations send only observed 0x01 status and 0x0C inquiry.
+- A separate Advanced-only, explicitly confirmed and locally backed-up
+  experimental operation sends recorded 0x04 start/0x05 finish for slot 8.
+  The live test has not yet been tried on hardware and MAY overwrite
+  the U1's slot 8; a local backup CANNOT restore that U1 programming.
+- Never sends unverified 0x07/0x08/0x14 configuration/firmware writes.
+- Validates frame checksums, fragment ordering and IR timing waveforms.
 """
 from __future__ import annotations
 
