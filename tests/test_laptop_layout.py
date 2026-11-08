@@ -93,7 +93,9 @@ class LaptopControlsTests(unittest.TestCase):
                     app.button_actions, 760,
                     (app._primary_action_buttons,
                      app._secondary_action_buttons), 415)
-                app.update()
+                # Grid placement changes immediately. Calling app.update() on
+                # this deliberately still-narrow window re-triggers <Configure>
+                # and legitimately puts it back in two-column mode.
                 for group in (app._device_action_buttons,
                               app._primary_action_buttons,
                               app._secondary_action_buttons):
