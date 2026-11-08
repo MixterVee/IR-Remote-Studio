@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.12-alpha
+# IR Remote Studio for Android — v0.1.13-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -239,3 +239,22 @@ file-transfer step. v0.1.12 retains v0.1.11's six-second, no-retry MH
 handshake diagnostic. For a power-cycle, disconnect USB, remove batteries
 briefly, reinstall batteries, reconnect USB and run the identity test once.
 No firmware resets, configuration writes, or IR-learning commands are issued.
+
+
+## Fix MH ACK and sequence-close packet length — v0.1.13-alpha
+
+A hardware trace on v0.1.12 showed a successful 289-byte `/sys/sysinfo`
+metadata announcement, followed by `sysinfo transfer ACK: OUT=true/8 bytes`.
+The ACK prefix was correctly constructed (FF 04 04 02 ...), but the USB
+report ByteBuffer was flipped after only 8 bytes. The MH protocol uses a
+64-byte HID OUT report, with zero padding for short command prefixes.
+
+This release zero-pads **all** MH sysinfo control commands to 64 bytes,
+including the 8-byte ACK and 6-byte transfer-sequence close packet.
+The 03/04/05 sequence numbers, bounded identity-only read, data-length checks,
+serial/GUID redaction, and existing handshake remain unchanged.
+
+Unit tests now specifically verify full-length zero-padding for the ACK and
+session close, and that the already-full 64-byte read request stays identical.
+The Android debug APK remains experimental: no IR capture, configuration,
+flash, firmware or persistent device writes are attempted.
