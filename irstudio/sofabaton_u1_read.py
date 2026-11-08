@@ -14,7 +14,7 @@ LIMITED SAFETY SCOPE:
 - Does not modify saved U1 remote programming or firmware intentionally.
 - Validates every received frame, fragment ordering, assembled checksum,
   carrier frequency, and actual IR durations before returning any capture.
-- Opens a new BLE session and disconnects after each operation.
+- Supports both the original one-shot read and a persistent, verified U1 session.
 
 Reading a saved command is a stepping stone to future direct IR learning.
 It is NOT live IR capture, and BLE interoperability requires field testing.
@@ -132,9 +132,66 @@ def is_u1_service(services) -> bool:
     return False
 
 
+async def verify_identity(client, inbox: asyncio.Queue[bytes]) -> bytes:
+    """Verify official-app U1 0x02 reply after the benign 0x01 inquiry."""
+    await client.write_gatt_char(WRITE, encode_frame(HELLO), response=False)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 5.0
+    while loop.time() < deadline:
+        try:
+            raw = await asyncio.wait_for(
+                inbox.get(), timeout=max(.05, deadline - loop.time()))
+        except asyncio.TimeoutError:
+            break
+        cmd, payload = decode_frame(raw)
+        if cmd == BANNER:
+            if len(payload) < 6:
+                raise U1ReadError("U1 device-identification reply too short.")
+            return payload
+    raise U1ReadError("U1 identification timed out; no IR request was sent.")
+
+
+async def read_connected_ir(client, inbox: asyncio.Queue[bytes],
+                            slot: int) -> IrRead:
+    """Read already-stored code via an open, previously verified connection.
+
+    Caller owns notify subscription and BLE session; this never disconnects.
+    """
+    if slot not in ALLOWED_SLOTS:
+        raise ValueError("Select an existing U1 slot 1 through 8.")
+    if not client.is_connected:
+        raise U1ReadError("U1 Bluetooth session is no longer connected.")
+    # Remove stale notifications from an earlier operation.
+    while not inbox.empty():
+        inbox.get_nowait()
+    await client.write_gatt_char(
+        WRITE, encode_frame(READ_IR, bytes((slot, 0xFF))), response=False)
+    fragments = IrAssembler(slot)
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + 12.0
+    while loop.time() < deadline:
+        try:
+            raw = await asyncio.wait_for(
+                inbox.get(), timeout=max(.05, deadline - loop.time()))
+        except asyncio.TimeoutError:
+            break
+        cmd, payload = decode_frame(raw)
+        if cmd != IR_DATA:
+            continue
+        result = fragments.add(payload)
+        if result:
+            return result
+    raise U1ReadError(
+        f"No complete IR code received from U1 slot {slot}. "
+        f"Received {fragments.next_fragment-1} of "
+        f"{fragments.expected or '?'} fragment(s). "
+        "Use a slot containing an existing learned IR command.")
+
+
 async def _read_ir_async(address: str, slot: int,
                          status: Callable[[str], None] | None = None,
                          client_factory=None) -> IrRead:
+    """Previous one-shot read-back remains available for compatibility."""
     if slot not in ALLOWED_SLOTS:
         raise ValueError("Select an existing U1 slot 1 through 8.")
     if not address or len(address) > 128:
@@ -153,57 +210,22 @@ async def _read_ir_async(address: str, slot: int,
             raise U1ReadError("The selected device does not expose the expected U1 "
                               "FFF0 / FFF1 / FFF2 Bluetooth interface. No commands sent.")
         inbox: asyncio.Queue[bytes] = asyncio.Queue()
+
         def receive(sender, data):
-            # Validate on consuming task, not inside platform callback.
             inbox.put_nowait(bytes(data))
 
         await client.start_notify(NOTIFY, receive)
         try:
             if status:
                 status("Connected; checking U1 device identity...")
-            await client.write_gatt_char(WRITE, encode_frame(HELLO), response=False)
-            banner = None
-            loop = asyncio.get_running_loop()
-            deadline = loop.time() + 5.0
-            while loop.time() < deadline:
-                try:
-                    raw = await asyncio.wait_for(inbox.get(), timeout=max(.05, deadline-loop.time()))
-                except asyncio.TimeoutError:
-                    break
-                cmd, payload = decode_frame(raw)
-                if cmd == BANNER:
-                    if len(payload) < 6:
-                        raise U1ReadError("U1 device-identification reply too short.")
-                    banner = payload
-                    break
-            if banner is None:
-                raise U1ReadError("U1 identification timed out; no IR request was sent.")
+            await verify_identity(client, inbox)
             if status:
                 status(f"U1 verified; reading saved IR slot {slot} (no new learning)...")
-            await client.write_gatt_char(
-                WRITE, encode_frame(READ_IR, bytes((slot, 0xFF))),
-                response=False)
-            fragments = IrAssembler(slot)
-            deadline = loop.time() + 12.0
-            while loop.time() < deadline:
-                try:
-                    raw = await asyncio.wait_for(inbox.get(), timeout=max(.05, deadline-loop.time()))
-                except asyncio.TimeoutError:
-                    break
-                cmd, payload = decode_frame(raw)
-                if cmd != IR_DATA:
-                    continue
-                result = fragments.add(payload)
-                if result:
-                    if status:
-                        status(f"Recovered {len(result.timings_us)} timings "
-                               f"at {result.carrier_hz:,} Hz from stored slot {slot}.")
-                    return result
-            raise U1ReadError(
-                f"No complete IR code received from U1 slot {slot}. "
-                f"Received {fragments.next_fragment-1} of "
-                f"{fragments.expected or '?'} fragment(s). "
-                "Use a slot containing an existing learned IR command.")
+            result = await read_connected_ir(client, inbox, slot)
+            if status:
+                status(f"Recovered {len(result.timings_us)} timings "
+                       f"at {result.carrier_hz:,} Hz from stored slot {slot}.")
+            return result
         finally:
             try:
                 await client.stop_notify(NOTIFY)

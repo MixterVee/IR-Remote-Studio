@@ -57,6 +57,40 @@ class U1SaveUITests(unittest.TestCase):
             self.app.store_external_capture(
                 38000, [4000, 4000]+[560, 1600]*25, "U1")
 
+    def test_main_window_green_only_on_verified_u1_connection(self):
+        self.app.u1_session._state(
+            "CONNECTED", "SB-Test", "MOCK",
+            "Identity handshake verified.")
+        self.app._refresh_u1_status()
+        self.assertIn("CONNECTED — READY", self.app.u1_state_var.get())
+        self.assertEqual(str(self.app.u1_disconnect_btn.cget("state")), "normal")
+        self.app.u1_session._state(
+            "LOST", "SB-Test", "MOCK", "Device dropped BLE.")
+        self.app._refresh_u1_status()
+        self.assertIn("CONNECTION LOST", self.app.u1_state_var.get())
+        self.assertEqual(str(self.app.u1_disconnect_btn.cget("state")), "disabled")
+
+    def test_explicit_connect_prompt_does_not_pair_when_cancelled(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        dlg = SofaBatonBleDialog(self.app)
+        dlg.withdraw()
+        try:
+            self.assertFalse(dlg.pair_var.get())
+            dlg._devices = [BleEntry(
+                name="SB-TEST", address="MOCK", rssi=-40,
+                advertised_services=("0000fff0-0000-1000-8000-00805f9b34fb",),
+                likely_sofabaton=True)]
+            dlg.device_list.insert("end", "SB-TEST")
+            dlg.device_list.selection_set(0)
+            dlg._select_device()
+            with patch("irstudio.sofabaton_ble_ui.messagebox.askokcancel",
+                       return_value=False), \
+                 patch.object(dlg, "_run") as background:
+                dlg.connect_u1()
+                background.assert_not_called()
+        finally:
+            dlg.destroy()
+
     def test_u1_reader_action_prompts_before_queries(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
         dialog = SofaBatonBleDialog(self.app)

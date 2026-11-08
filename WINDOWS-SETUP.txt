@@ -1,4 +1,4 @@
-IR Remote Studio 0.2.7-beta — Windows 11 x64
+IR Remote Studio 0.2.8-beta — Windows 11 x64
 ================================================
 
 FIRST STANDALONE LEARNER TEST
@@ -7,7 +7,7 @@ This beta adds direct USB learning WITHOUT requiring Concordance for
 supported Harmony 300/350 and an experimental Ocrustar/ElkSmart dongle
 adapter. Previous Windows features and the Concordance backend remain.
 
-1. Download the v0.2.7-beta Windows x64 ZIP from GitHub Actions.
+1. Download the v0.2.8-beta Windows x64 ZIP from GitHub Actions.
 2. Extract the files and launch IR-Remote-Studio.exe.
 3. Connect ONE supported USB IR learning device.
 4. From "IR learning hardware", choose one of:
@@ -163,3 +163,29 @@ visible above the Windows taskbar. The lists shrink when vertical space
 is limited instead of pushing action rows offscreen. The layout editor
 also reserves its footer Save/Cancel, button-width controls and preview
 status before allocating height to the expandable list/preview.
+
+PERSISTENT SOFABATON BLUETOOTH CONNECTION (0.2.8)
+-------------------------------------------------
+1. Open SofaBaton U1 Bluetooth... in main Windows IR Remote Studio.
+2. Close the official SofaBaton phone app; put batteries in U1.
+3. Scan Bluetooth and select your identified SB-prefixed U1.
+4. Click Connect U1 and approve the connection request. Normally
+   Windows pairing is NOT needed; leave "Request Windows pairing"
+   unchecked. Only check it after an unpaired connection fails and
+   you explicitly want Windows to request OS-level pairing.
+5. App validates FFF0/FFF1/FFF2 service and U1's live 0x02 device
+   identity reply before displaying green CONNECTED — READY.
+6. Bluetooth window closes; verified connection persists in Windows
+   main app. Reopen Bluetooth window to Read stored IR (test) on the
+   same session; no new scan is required while connected.
+7. Choose Disconnect U1 in the main window when done. Closing the
+   main application also closes the BLE session. Unexpected BLE
+   disconnect changes green READY to red CONNECTION LOST.
+8. The red USB NOT CONNECTED indicator is separate from the
+   SofaBaton U1 Bluetooth status and can legitimately remain red
+   while a BLE remote is fully connected.
+
+This release still DOES NOT initiate new U1 infrared learning.
+Bluetooth writes are limited to the official-app identity inquiry
+(0x01) and previously learned code read inquiry (0x0C), with
+explicit permission. No firmware or remote-profile changes.
