@@ -202,6 +202,47 @@ final class HarmonyIrCaptureProbe {
         return out.toString();
     }
 
+    private static void readOneButton(UsbDeviceConnection conn, UsbEndpoint in,
+                                      StringBuilder log) {
+        List<Integer> words = new ArrayList<>();
+        int packets = 0;
+        int sequence = 0x90; // Concordance uses 0x90 for MH architecture 16.
+        boolean done = false;
+        for (int i = 0; i < MAX_PACKETS; i++) {
+            byte[] report = nextReport(conn, in,
+                    packets == 0 ? START_WAIT_MS : MORE_WAIT_MS);
+            if (report == null) {
+                log.append(packets == 0
+                        ? "No IR data within 10 seconds\n"
+                        : "IR data stream ended after timeout\n");
+                break;
+            }
+            int type = report[0] & 0xF0;
+            if (type == 0xF0) {
+                done = true;
+                break;
+            }
+            if (type != 0x90 || report.length != REPORT_BYTES) {
+                log.append("Unexpected IR report type or size; stopped\n");
+                break;
+            }
+            if ((report[1] & 0xFF) != sequence) {
+                log.append("Unexpected IR sequence number; stopped\n");
+                break;
+            }
+            if (!appendSignalWords(report, words)) {
+                log.append("Malformed IR timing packet; stopped\n");
+                break;
+            }
+            packets++;
+            sequence = (sequence + 0x10) & 0xFF;
+        }
+        log.append("IR data packets received: ").append(packets).append('\n');
+        log.append("IR end marker received: ").append(done).append('\n');
+        log.append(summary(words));
+        log.append("Diagnostic only: no command saved or exported.\n");
+    }
+
     static String capture(UsbDeviceConnection conn, UsbEndpoint in,
                           UsbEndpoint out) {
         StringBuilder log = new StringBuilder();
@@ -215,55 +256,18 @@ final class HarmonyIrCaptureProbe {
             if (response == null || (response[0] & 0xFF) != 0xFF
                     || (response[1] & 0xFF) != 0x01) {
                 log.append("IR receive open not confirmed; stopped\n");
-                return log.toString();
+            } else {
+                parameter = response[5];
+                opened = true;
+                byte[] ack = exchange(conn, in, out, captureAck(parameter),
+                        EXCHANGE_WAIT_MS, log, "IR receive ACK");
+                if (ack == null || (ack[0] & 0xFF) != 0xFF
+                        || (ack[1] & 0xFF) != 0x04) {
+                    log.append("IR receive ACK not confirmed\n");
+                } else {
+                    readOneButton(conn, in, log);
+                }
             }
-            parameter = response[5];
-            opened = true;
-            byte[] ack = exchange(conn, in, out, captureAck(parameter),
-                    EXCHANGE_WAIT_MS, log, "IR receive ACK");
-            if (ack == null || (ack[0] & 0xFF) != 0xFF
-                    || (ack[1] & 0xFF) != 0x04) {
-                log.append("IR receive ACK not confirmed\n");
-                return log.toString();
-            }
-
-            List<Integer> words = new ArrayList<>();
-            int packets = 0;
-            int sequence = 0x90; // Concordance uses 0x90 for MH architecture 16.
-            boolean done = false;
-            for (int i = 0; i < MAX_PACKETS; i++) {
-                byte[] report = nextReport(conn, in,
-                        packets == 0 ? START_WAIT_MS : MORE_WAIT_MS);
-                if (report == null) {
-                    log.append(packets == 0
-                            ? "No IR data within 10 seconds\n"
-                            : "IR data stream ended after timeout\n");
-                    break;
-                }
-                int type = report[0] & 0xF0;
-                if (type == 0xF0) {
-                    done = true;
-                    break;
-                }
-                if (type != 0x90 || report.length != REPORT_BYTES) {
-                    log.append("Unexpected IR report type or size; stopped\n");
-                    break;
-                }
-                if ((report[1] & 0xFF) != sequence) {
-                    log.append("Unexpected IR sequence number; stopped\n");
-                    break;
-                }
-                if (!appendSignalWords(report, words)) {
-                    log.append("Malformed IR timing packet; stopped\n");
-                    break;
-                }
-                packets++;
-                sequence = (sequence + 0x10) & 0xFF;
-            }
-            log.append("IR data packets received: ").append(packets).append('\n');
-            log.append("IR end marker received: ").append(done).append('\n');
-            log.append(summary(words));
-            log.append("Diagnostic only: no command saved or exported.\n");
         } catch (RuntimeException error) {
             log.append("IR capture error: ")
                     .append(error.getClass().getSimpleName()).append('\n');
