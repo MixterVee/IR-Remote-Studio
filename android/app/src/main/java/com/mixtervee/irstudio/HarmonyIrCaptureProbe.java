@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 /**
  * Experimental ONE-SHOT Harmony 300 MH IR receive diagnostic (arch 0x10).
@@ -328,7 +329,7 @@ final class HarmonyIrCaptureProbe {
      * keepalive reports; do not let 16 of them truncate a real waveform.
      * Never issue additional USB OUT packets here.
      */
-    private static void readOneButton(UsbDeviceConnection conn, UsbEndpoint in,
+    private static String readOneButton(UsbDeviceConnection conn, UsbEndpoint in,
                                       StringBuilder log) {
         List<Integer> words = new ArrayList<>();
         int totalReports = 0;
@@ -422,9 +423,11 @@ final class HarmonyIrCaptureProbe {
                             : "capture completeness unverified")
                     .append('\n');
         }
+        String candidate = null;
         if (firstRepeatAt >= 0) {
             try {
                 String pronto = HarmonyProntoConverter.preview(words, firstRepeatAt);
+                candidate = pronto;
                 log.append("Pronto Hex candidate (experimental, unverified):\n")
                         .append(pronto).append('\n');
                 log.append("First-frame timing pairs: ")
@@ -439,15 +442,25 @@ final class HarmonyIrCaptureProbe {
             log.append("Pronto preview withheld: no first-repeat boundary\n");
         }
         log.append("Diagnostic preview only: no command saved, transmitted or exported.\n");
+        return candidate;
     }
 
     static String capture(UsbDeviceConnection conn, UsbEndpoint in,
                           UsbEndpoint out, Runnable onReceiverReady) {
+        return capture(conn, in, out, onReceiverReady, null);
+    }
+
+    static String capture(UsbDeviceConnection conn, UsbEndpoint in,
+                          UsbEndpoint out, Runnable onReceiverReady,
+                          Consumer<String> onVerifiedCandidate) {
         StringBuilder log = new StringBuilder();
         log.append("\nHarmony MH IR receive test (experimental)\n");
         log.append("Arch 0x10; one button press; maximum 10-second start wait\n");
         byte parameter = 0;
         boolean opened = false;
+        boolean cleanStop = false;
+        boolean cleanClose = false;
+        String candidate = null;
         try {
             byte[] response = exchange(conn, in, out, openCommand(),
                     EXCHANGE_WAIT_MS, log, "Open /ir/ir_cap");
@@ -471,7 +484,7 @@ final class HarmonyIrCaptureProbe {
                             log.append("Could not display ready prompt; capture continues\n");
                         }
                     }
-                    readOneButton(conn, in, log);
+                    candidate = readOneButton(conn, in, log);
                 }
             }
         } catch (RuntimeException error) {
@@ -485,18 +498,30 @@ final class HarmonyIrCaptureProbe {
                 boolean stopped = sendOnly(conn, out, stopCommand(parameter),
                         log, "IR receive STOP");
                 if (stopped) {
-                    drainForResponse(conn, in, false, parameter, log);
+                    cleanStop = drainForResponse(conn, in, false, parameter, log);
                 } else {
                     log.append("STOP send unconfirmed; continuing bounded CLOSE cleanup\n");
                 }
                 boolean closed = sendOnly(conn, out, closeCommand(parameter),
                         log, "IR sequence CLOSE");
                 if (closed) {
-                    drainForResponse(conn, in, true, parameter, log);
+                    cleanClose = drainForResponse(conn, in, true, parameter, log);
                 } else {
                     log.append("CLOSE send unconfirmed; unplug USB if next test fails\n");
                 }
             }
+        }
+        if (candidate != null && cleanStop && cleanClose) {
+            log.append("Verified capture candidate available for user-approved local save\n");
+            if (onVerifiedCandidate != null) {
+                try {
+                    onVerifiedCandidate.accept(candidate);
+                } catch (RuntimeException error) {
+                    log.append("Local preview callback unavailable\n");
+                }
+            }
+        } else if (candidate != null) {
+            log.append("Local save disabled: STOP and CLOSE were not both verified\n");
         }
         return log.toString();
     }
