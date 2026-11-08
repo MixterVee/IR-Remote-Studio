@@ -115,7 +115,7 @@ public class MainActivity extends Activity {
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.addView(text("IR Remote Studio", 22, WHITE, true));
         titles.addView(text("LEARN  ·  ORGANIZE  ·  REPLAY", 11, MUTED, true));
-        titles.addView(text("v0.2.0-alpha  •  Harmony 300 learning", 11, MUTED, false));
+        titles.addView(text("v0.2.1-alpha  •  Harmony 300 learning", 11, MUTED, false));
         header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
 
@@ -537,8 +537,15 @@ public class MainActivity extends Activity {
         content.addView(copy, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
 
-        TextView note = text("Local phone library only • Harmony programming unchanged",
-                11, MUTED, false);
+        Button saveAndLearnAnother = actionButton(
+                "Save & Learn Another Button", PURPLE);
+        LinearLayout.LayoutParams nextParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(49));
+        nextParams.setMargins(0, dp(10), 0, 0);
+        content.addView(saveAndLearnAnother, nextParams);
+
+        TextView note = text("Save the current command before starting a new capture. "
+                + "Harmony programming unchanged.", 11, MUTED, false);
         note.setPadding(0, dp(12), 0, dp(3));
         content.addView(note);
 
@@ -552,6 +559,21 @@ public class MainActivity extends Activity {
                         (d, w) -> copyText("Harmony learning report", report))
                 .setPositiveButton("Save button", null)
                 .create();
+        saveAndLearnAnother.setOnClickListener(v -> {
+            // Never discard the current capture: retry validation in the same
+            // local persistence path as the existing Save button.
+            if (saveLearnedButton(pronto,
+                    buttonName.getText().toString().trim(),
+                    targetSpinner.getSelectedItemPosition(),
+                    remoteName.getText().toString().trim(),
+                    buttonName, remoteName)) {
+                dialog.dismiss();
+                // Previous capture's STOP/DONE and CLOSE were already
+                // verified. Starting another capture requires explicit
+                // confirmation in the normal learning flow.
+                startLearning();
+            }
+        });
         dialog.setOnShowListener(v ->
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w -> {
                     if (saveLearnedButton(pronto,
