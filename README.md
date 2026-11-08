@@ -61,7 +61,7 @@ official Bluetooth-connected app. In November 2026, a Pixel HCI capture
 revealed its proprietary A5 5A packet framing and allowed reconstruction
 of two infrared recordings which successfully played in IRPlus.
 
-In Windows v0.2.9-beta, **SofaBaton U1 Bluetooth...** offers:
+In Windows v0.3.0-beta, **SofaBaton U1 Bluetooth...** offers:
 
 - BLE scanning and read-only GATT structure inspection (same as v0.2.5).
 - **Advanced → Read stored IR (test)**: for a positively identified U1, query a
@@ -266,7 +266,7 @@ pairing (only if needed)** checkbox is available during Connect; use
 only after normal connection fails. Pairing can prompt for user input.
 There is no U1 firmware/profile programming, nor new live IR learning.
 
-### Windows 0.2.9-beta: simplified SofaBaton connection screen
+### Windows 0.3.0-beta: simplified SofaBaton connection screen
 
 The normal U1 window now focuses on **Scan Bluetooth**, **Connect U1**,
 **Disconnect**, a high-contrast connected indicator and the identified
@@ -281,3 +281,21 @@ opening it never sends Bluetooth commands. Existing proven stored-code
 reads continue to use the persistent connected session. Main-window USB
 capture is labeled **(USB)**, separately from the U1 Bluetooth status.
 All U1 programming and firmware writes remain disabled.
+
+### Windows 0.3.0-beta: one connection indicator
+
+The main window now uses a **single compact connection line** below the
+receiver controls. It displays **red NOT CONNECTED** when no learner is
+verified, or **green CONNECTED — device name** when a U1 Bluetooth link
+or supported USB learner has been verified. The connected BLE U1 takes
+priority over irrelevant USB not-connected/failure messages. An available
+USB learner is shown if the U1 disconnects and USB verification is still
+valid. Temporary connecting operations use amber instead of falsely
+claiming connected. The U1 Disconnect button occupies the same status
+row only while a live U1 session exists.
+
+Note: unlike U1's persistent BLE connection, a USB connection
+verification is a successful handshake; the USB handle closes between
+learn operations and reopens when capture begins. As before, a hot
+unplug requires Refresh USB / Connect to update that state. Protocols
+and stored IR behavior are unchanged.
