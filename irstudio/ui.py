@@ -67,7 +67,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.2.3-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.2.4-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -511,14 +511,35 @@ class Studio(tk.Tk):
             messagebox.showerror("Restore failed", str(exc))
 
     def _harmony_error(self, error):
-        if "libconcord error 11" in error or "USB connection failed" in error:
-            error = ("USB connection unsuccessful. Check that the Harmony has batteries, "
-                     "try a known-good data cable and USB port, and close other Harmony software.\n\n" + error)
-        if "Ocrustar" in error or "libusb" in error or "WinUSB" in error:
-            error += ("\n\nOcrustar may need a suitable Windows USB driver. "
-                      "Do not change drivers until the exact device ID and "
-                      "interfaces have been checked.")
-        messagebox.showerror("IR learning device", error)
+        """Offer actionable USB recovery steps after a failed probe/capture.
+
+        Never retry USB commands automatically: the user must reconnect or
+        select a port and explicitly press Connect / Retry again.
+        """
+        details = str(error).strip() or "No technical details available."
+        is_ocrustar = ("Ocrustar" in self.receiver_var.get()
+                        or any(name in details for name in ("Ocrustar", "libusb", "WinUSB")))
+        recovery = (
+            "Unable to communicate with the IR learning receiver.\n\n"
+            "1. Make sure the Harmony and original remote have working "
+            "batteries, if battery-powered.\n"
+            "2. Disconnect the receiver from USB, then reconnect it.\n"
+            "3. If that fails, try a different USB port directly on your PC.\n"
+            "4. Click Refresh USB, then Connect / Retry.\n"
+            "5. Close any other Harmony or IR-learning software.\n"
+        )
+        if is_ocrustar:
+            recovery += (
+                "\nOcrustar: USB driver access may need checking. Do not replace "
+                "drivers until the device ID and interfaces are verified.\n"
+            )
+        # Keep the original diagnostic available without filling the popup
+        # with the entire session trace; full traces remain in Logs.
+        summary = details if len(details) <= 1300 else details[:900] + "\n... (see Logs for complete details)"
+        messagebox.showerror(
+            "IR Learner — Connection Failed",
+            recovery + "\nTechnical details:\n" + summary,
+            parent=self)
 
     def _set_connection(self, state: str, detail: str) -> None:
         """High-contrast status independent of the general activity log.

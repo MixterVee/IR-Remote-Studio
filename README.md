@@ -5,7 +5,7 @@
 Create devices, use custom labels for every button, capture commands from a compatible Logitech Harmony IR learner, compare repeated recordings, and export **`.irplus`** remotes for compatible Android phones.
 
 > **Status (November 2026):** Windows v0.1.7 is the established GitHub release.
-> **Windows v0.2.3-beta** builds on direct USB learning backends for Harmony 300/350
+> **Windows v0.2.4-beta** builds on direct USB learning backends for Harmony 300/350
 > (shared HID ID 046D:C124) and a documented Ocrustar/ElkSmart D226/D552
 > learning family (045C:02AA). Both Windows USB transports need real-device
 > validation before they can be treated as production-ready. The existing
@@ -18,13 +18,13 @@ Create devices, use custom labels for every button, capture commands from a comp
 For the tested Windows v0.1.7 release, use
 [GitHub Releases](https://github.com/MixterVee/IR-Remote-Studio/releases).
 
-For the **experimental v0.2.3-beta direct USB learner**, obtain the
+For the **experimental v0.2.4-beta direct USB learner**, obtain the
 Windows ZIP from the latest successful
 [Windows Actions build](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/windows.yml).
 Extract the ZIP and launch the standalone \`IR-Remote-Studio.exe\`.
 Python is not required to run the packaged executable.
 
-In v0.2.3-beta the Windows learning panel provides **Save** to
+In v0.2.4-beta the Windows learning panel provides **Save** to
 confirm the selected command is saved without starting another capture, and
 **Save & Learn another** to save and continue learning. Captures remain
 autosaved immediately after successful receiving, as in the previous version.
@@ -34,7 +34,7 @@ The **IR LEARNER CONNECTION** panel now has prominent **Refresh USB**
 controls. **Red** indicates NOT CONNECTED/FAILED, **amber** means
 USB detected or connecting, and **green** indicates a verified
 READY handshake or a receiver actively armed for capture.
-USB handshake checks open and release a session; green after a
+On connection failures, a popup recommends unplugging/reconnecting the\nreceiver or trying another USB port, followed by Refresh USB and\nConnect / Retry. Diagnostic details remain available.\nUSB handshake checks open and release a session; green after a
 successful check is the **last verified state**, not a promise that a
 permanent USB connection remains open. Green **READY — PRESS A BUTTON
 NOW** is shown only while a capture session has armed the receiver.
