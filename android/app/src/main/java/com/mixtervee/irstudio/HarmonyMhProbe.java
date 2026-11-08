@@ -286,9 +286,23 @@ public final class HarmonyMhProbe {
     }
 
     public static String run(UsbManager manager, UsbDevice device) {
+        return runInternal(manager, device, false);
+    }
+
+    /** A separate opt-in diagnostic that receives one IR button press. */
+    public static String runCapture(UsbManager manager, UsbDevice device) {
+        return runInternal(manager, device, true);
+    }
+
+    private static String runInternal(UsbManager manager, UsbDevice device,
+                                      boolean captureIr) {
         StringBuilder log = new StringBuilder();
-        log.append("IR Remote Studio — Harmony 300 read-only identity test").append('\n')
-                .append("Read-only /sys/sysinfo with serial/GUID redaction; no permanent device changes")
+        log.append(captureIr
+                ? "IR Remote Studio — Harmony 300 IR capture diagnostic"
+                : "IR Remote Studio — Harmony 300 read-only identity test").append('\n');
+        log.append(captureIr
+                ? "Experimental IR receiving only; no stored programming or firmware changes"
+                : "Read-only /sys/sysinfo with serial/GUID redaction; no permanent device changes")
                 .append('\n').append('\n');
         if (manager == null || device == null ||
                 !HarmonyUsbIds.isHarmony300Or350(device.getVendorId(), device.getProductId())) {
@@ -346,12 +360,20 @@ public final class HarmonyMhProbe {
             log.append("MH sync: five 64-byte OUT reports completed").append('\n');
             if (exchangeFinal(conn, in, out, log)) {
                 if (exchangeContinuation(conn, in, out, log)) {
-                    HarmonySysinfoProbe.readIdentity(conn, in, out, log);
+                    if (captureIr) {
+                        log.append(HarmonyIrCaptureProbe.capture(conn, in, out));
+                    } else {
+                        HarmonySysinfoProbe.readIdentity(conn, in, out, log);
+                    }
                 } else {
-                    log.append("sysinfo read skipped: stage-two reply did not match observed pattern\n");
+                    log.append(captureIr
+                            ? "IR capture skipped: stage-two reply did not match observed pattern\n"
+                            : "sysinfo read skipped: stage-two reply did not match observed pattern\n");
                 }
             } else {
-                log.append("MH continuation skipped: stage-one response not confirmed\n");
+                log.append(captureIr
+                        ? "IR capture skipped: stage-one reply not confirmed\n"
+                        : "MH continuation skipped: stage-one response not confirmed\n");
             }
         } catch (TimeoutException error) {
             log.append("MH IN/OUT acknowledgement timed out").append('\n');
