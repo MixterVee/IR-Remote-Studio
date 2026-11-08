@@ -313,6 +313,45 @@ class U1SaveUITests(unittest.TestCase):
             "CONNECTED — SofaBaton U1 (SB202006231D9E)")
         self.assertFalse(dlg.winfo_exists())
 
+    def test_experimental_learn_requires_explicit_typed_confirmation(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            svc = ("0000fff0-0000-1000-8000-00805f9b34fb",)
+            device = BleEntry("SB202006231D9E", "U1", -50, svc, True)
+            dlg._devices = [device]
+            dlg.device_list.insert("end", "SB202006231D9E")
+            dlg.device_list.selection_set(0)
+            self.app.u1_session._state(
+                "CONNECTED", "SB202006231D9E", "U1", "Identity verified.")
+            dlg._poll_connection()
+            self.assertEqual(
+                str(dlg.learn_button.cget("state")), "disabled")
+            self.assertEqual(
+                str(dlg.experimental_learn_button.cget("state")), "normal")
+            with patch("irstudio.sofabaton_ble_ui.messagebox.askokcancel",
+                       return_value=False), \
+                 patch.object(dlg, "_run") as task:
+                dlg.learn_ir_experimental()
+                task.assert_not_called()
+            with patch("irstudio.sofabaton_ble_ui.messagebox.askokcancel",
+                       return_value=True), \
+                 patch("irstudio.sofabaton_ble_ui.simpledialog.askstring",
+                       return_value="NO"), \
+                 patch.object(dlg, "_run") as task:
+                dlg.learn_ir_experimental()
+                task.assert_not_called()
+            with patch("irstudio.sofabaton_ble_ui.messagebox.askokcancel",
+                       return_value=True), \
+                 patch("irstudio.sofabaton_ble_ui.simpledialog.askstring",
+                       return_value="LEARN 8"), \
+                 patch.object(dlg, "_run") as task:
+                dlg.learn_ir_experimental()
+                task.assert_called_once()
+        finally:
+            dlg.destroy()
+
     def test_u1_reader_action_prompts_before_queries(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
         dialog = SofaBatonBleDialog(self.app, auto_scan=False)
