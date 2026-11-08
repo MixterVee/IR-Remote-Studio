@@ -335,3 +335,42 @@ to the far right edge. The button now uses a contrasting red background and
 white label. It disappears when the BLE link is no longer connected. This is
 a visual-only change; BLE pairing, reading stored IR and USB capture remain
 unchanged.
+
+### Windows v0.3.3-beta: responsive action buttons and high-risk U1 live IR experiment
+
+**Narrow Windows layout fix:** At laptop widths the Devices and Buttons
+action bars now wrap their controls into two columns so **Delete** and
+**Layout editor** no longer disappear beyond the right-hand pane edge.
+When there is enough width, buttons return to three columns. This
+preserves the vertical-taskbar sizing fix.
+
+**Experimental U1 live learning, NOT production-ready:** The normal
+**Learn IR** remains disabled because the U1 learning sequence has not
+yet been verified on live hardware. A guarded
+**Advanced → Experimental: learn IR in slot 8 (risk of overwrite)**
+operation is now available after connecting a verified U1. The
+only learning sequence currently implemented is the exact one
+observed in the official SofaBaton phone app's captured BLE exchange:
+
+- Recorded start: `a5 5a 09 04 08 18 02 00 00 00 00 00 2e`
+- Observed ready acknowledgment: `a5 5a 00 04 03`
+- Observed capture event: `a5 5a 01 06 00 06`
+- Strict ordered and checksummed IR waveform fragments use `0x0d`.
+- Recorded finish/exit: `a5 5a 01 05 01 06`
+
+The app **refuses to start** until it successfully reads slot 8,
+writes a timestamped JSON backup to `Documents/IR Remote Studio/
+U1-Learn-Backups`, fsyncs it, and verifies it is importable. The
+user must then accept a warning and **type LEARN 8**. The experimental
+learning operation may overwrite U1 slot 8 and alter an unknown
+physical key/device assignment. The local IR backup **cannot be
+automatically restored to the U1**. The test does NOT send unknown
+0x07/0x08/0x14 configuration/firmware instructions; it uses
+only the observed start/finish commands and record stream. A successful
+capture still requires selecting the destination button and pressing
+**Advanced → Save to selected button** to save it in the local
+library. Cancel, failed backup, and invalid reply never send start.
+
+**Important:** The tested protocol slot range 1–8 is an application
+restriction, not a documented limit of the U1 or a known 1:1 mapping
+to physical buttons. Real-hardware validation remains outstanding.
