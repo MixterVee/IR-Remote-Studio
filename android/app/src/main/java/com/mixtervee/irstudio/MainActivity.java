@@ -250,7 +250,15 @@ public class MainActivity extends Activity {
         TextView heading = text(remote.displayName(), 19, WHITE, true);
         heading.setGravity(Gravity.CENTER);
         heading.setPadding(dp(5), dp(8), dp(5), dp(13));
+        heading.setOnLongClickListener(v -> {
+            manageRemote(remote);
+            return true;
+        });
         remoteLayout.addView(heading);
+        TextView hint = text("Long-press remote name to rename or delete", 11, MUTED, false);
+        hint.setGravity(Gravity.CENTER);
+        hint.setPadding(0, 0, 0, dp(8));
+        remoteLayout.addView(hint);
 
         LinearLayout row = newRow();
         int used = 0;
@@ -636,6 +644,75 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> toast("IR test failed: " + error.getMessage()));
             }
         }, "IrStudioOneShotTest").start();
+    }
+
+    private void manageRemote(IrplusCodec.Remote remote) {
+        new AlertDialog.Builder(this)
+                .setTitle(remote.displayName())
+                .setItems(new String[]{"Rename remote", "Delete remote"}, (d, choice) -> {
+                    if (choice == 0) renameRemote(remote);
+                    else deleteRemote(remote);
+                }).show();
+    }
+
+    private void renameRemote(IrplusCodec.Remote remote) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(remote.model);
+        input.selectAll();
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Rename remote")
+                .setView(input)
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save", null).create();
+        dialog.setOnShowListener(v ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w -> {
+                    String name = input.getText().toString().trim();
+                    if (name.isEmpty() || name.length() > 60) {
+                        input.setError("Enter 1-60 characters");
+                        return;
+                    }
+                    int index = remotes.indexOf(remote);
+                    if (index < 0) return;
+                    IrplusCodec.Remote renamed = new IrplusCodec.Remote(
+                            remote.manufacturer, name);
+                    renamed.items.addAll(remote.items);
+                    remotes.set(index, renamed);
+                    try {
+                        saveRemotes();
+                        selectedDevice = index;
+                        refreshDevices();
+                        dialog.dismiss();
+                    } catch (Exception error) {
+                        remotes.set(index, remote);
+                        toast("Rename failed: " + error.getMessage());
+                    }
+                }));
+        dialog.show();
+    }
+
+    private void deleteRemote(IrplusCodec.Remote remote) {
+        new AlertDialog.Builder(this)
+                .setTitle("Delete " + remote.displayName() + "?")
+                .setMessage("This deletes this remote and its buttons from the "
+                        + "phone's local library. You can export a backup first. "
+                        + "Nothing is erased from the Harmony 300.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Delete remote", (d, w) -> {
+                    int index = remotes.indexOf(remote);
+                    if (index < 0) return;
+                    remotes.remove(index);
+                    try {
+                        saveRemotes();
+                        selectedDevice = Math.max(0,
+                                Math.min(index, remotes.size() - 1));
+                        refreshDevices();
+                        setStatus("Remote removed from the local phone library.");
+                    } catch (Exception error) {
+                        remotes.add(index, remote);
+                        toast("Delete failed: " + error.getMessage());
+                    }
+                }).show();
     }
 
     private void editLearnedButton(IrplusCodec.Remote remote, IrplusCodec.Item item) {
