@@ -194,8 +194,8 @@ class SofaBatonBleDialog(tk.Toplevel):
         self.advanced_open = not self.advanced_open
         # Free vertical space for advanced controls on smaller laptop displays.
         # The device list and diagnostic report retain their own scrolling.
-        self.device_list.configure(height=3 if self.advanced_open else 5)
-        self.report.configure(height=4 if self.advanced_open else 6)
+        self.device_list.configure(height=2 if self.advanced_open else 5)
+        self.report.configure(height=2 if self.advanced_open else 6)
         if self.advanced_open:
             self.advanced_toggle_button.configure(text="Advanced  ▾")
             self.advanced_panel.pack(fill="both", expand=True, pady=(9, 0))
