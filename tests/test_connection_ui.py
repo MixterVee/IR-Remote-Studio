@@ -70,6 +70,29 @@ class ConnectionIndicatorTests(unittest.TestCase):
         self.assertIn("Unplug and reconnect",
                       self.app.connection_detail_var.get())
 
+    def test_connection_failure_popup_shows_unplug_and_other_port_steps(self):
+        with patch.object(self.app, "_background",
+                          side_effect=lambda mode, done: done(None, "USB read timeout")), \
+             patch("irstudio.ui.messagebox.showerror") as popup:
+            self.app.probe()
+        popup.assert_called_once()
+        title, message = popup.call_args.args[:2]
+        self.assertEqual(title, "IR Learner — Connection Failed")
+        self.assertIn("Disconnect the receiver from USB", message)
+        self.assertIn("different USB port", message)
+        self.assertIn("Refresh USB, then Connect / Retry", message)
+        self.assertIn("USB read timeout", message)
+        self.assertIs(popup.call_args.kwargs["parent"], self.app)
+        self.assertEqual(self.app.connection_state_var.get(),
+                         "CONNECTION FAILED — RETRY")
+
+    def test_ocrustar_failure_popup_has_driver_caution(self):
+        self.app.receiver_var.set("Ocrustar / ElkSmart — USB bulk (experimental)")
+        with patch("irstudio.ui.messagebox.showerror") as popup:
+            self.app._harmony_error("device open failed")
+        self.assertIn("Ocrustar: USB driver access", popup.call_args.args[1])
+        self.assertIn("Do not replace", popup.call_args.args[1])
+
     def test_ready_requires_active_capture_and_ignores_stale_callback(self):
         self.app.running = True
         self.app._active_operation = 7
