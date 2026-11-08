@@ -77,9 +77,23 @@ final class HarmonySysinfoProbe {
         return value.toString();
     }
 
+    /**
+     * All MH control commands are zero-padded to a complete 64-byte HID OUT
+     * report. ACK and sequence-close prefixes are only 8 and 6 bytes long.
+     * Sending their raw lengths previously caused a partial OUT transfer.
+     */
+    static byte[] paddedHidReport(byte[] prefix) {
+        if (prefix == null || prefix.length == 0 || prefix.length > REPORT_SIZE) {
+            throw new IllegalArgumentException("MH HID command must be 1..64 bytes");
+        }
+        byte[] packet = new byte[REPORT_SIZE];
+        System.arraycopy(prefix, 0, packet, 0, prefix.length);
+        return packet;
+    }
+
     private static ByteBuffer direct(byte[] data) {
         ByteBuffer bytes = ByteBuffer.allocateDirect(REPORT_SIZE);
-        bytes.put(data);
+        bytes.put(paddedHidReport(data));
         bytes.flip();
         return bytes;
     }
