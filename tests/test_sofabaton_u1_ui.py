@@ -192,14 +192,14 @@ class U1SaveUITests(unittest.TestCase):
 
     def test_open_starts_scan_without_prompting_for_connection(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
-        import unittest.mock as mock
         svc = "0000fff0-0000-1000-8000-00805f9b34fb"
         target = BleEntry("SB202006231D9E", "U1-ADDRESS", -51, (svc,), True)
         other = BleEntry("Other-device", "OTHER", -20, (), False)
         dlg = SofaBatonBleDialog(self.app, auto_scan=False)
         dlg.withdraw()
-        try:
-            self.assertIn("Hold the - and E buttons", dlg.winfo_children()[0].winfo_children()[1].cget("text"))
+        self.assertIn(
+            "Hold the - and E buttons",
+            dlg.winfo_children()[0].winfo_children()[1].cget("text"))
         def connected(address, name, pair):
             self.app.u1_session._state(
                 "CONNECTED", name, address, "U1 identity verified.")
