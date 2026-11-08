@@ -7,6 +7,8 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.ConsumerIrManager;
+import android.hardware.usb.UsbDevice;
+import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.view.Gravity;
@@ -15,6 +17,7 @@ import android.view.ViewGroup;
 import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -36,8 +39,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.atomic.AtomicReference;
 
-/** First Android test build: import, view, export and transmit raw PRONTO_HEX. */
+/** Learn, organize, replay and export raw Pronto IR commands on Android. */
 public class MainActivity extends Activity {
     private static final int IMPORT_DEVICE = 1001;
     private static final int EXPORT_DEVICE = 1002;
@@ -47,6 +51,8 @@ public class MainActivity extends Activity {
     private static final int MUTED = Color.rgb(183, 201, 225);
     private static final int BLUE = Color.rgb(23, 103, 190);
     private static final int ORANGE = Color.rgb(241, 147, 29);
+    private static final int TEAL = Color.rgb(12, 164, 146);
+    private static final int PURPLE = Color.rgb(83, 81, 167);
 
     private final List<IrplusCodec.Remote> remotes = new ArrayList<>();
     private ConsumerIrManager irManager;
@@ -54,6 +60,7 @@ public class MainActivity extends Activity {
     private TextView status;
     private Spinner deviceSpinner;
     private Button exportButton;
+    private Button learnButton;
     private int selectedDevice = 0;
 
     @Override
@@ -107,17 +114,31 @@ public class MainActivity extends Activity {
         titles.setPadding(dp(10), 0, 0, 0);
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.addView(text("IR Remote Studio", 22, WHITE, true));
-        titles.addView(text("Android USB lab · v0.1.18-alpha", 12, MUTED, false));
+        titles.addView(text("LEARN  ·  ORGANIZE  ·  REPLAY", 11, MUTED, true));
+        titles.addView(text("v0.2.0-alpha  •  Harmony 300 learning", 11, MUTED, false));
         header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
+
+        LinearLayout quickActions = new LinearLayout(this);
+        quickActions.setOrientation(LinearLayout.HORIZONTAL);
+        quickActions.setPadding(0, dp(10), 0, dp(3));
+        learnButton = actionButton("◉  Learn IR Button", TEAL);
+        learnButton.setOnClickListener(v -> startLearning());
+        quickActions.addView(learnButton, new LinearLayout.LayoutParams(0, dp(54), 2));
+        Button createRemote = actionButton("+  New Remote", PURPLE);
+        createRemote.setOnClickListener(v -> createRemote());
+        LinearLayout.LayoutParams newParams = new LinearLayout.LayoutParams(0, dp(54), 1);
+        newParams.setMargins(dp(8), 0, 0, 0);
+        quickActions.addView(createRemote, newParams);
+        root.addView(quickActions);
 
         LinearLayout actions = new LinearLayout(this);
         actions.setOrientation(LinearLayout.HORIZONTAL);
         actions.setPadding(0, dp(9), 0, dp(9));
-        Button importBtn = actionButton("Import .irplus");
+        Button importBtn = actionButton("↓ Import .irplus");
         importBtn.setOnClickListener(v -> openImport());
         actions.addView(importBtn, new LinearLayout.LayoutParams(0, dp(50), 1));
-        exportButton = actionButton("Export device");
+        exportButton = actionButton("↑ Export Remote");
         exportButton.setOnClickListener(v -> openExport());
         LinearLayout.LayoutParams exportParams = new LinearLayout.LayoutParams(0, dp(50), 1);
         exportParams.setMargins(dp(8), 0, 0, 0);
@@ -125,13 +146,16 @@ public class MainActivity extends Activity {
         root.addView(actions);
 
         // Read-only USB inspection is a prerequisite for future Harmony learning.
-        Button usbButton = actionButton("Detect Harmony USB (experimental)");
+        Button usbButton = actionButton("Harmony USB Connection & Diagnostics", Color.rgb(31, 66, 106));
         usbButton.setOnClickListener(v -> UsbHarmonyInspector.show(this));
         LinearLayout.LayoutParams usbParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
         usbParams.setMargins(0, 0, 0, dp(9));
         root.addView(usbButton, usbParams);
 
+        TextView section = text("MY REMOTES   •   LONG-PRESS A BUTTON TO EDIT", 11, MUTED, true);
+        section.setPadding(dp(5), dp(4), dp(5), dp(9));
+        root.addView(section);
         deviceSpinner = new Spinner(this);
         deviceSpinner.setBackground(background(SURFACE, 8));
         deviceSpinner.setPadding(dp(10), dp(6), dp(10), dp(6));
@@ -167,7 +191,7 @@ public class MainActivity extends Activity {
         root.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
-        TextView footer = text("Commands use the phone's built-in IR transmitter where Android exposes it.",
+        TextView footer = text("Learned buttons are stored locally. The Harmony's programming remains unchanged.",
                 11, MUTED, false);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(dp(6), dp(9), dp(6), dp(5));
@@ -175,12 +199,16 @@ public class MainActivity extends Activity {
     }
 
     private Button actionButton(String value) {
+        return actionButton(value, BLUE);
+    }
+
+    private Button actionButton(String value, int color) {
         Button b = new Button(this);
         b.setAllCaps(false);
         b.setText(value);
         b.setTextSize(14);
         b.setTextColor(WHITE);
-        b.setBackground(background(BLUE, 9));
+        b.setBackground(background(color, 12));
         return b;
     }
 
@@ -191,7 +219,7 @@ public class MainActivity extends Activity {
     private void refreshDevices() {
         List<String> names = new ArrayList<>();
         for (IrplusCodec.Remote remote : remotes) names.add(remote.displayName());
-        if (names.isEmpty()) names.add("No remote loaded — import an .irplus file");
+        if (names.isEmpty()) names.add("No remotes yet — create or learn one");
         ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_item, names);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
@@ -212,8 +240,7 @@ public class MainActivity extends Activity {
         remoteLayout.removeAllViews();
         IrplusCodec.Remote remote = current();
         if (remote == null) {
-            TextView empty = text("Import a remote exported from IR Remote Studio on Windows.\n\n"
-                    + "The buttons will appear here in their saved layout.",
+            TextView empty = text("Your IR library is empty.\n\nTap Learn IR Button to capture a command, or New Remote to create a layout.\n\nImported .irplus files work here too.",
                     16, MUTED, false);
             empty.setGravity(Gravity.CENTER);
             empty.setPadding(dp(18), dp(75), dp(18), dp(30));
@@ -248,6 +275,10 @@ public class MainActivity extends Activity {
                 b.setPadding(dp(2), dp(4), dp(2), dp(4));
                 b.setBackground(background(buttonColor(item.label), 9));
                 b.setOnClickListener(v -> send(item));
+                b.setOnLongClickListener(v -> {
+                    editLearnedButton(remote, item);
+                    return true;
+                });
                 LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, dp(53), item.span);
                 p.setMargins(dp(2), dp(3), dp(2), dp(3));
                 row.addView(b, p);
