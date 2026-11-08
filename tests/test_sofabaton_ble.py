@@ -33,6 +33,37 @@ class BleDiagnosticsTests(unittest.TestCase):
         self.assertEqual(result[0].advertised_services, ("1234",))
         self.assertFalse(result[1].likely_sofabaton)
 
+    def test_unique_sb_serial_candidate_is_selected_for_auto_connect(self):
+        svc = "0000fff0-0000-1000-8000-00805f9b34fb"
+        serial = sofabaton_ble.BleEntry(
+            "SB202006231D9E", "20:20:06:23:1D:9E", -51, (svc,), True)
+        other = sofabaton_ble.BleEntry(
+            "Office Shield", "18:19", -60, (svc,), False)
+        self.assertEqual(
+            sofabaton_ble.auto_connect_candidate([other, serial]), serial)
+        self.assertEqual(
+            sofabaton_ble.auto_connect_candidate([serial]), serial)
+        self.assertIsNone(sofabaton_ble.auto_connect_candidate([other]))
+        # Never connect blindly to another device advertising the same UUID.
+        wrong_service = sofabaton_ble.BleEntry(
+            "SB0123456789", "XX", -30, ("0000180f",), True)
+        self.assertIsNone(sofabaton_ble.auto_connect_candidate([wrong_service]))
+        # Some Windows adapters omit service UUIDs during advertisement.
+        no_uuid = sofabaton_ble.BleEntry(
+            "SB0123456789", "YY", -50, (), True)
+        self.assertEqual(
+            sofabaton_ble.auto_connect_candidate([no_uuid]), no_uuid)
+
+    def test_multiple_sb_serial_devices_require_manual_choice(self):
+        svc = ("0000fff0-0000-1000-8000-00805f9b34fb",)
+        a = sofabaton_ble.BleEntry("SB202006231D9E", "AA", -51, svc, True)
+        b = sofabaton_ble.BleEntry("SB202006231D9F", "BB", -52, svc, True)
+        self.assertIsNone(sofabaton_ble.auto_connect_candidate([a, b]))
+        for name in ("SB", "SB-TEST", "SBheadset", "SBAA", "test SB001122"):
+            unsafe = sofabaton_ble.BleEntry(name, "XX", -40, svc, True)
+            self.assertIsNone(
+                sofabaton_ble.auto_connect_candidate([unsafe]), name)
+
     def test_scanner_passively_collects_advertisements_without_connect(self):
         events = []
 
