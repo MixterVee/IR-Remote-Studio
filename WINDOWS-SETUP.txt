@@ -1,4 +1,4 @@
-IR Remote Studio 0.2.0-beta — Windows 11 x64
+IR Remote Studio 0.2.1-beta — Windows 11 x64
 ================================================
 
 FIRST STANDALONE LEARNER TEST
@@ -7,7 +7,7 @@ This beta adds direct USB learning WITHOUT requiring Concordance for
 supported Harmony 300/350 and an experimental Ocrustar/ElkSmart dongle
 adapter. Previous Windows features and the Concordance backend remain.
 
-1. Download the v0.2.0-beta Windows x64 ZIP from GitHub Actions.
+1. Download the v0.2.1-beta Windows x64 ZIP from GitHub Actions.
 2. Extract the files and launch IR-Remote-Studio.exe.
 3. Connect ONE supported USB IR learning device.
 4. From "IR learning hardware", choose one of:
@@ -22,10 +22,12 @@ adapter. Previous Windows features and the Concordance backend remain.
    the selected adapter's handshake, NOT an IR capture.
 7. Select/create a device and button; choose "Capture selected button."
 8. WAIT for READY; point a source remote at your learner, quickly press
-   and release one source button. The result is saved to the local app
-   library only after a valid waveform and completed cleanup.
-9. Export .irplus to test the button on the known-working Android phone
-   or in IRPlus. The app also provides a "Save & Learn another" option.
+   and release one source button. Valid captures are automatically saved
+   to the local app library after successful protocol cleanup.
+9. Click "Save button" to confirm and finish learning this button; OR
+   click "Save & Learn another" to create and capture another button.
+   Both options safely persist the current button; no duplicate captures.
+10. Export .irplus to test the button on the Android phone or in IRPlus.
 
 SUPPORTED STANDALONE BACKENDS
 -----------------------------
