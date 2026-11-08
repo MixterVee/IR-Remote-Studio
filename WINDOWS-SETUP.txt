@@ -209,3 +209,21 @@ green CONNECTED — READY only after the verified Bluetooth handshake.
 To read an EXISTING previously learned command, reopen the Bluetooth
 window, expand Advanced, choose the slot and Read stored IR, then save.
 USB capture in the main window is separately identified as USB.
+
+SINGLE CONNECTION STATUS (WINDOWS 0.3.0-BETA)
+--------------------------------------------
+The Windows main window now shows only ONE status:
+  NOT CONNECTED                          [red]
+  CONNECTED — SB... / SofaBaton U1      [green]
+  CONNECTED — Harmony or Ocrustar       [green]
+
+Only a verified receiver is shown. A connected U1 takes priority over
+a disconnected USB receiver, avoiding simultaneous red and green
+messages. Unverified connection attempts are shown as CONNECTING in
+amber. Disconnect U1 is shown on the same line only for an active BLE
+link, avoiding additional vertical space.
+
+USB: 'Connected' indicates a successful receiver handshake and ready
+to start capture (the temporary USB probe handle closes between
+operations); unplugging requires Refresh USB to update the display.
+No changes to IR capture, Bluetooth safety checks or stored profiles.

@@ -33,15 +33,16 @@ class Studio(tk.Tk):
         self.active_button = None
         self.running = False
         self.connected_model = None
+        self._usb_connection_state = "not-connected"
+        self._usb_connection_detail = ""
         self.u1_session = U1Session()
         self.u1_state_var = tk.StringVar(value="BLUETOOTH — NOT CONNECTED")
         self.u1_detail_var = tk.StringVar(value="Scan and select U1, then Connect U1.")
         self._u1_last_status = None
         self._u1_poll_after = None
         self.receiver_var = tk.StringVar(value=AUTO)
+        # One visible connection indicator for all supported receivers.
         self.connection_state_var = tk.StringVar(value="NOT CONNECTED")
-        self.connection_detail_var = tk.StringVar(
-            value="Connect your Harmony or supported IR learner, then click Connect / Retry.")
         self._active_operation = 0
         self._scan_in_progress = False
         self.aim_var = tk.StringVar(value="USB capture: aim the original remote at the Harmony receiver, about 5–10 cm away.")
@@ -75,7 +76,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.2.9-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.3.0-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -102,7 +103,7 @@ class Studio(tk.Tk):
                      width=4, state="readonly").pack(side="right")
 
         # Make USB connectivity a first-class workflow, not a toolbar detail.
-        connection = ttk.LabelFrame(self, text="USB IR LEARNER / BLUETOOTH U1", padding=(16, 12))
+        connection = ttk.LabelFrame(self, text="IR LEARNER CONNECTION", padding=(16, 10))
         connection.pack(fill="x", padx=16, pady=(2, 11))
         connection_top = ttk.Frame(connection)
         connection_top.pack(fill="x")
@@ -123,34 +124,19 @@ class Studio(tk.Tk):
             command=self.open_sofabaton_ble)
         self.sofabaton_ble_btn.pack(side="left", padx=(10, 0), ipady=7)
 
+        # One truthful status for the whole app: a verified BLE U1 takes
+        # priority over an unused USB receiver. Avoid simultaneous red USB
+        # and green Bluetooth messages when the user has a working learner.
         connection_info = ttk.Frame(connection)
-        connection_info.pack(fill="x", pady=(12, 0))
+        connection_info.pack(fill="x", pady=(9, 0))
         self.connection_heading = ttk.Label(
             connection_info, textvariable=self.connection_state_var,
-            font=("Segoe UI Semibold", 14), foreground="#bc2525")
-        self.connection_heading.pack(anchor="w")
-        self.connection_description = ttk.Label(
-            connection_info, textvariable=self.connection_detail_var,
-            wraplength=990, justify="left", foreground="#536277")
-        self.connection_description.pack(anchor="w", pady=(4, 0))
-
-        # USB readiness and Bluetooth readiness are intentionally separate:
-        # a red USB status must not invalidate a verified green U1 BLE link.
-        u1_row = ttk.Frame(connection)
-        u1_row.pack(fill="x", pady=(9, 0))
-        ttk.Label(u1_row, text="SofaBaton U1:").pack(side="left", padx=(0, 10))
-        self.u1_connection_label = ttk.Label(
-            u1_row, textvariable=self.u1_state_var,
-            font=("Segoe UI Semibold", 11), foreground="#bc2525")
-        self.u1_connection_label.pack(side="left")
+            font=("Segoe UI Semibold", 13), foreground="#bc2525")
+        self.connection_heading.pack(side="left", fill="x", expand=True)
         self.u1_disconnect_btn = ttk.Button(
-            u1_row, text="Disconnect U1",
+            connection_info, text="Disconnect U1",
             command=self.disconnect_u1, state="disabled")
-        self.u1_disconnect_btn.pack(side="right")
-        self.u1_connection_description = ttk.Label(
-            connection, textvariable=self.u1_detail_var,
-            foreground="#536277", wraplength=950)
-        self.u1_connection_description.pack(fill="x", pady=(3, 0))
+        # The Disconnect button only appears when the U1 is actually connected.
 
         # Reserve status space before the expandable work area.
         status = ttk.Frame(self, padding=(16, 6, 16, 12))
@@ -254,8 +240,6 @@ class Studio(tk.Tk):
         new_state = (snapshot.state, snapshot.name, snapshot.address, snapshot.detail)
         if new_state != self._u1_last_status:
             self._u1_last_status = new_state
-            color = ("#147b3b" if snapshot.connected else
-                     "#9a6300" if snapshot.state == "CONNECTING" else "#bc2525")
             self.u1_state_var.set(
                 f"CONNECTED — READY ({snapshot.name})" if snapshot.connected
                 else "BLUETOOTH — CONNECTING..." if snapshot.state == "CONNECTING"
@@ -263,9 +247,7 @@ class Studio(tk.Tk):
                 else "BLUETOOTH — CONNECTION FAILED" if snapshot.state == "FAILED"
                 else "BLUETOOTH — NOT CONNECTED")
             self.u1_detail_var.set(snapshot.detail)
-            self.u1_connection_label.configure(foreground=color)
-            self.u1_disconnect_btn.configure(
-                state="normal" if snapshot.connected else "disabled")
+            self._render_connection_status()
         # Re-arm one timer only. Manual refresh after Connect must not create
         # a second independent polling loop.
         if self._u1_poll_after is not None:
@@ -651,26 +633,54 @@ class Studio(tk.Tk):
             recovery + "\nTechnical details:\n" + summary,
             parent=self)
 
-    def _set_connection(self, state: str, detail: str) -> None:
-        """High-contrast status independent of the general activity log.
+    def _render_connection_status(self):
+        """Display exactly one red/green connection state and device name.
 
-        A successful probe is a completed handshake, not an always-open
-        USB connection. Live READY only occurs after capture receiver ACK.
+        Bluetooth readiness is live and verified. USB readiness represents
+        the most recent successful handshake (USB probing closes afterward),
+        as it did in previous versions. Do not show a red USB warning while
+        a verified U1 BLE connection is active.
         """
-        colors = {
-            "not-connected": ("NOT CONNECTED", "#bc2525"),
-            "detected": ("USB DETECTED — CONNECT TO VERIFY", "#9a6300"),
-            "connecting": ("CONNECTING...", "#9a6300"),
-            "ready": ("READY — CONNECTION VERIFIED", "#147b3b"),
-            "armed": ("READY — PRESS A BUTTON NOW", "#147b3b"),
-            "captured": ("CAPTURE COMPLETE", "#147b3b"),
-            "failed": ("CONNECTION FAILED — RETRY", "#bc2525"),
-            "capture-failed": ("CAPTURE FAILED — RETRY", "#bc2525"),
-        }
-        title, color = colors[state]
-        self.connection_state_var.set(title)
-        self.connection_detail_var.set(detail)
+        snap = self.u1_session.snapshot()
+        usb_ready = (
+            self.connected_model is not None and
+            self._usb_connection_state in ("ready", "armed", "captured")
+        )
+        if snap.connected:
+            label = f"CONNECTED — SofaBaton U1 ({snap.name})"
+            color = "#147b3b"
+        elif self._usb_connection_state == "armed" and self.running:
+            # A USB capture receiver can be actively armed even when the
+            # user skipped a separate pre-capture probe.
+            label = f"CONNECTED — {self.connected_model or 'USB IR learner'}"
+            color = "#147b3b"
+        elif usb_ready:
+            label = f"CONNECTED — {self.connected_model}"
+            color = "#147b3b"
+        elif snap.state == "CONNECTING" or self._usb_connection_state == "connecting":
+            label = "CONNECTING..."
+            color = "#9a6300"
+        else:
+            label = "NOT CONNECTED"
+            color = "#bc2525"
+
+        self.connection_state_var.set(label)
         self.connection_heading.configure(foreground=color)
+        # Disconnect is relevant only when there is a real active U1 session.
+        if snap.connected:
+            self.u1_disconnect_btn.configure(state="normal")
+            if not self.u1_disconnect_btn.winfo_manager():
+                self.u1_disconnect_btn.pack(side="right")
+        else:
+            self.u1_disconnect_btn.configure(state="disabled")
+            if self.u1_disconnect_btn.winfo_manager():
+                self.u1_disconnect_btn.pack_forget()
+
+    def _set_connection(self, state: str, detail: str) -> None:
+        """Track USB receiver verification without competing status banners."""
+        self._usb_connection_state = state
+        self._usb_connection_detail = detail
+        self._render_connection_status()
 
     def _receiver_changed(self, event=None) -> None:
         """Changing receiver invalidates any previous handshake result."""
