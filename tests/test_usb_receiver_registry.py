@@ -101,7 +101,7 @@ class OcrustarLearningTests(unittest.TestCase):
         self.assertEqual(bus.writes, [b"\xfc" * 4])
 
     def test_stop_attempted_for_incomplete_waveform(self):
-        malformed = b"\x01" * 12
+        malformed = b"\x00" * 12
         bus = SimulatedBulk([self.ident, b"\xfe" * 4 +
                 len(malformed).to_bytes(2, "big") + malformed[:6],
                 malformed[6:]])
