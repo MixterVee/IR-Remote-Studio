@@ -1,4 +1,4 @@
-IR Remote Studio 0.2.2-beta — Windows 11 x64
+IR Remote Studio 0.2.3-beta — Windows 11 x64
 ================================================
 
 FIRST STANDALONE LEARNER TEST
@@ -7,7 +7,7 @@ This beta adds direct USB learning WITHOUT requiring Concordance for
 supported Harmony 300/350 and an experimental Ocrustar/ElkSmart dongle
 adapter. Previous Windows features and the Concordance backend remain.
 
-1. Download the v0.2.2-beta Windows x64 ZIP from GitHub Actions.
+1. Download the v0.2.3-beta Windows x64 ZIP from GitHub Actions.
 2. Extract the files and launch IR-Remote-Studio.exe.
 3. Connect ONE supported USB IR learning device.
 4. From "IR learning hardware", choose one of:
@@ -15,14 +15,23 @@ adapter. Previous Windows features and the Concordance backend remain.
    • Harmony 300/350 — standalone HID
    • Ocrustar / ElkSmart — USB bulk (experimental)
    • Concordance — legacy DLL
-5. Use "Detect attached learner" to list supported USB IDs. It does
-   not send any configuration or learning commands.
-6. Choose "Check Harmony IR learner" (in this beta, this button checks
-   the selected USB IR learner, including Ocrustar). This performs only
-   the selected adapter's handshake, NOT an IR capture.
+5. In the prominent IR LEARNER CONNECTION panel, click "Refresh USB"
+   to detect supported device IDs WITHOUT sending any commands.
+   RED NOT CONNECTED means detection/verification has not succeeded.
+   AMBER USB DETECTED means the USB identity is recognized, but the
+   actual protocol handshake has NOT been verified yet.
+6. Click "Connect / Retry". GREEN READY — CONNECTION VERIFIED means
+   the selected learner's protocol handshake has succeeded.
+   This verification USB session then closes normally; it does not
+   maintain a permanently open connection. If the handshake fails,
+   RED CONNECTION FAILED — RETRY appears with reconnection guidance.
+   Unplug/reconnect the remote and try again if Windows is inconsistent.
 7. Select/create a device and button; choose "Capture selected button."
-8. WAIT for READY; point a source remote at your learner, quickly press
-   and release one source button. Valid captures are automatically saved
+8. WAIT for the separate GREEN READY — PRESS A BUTTON NOW indication;
+   this confirms that the receiver is actually armed. Point a source
+   remote at the learner, press and release one button. When the
+   capture finishes, the USB session closes. Valid captures are
+   automatically saved
    to the local app library after successful protocol cleanup.
 9. Click "Save" to confirm and finish learning this button; OR
    click "Save & Learn another" to create and capture another button.
