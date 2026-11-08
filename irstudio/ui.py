@@ -32,6 +32,10 @@ class Studio(tk.Tk):
         self.running = False
         self.connected_model = None
         self.receiver_var = tk.StringVar(value=AUTO)
+        self.connection_state_var = tk.StringVar(value="NOT VERIFIED")
+        self.connection_detail_var = tk.StringVar(
+            value="Connect your Harmony or supported IR learner, then click Connect / Retry.")
+        self._active_operation = 0
         self.aim_var = tk.StringVar(value="Aim the original remote at the Harmony learning receiver, about 5-10 cm away.")
         self.status_var = tk.StringVar(value=f"Library: {self.library_path}")
         self.repeat_var = tk.StringVar(value="0")
@@ -62,7 +66,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.2.2-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.2.3-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -81,10 +85,6 @@ class Studio(tk.Tk):
 
         toolbar = ttk.Frame(self, padding=(16, 10, 16, 10))
         toolbar.pack(fill="x")
-        self.probe_btn = ttk.Button(toolbar, text="Check IR learning device", command=self.probe)
-        self.probe_btn.pack(side="left")
-
-        ttk.Separator(toolbar, orient="vertical").pack(side="left", fill="y", padx=12)
         ttk.Button(toolbar, text="Import IR Capture (.json)", command=self.import_capture).pack(side="left", padx=(0, 6))
         ttk.Button(toolbar, text="Import Device (.irplus)", command=self.import_irplus).pack(side="left")
         ttk.Button(toolbar, text="Export Device (.irplus)", command=self.export_irplus).pack(side="right")
@@ -92,16 +92,34 @@ class Studio(tk.Tk):
         ttk.Combobox(toolbar, textvariable=self.repeat_var, values=("0", "1", "2"),
                      width=4, state="readonly").pack(side="right")
 
-        receiver_strip = ttk.Frame(self, padding=(16, 0, 16, 8))
-        receiver_strip.pack(fill="x")
-        ttk.Label(receiver_strip, text="IR learning hardware:").pack(side="left")
-        receiver_picker = ttk.Combobox(receiver_strip, textvariable=self.receiver_var,
-            values=BACKENDS, state="readonly", width=43)
-        receiver_picker.pack(side="left", padx=(10, 8))
-        ttk.Button(receiver_strip, text="Detect attached learner",
-                   command=self.detect_learner).pack(side="left")
-        ttk.Label(receiver_strip, text="Unknown dongles are never sent commands.",
-                  foreground="#536277").pack(side="left", padx=(12, 0))
+        # Make USB connectivity a first-class workflow, not a toolbar detail.
+        connection = ttk.LabelFrame(self, text="IR LEARNER CONNECTION", padding=(16, 12))
+        connection.pack(fill="x", padx=16, pady=(2, 11))
+        connection_top = ttk.Frame(connection)
+        connection_top.pack(fill="x")
+        ttk.Label(connection_top, text="Receiver:").pack(side="left", padx=(0, 8))
+        self.receiver_picker = ttk.Combobox(
+            connection_top, textvariable=self.receiver_var,
+            values=BACKENDS, state="readonly", width=39)
+        self.receiver_picker.pack(side="left", padx=(0, 12))
+        self.receiver_picker.bind("<<ComboboxSelected>>", self._receiver_changed)
+        self.probe_btn = ttk.Button(
+            connection_top, text="Connect / Retry", command=self.probe)
+        self.probe_btn.pack(side="left", ipadx=18, ipady=7)
+        self.detect_btn = ttk.Button(
+            connection_top, text="Refresh USB", command=self.detect_learner)
+        self.detect_btn.pack(side="left", padx=(10, 0), ipadx=8, ipady=7)
+
+        connection_info = ttk.Frame(connection)
+        connection_info.pack(fill="x", pady=(12, 0))
+        self.connection_heading = ttk.Label(
+            connection_info, textvariable=self.connection_state_var,
+            font=("Segoe UI Semibold", 14), foreground="#a35b00")
+        self.connection_heading.pack(anchor="w")
+        self.connection_description = ttk.Label(
+            connection_info, textvariable=self.connection_detail_var,
+            wraplength=990, justify="left", foreground="#536277")
+        self.connection_description.pack(anchor="w", pady=(4, 0))
 
         # Reserve status space before the expandable work area.
         status = ttk.Frame(self, padding=(16, 6, 16, 12))
