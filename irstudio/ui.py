@@ -152,14 +152,21 @@ class Studio(tk.Tk):
         ttk.Separator(status).pack(fill="x", pady=(0, 7))
         ttk.Label(status, textvariable=self.status_var, wraplength=1080).pack(anchor="w")
 
-        panels = ttk.PanedWindow(self, orient="horizontal")
+        # tk.PanedWindow supports per-pane minimum widths; ttk.PanedWindow
+        # only supports weights and otherwise squeezes a pane to less than
+        # a button's label width at ordinary laptop window sizes.
+        panels = tk.PanedWindow(
+            self, orient="horizontal", sashwidth=4, borderwidth=0,
+            sashrelief="flat", showhandle=False)
         panels.pack(fill="both", expand=True, padx=16, pady=(0, 8))
         left = ttk.Frame(panels, padding=8)
         middle = ttk.Frame(panels, padding=8)
         right = ttk.Frame(panels, padding=8)
-        panels.add(left, weight=2)
-        panels.add(middle, weight=4)
-        panels.add(right, weight=3)
+        # Total minimums (900px) fit within 960px application minimum.
+        # Users can resize columns with the sash but cannot hide controls.
+        panels.add(left, minsize=210, stretch="always")
+        panels.add(middle, minsize=310, stretch="always")
+        panels.add(right, minsize=380, stretch="always")
 
         ttk.Label(left, text="Devices", font=("Segoe UI Semibold", 13)).pack(anchor="w", pady=(0, 8))
         self.device_actions = ttk.Frame(left)
