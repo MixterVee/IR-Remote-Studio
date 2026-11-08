@@ -77,7 +77,8 @@ def decode_first_frame(words: list[int], repeat_at: int) -> tuple[int, list[int]
     first_mark, cycles = words[1], words[2]
     if not 100 <= first_mark <= 20000 or not 1 <= cycles <= 5000:
         raise ValueError("Malformed first carrier burst.")
-    carrier = round(cycles * 1_000_000 / first_mark)
+    # Match Android's integer carrier estimate; avoid Python round() differences.
+    carrier = cycles * 1_000_000 // first_mark
     if not 18000 <= carrier <= 80000:
         raise ValueError("Unsupported IR carrier estimate.")
     timings: list[int] = []
