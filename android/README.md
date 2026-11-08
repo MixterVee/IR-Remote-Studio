@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.11-alpha
+# IR Remote Studio for Android — v0.1.12-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -196,8 +196,9 @@ Hardware testing of 0.1.9 demonstrated a 289-byte file descriptor response to
 byte count. Review against Concordance `CRemoteMH::ReadFile` identified a
 bad local file-transfer sequence (previously read=03, ACK=04, close=05).
 
-Version 0.1.10 uses the Concordance identity-file sequence read=00, ACK=01,
-and transient sequence close=02. It logs actual OUT and IN transfer byte
+Version 0.1.10 incorrectly used read=00, ACK=01 and close=02 for
+/sys/sysinfo. This was corrected in v0.1.12-alpha: Concordance's GetIdentity
+calls ReadFile with start_seq=0x03 (read=03, ACK=04, close=05). It logs actual OUT and IN transfer byte
 counts, accepts bounded short control and data replies (HID max packet size
 remains 64), and validates each data packet length before reading its payload.
 
@@ -221,3 +222,20 @@ There is **no automatic retry** and no extra Harmony command. On an
 incomplete first reply, the identity-file read is skipped and the USB
 interface is released. For a repeat test, unplug and reconnect the Harmony
 USB cable, leave batteries installed, then run the identity diagnostic once.
+
+
+## Correct /sys/sysinfo file-transfer sequence — v0.1.12-alpha
+
+**Correction to v0.1.10:** The MH file transfer does not universally start
+at sequence zero. In `CRemoteMH::GetIdentity`, Concordance passes
+`start_seq=0x03` to `ReadFile("/sys/sysinfo", ...)`. That function
+increments the sequence for the read request, ACK, and transfer close:
+**03 → 04 → 05**. v0.1.10-alpha erroneously changed those values to
+00 → 01 → 02; this version restores the correct identity-read sequence
+and updates the unit tests.
+
+The stage-one USB timeout reported on v0.1.11 happened **before** this
+file-transfer step. v0.1.12 retains v0.1.11's six-second, no-retry MH
+handshake diagnostic. For a power-cycle, disconnect USB, remove batteries
+briefly, reinstall batteries, reconnect USB and run the identity test once.
+No firmware resets, configuration writes, or IR-learning commands are issued.
