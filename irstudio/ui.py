@@ -650,7 +650,7 @@ class Studio(tk.Tk):
             label = f"CONNECTED — SofaBaton U1 ({snap.name})"
             color = "#147b3b"
         elif usb_ready:
-            label = f"CONNECTED — {self.connected_model} (USB)"
+            label = f"CONNECTED — {self.connected_model}"
             color = "#147b3b"
         elif snap.state == "CONNECTING" or self._usb_connection_state == "connecting":
             label = "CONNECTING..."
