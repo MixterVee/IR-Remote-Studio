@@ -266,6 +266,10 @@ class Studio(tk.Tk):
             self.u1_connection_label.configure(foreground=color)
             self.u1_disconnect_btn.configure(
                 state="normal" if snapshot.connected else "disabled")
+        # Re-arm one timer only. Manual refresh after Connect must not create
+        # a second independent polling loop.
+        if self._u1_poll_after is not None:
+            self.after_cancel(self._u1_poll_after)
         self._u1_poll_after = self.after(400, self._refresh_u1_status)
 
     def disconnect_u1(self):
