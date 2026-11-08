@@ -63,7 +63,7 @@ class U1SaveUITests(unittest.TestCase):
         dialog.withdraw()
         try:
             self.assertEqual(dialog.read_button.cget("text"), "Read stored IR (test)")
-            self.assertEqual(dialog.save_capture_button.cget("state"), "disabled")
+            self.assertEqual(str(dialog.save_capture_button.cget("state")), "disabled")
             dialog._devices = [BleEntry(
                 name="SB-synthetic", address="FAKE-U1", rssi=-40,
                 advertised_services=("0000fff0-0000-1000-8000-00805f9b34fb",),
