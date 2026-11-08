@@ -12,6 +12,7 @@ import android.os.SystemClock;
 import java.nio.ByteBuffer;
 import java.util.Locale;
 import java.util.concurrent.TimeoutException;
+import java.util.function.Consumer;
 
 /**
  * Experimental Harmony 300 (C124) MH session handshake.
@@ -337,21 +338,29 @@ public final class HarmonyMhProbe {
     }
 
     public static String run(UsbManager manager, UsbDevice device) {
-        return runInternal(manager, device, false, null);
+        return runInternal(manager, device, false, null, null);
     }
 
-    /** A separate opt-in diagnostic that receives one IR button press. */
+    /** Separate opt-in receiver; only a verified candidate is delivered. */
     public static String runCapture(UsbManager manager, UsbDevice device) {
         return runCapture(manager, device, null);
     }
 
     public static String runCapture(UsbManager manager, UsbDevice device,
                                     Runnable onReceiverReady) {
-        return runInternal(manager, device, true, onReceiverReady);
+        return runCapture(manager, device, onReceiverReady, null);
+    }
+
+    public static String runCapture(UsbManager manager, UsbDevice device,
+                                    Runnable onReceiverReady,
+                                    Consumer<String> onVerifiedCandidate) {
+        return runInternal(manager, device, true, onReceiverReady,
+                onVerifiedCandidate);
     }
 
     private static String runInternal(UsbManager manager, UsbDevice device,
-                                      boolean captureIr, Runnable onReceiverReady) {
+                                      boolean captureIr, Runnable onReceiverReady,
+                                      Consumer<String> onVerifiedCandidate) {
         StringBuilder log = new StringBuilder();
         log.append(captureIr
                 ? "IR Remote Studio — Harmony 300 IR capture diagnostic"
@@ -418,7 +427,7 @@ public final class HarmonyMhProbe {
                 if (exchangeContinuation(conn, in, out, log)) {
                     if (captureIr) {
                         log.append(HarmonyIrCaptureProbe.capture(conn, in, out,
-                                onReceiverReady));
+                                onReceiverReady, onVerifiedCandidate));
                     } else {
                         HarmonySysinfoProbe.readIdentity(conn, in, out, log);
                         log.append("No IR learning or configuration access attempted.\n");
