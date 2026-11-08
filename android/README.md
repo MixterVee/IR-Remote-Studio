@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.16-alpha
+# IR Remote Studio for Android — v0.1.17-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -337,3 +337,29 @@ To test, use a **quick tap and release** on the source remote pointed at
 the Harmony's receiver. Avoid holding the button down. No saved remote,
 flash or firmware is modified; this remains a diagnostic capture, not
 a Pronto Hex export feature.
+
+
+## Duplicate stage-one MH handshake reply — v0.1.17-alpha
+
+A v0.1.16 IR test stopped *before activating the receiver* because
+the response to the documented FF 00 02 session continuation was
+FF FF 81 00 81 (a repeat of the previously seen first-stage response),
+rather than the expected FF 00 82 00 7D.
+
+Version 0.1.17 preserves **all existing USB OUT commands**. Only when
+a complete continuation exchange returns that exact stage-one duplicate,
+the app checks **one additional incoming 64-byte USB report** within the
+original 4-second deadline. It does not resend the command and never
+starts an IR capture unless the extra report matches the known stage-two
+response. Unexpected replies and timeouts still fail closed.
+
+The user interface now displays "Connecting to Harmony..." during the
+MH handshake and shows a prominent READY prompt/Toast *only after* the
+`/ir/ir_cap` receiver ACK succeeds. Tap and release the button on the
+other infrared remote when that READY prompt appears, not before.
+The 10-second window applies to the first IR receive report and is not
+available when the initial MH handshake fails.
+
+No configuration/firmware writes, automatic reprogramming or saving/
+exporting of captured commands. Disconnect the Harmony's USB and briefly
+remove/reinstall batteries if stale replies persist across tests.
