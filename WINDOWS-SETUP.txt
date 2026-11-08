@@ -25,7 +25,7 @@ adapter. Previous Windows features and the Concordance backend remain.
    This verification USB session then closes normally; it does not
    maintain a permanently open connection. If the handshake fails,
    RED CONNECTION FAILED — RETRY appears with reconnection guidance.
-   A connection-failure popup explains unplug/reconnect, trying another\n   USB port, then Refresh USB and Connect / Retry. The original USB\n   error is also shown, with longer diagnostics stored in Logs.
+   A connection-failure popup also reminds you to check batteries\n   in any battery-powered Harmony/source remote, then explains\n   unplug/reconnect, trying another\n   USB port, then Refresh USB and Connect / Retry. The original USB\n   error is also shown, with longer diagnostics stored in Logs.
 7. Select/create a device and button; choose "Capture selected button."
 8. WAIT for the separate GREEN READY — PRESS A BUTTON NOW indication;
    this confirms that the receiver is actually armed. Point a source
