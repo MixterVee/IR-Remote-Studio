@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.1.15-alpha
+# IR Remote Studio for Android — v0.1.16-alpha
 
 An **experimental, unsigned-for-production / debug-signed** Android companion
 for IR Remote Studio Windows. This is the first test application, **not** a
@@ -308,3 +308,32 @@ The start, ACK, STOP and CLOSE packets remain unchanged; STOP/CLOSE are always
 attempted after opening the transient IR receive session. As before,
 no captured command is saved, replayed, exported or sent to the Harmony's
 persistent storage.
+
+
+## First repeat boundary and verified IR session close — v0.1.16-alpha
+
+The v0.1.15-alpha hardware trace captured 128/128 IR reports in ~2.3
+seconds, yielding 257 raw timing words at about **38,192 Hz**. The raw
+timing output includes repeated header patterns `4006, 7995` preceded
+by ~8,800 microsecond gaps. This suggests repeated copies of a button
+transmission, possibly because the source remote's button remained held.
+
+The IR receive diagnostic now uses a **conservative repeat-frame hint**:
+it identifies the first reappearance of the leading header burst/period
+after a long gap and stops gathering raw timing words at that boundary.
+This is not proof of a complete signal and is never automatically saved
+as a reusable IR command. If no repeat boundary appears, the 128-report
+and 15-second limits still apply.
+
+The cleanup now separately sends zero-padded 64-byte STOP and CLOSE OUT
+commands and performs bounded IN draining for each. IR data reports
+(`90 ..`) no longer count as STOP acknowledgement, and the IR end marker
+(`F0 ..`) no longer counts as a verified CLOSE reply. The app looks for
+the end marker after STOP and for the expected `FF 07 83 ..` reply
+after CLOSE, logging how many stale packets were discarded. Both cleanup
+phases have finite time/report limits.
+
+To test, use a **quick tap and release** on the source remote pointed at
+the Harmony's receiver. Avoid holding the button down. No saved remote,
+flash or firmware is modified; this remains a diagnostic capture, not
+a Pronto Hex export feature.
