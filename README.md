@@ -374,3 +374,27 @@ library. Cancel, failed backup, and invalid reply never send start.
 **Important:** The tested protocol slot range 1–8 is an application
 restriction, not a documented limit of the U1 or a known 1:1 mapping
 to physical buttons. Real-hardware validation remains outstanding.
+
+### Windows v0.3.9-beta: verified v0.3.3 backend, main-screen capture
+
+On Nov 9, a fresh physical U1 test of Windows v0.3.3 **learned four
+IR commands**, exported an `.irplus` remote and verified the commands
+worked in IRplus. This demonstrates the original U1 capture pathway
+still functions with the user's current remote.
+
+Unlike attempted v0.3.4–v0.3.8 revisions, v0.3.9 **branches directly
+from v0.3.3** and preserves both the original U1 BLE session and the
+original connection dialog `_run` task-scheduling path. The dialog
+runs withdrawn (not visible) during learning, allowing the user to
+select any device/button and **Capture directly from the main screen**.
+The old LEARN 8 typed-confirmation UI is removed entirely. A completed,
+validated capture autosaves to the original selected library button
+and can be exported to IRplus. Explicit USB selection still uses USB.
+
+The preflight reads and backs up the previous slot-8 waveform as before;
+the stored U1 profile cannot be restored from it. No speculative
+0x14/0x07/0x08 configuration commands or altered BLE parsers were
+added. Automated tests exercise the original task route and main
+library autosave. Physical U1 validation of the *new UI flow* remains
+required; success with the same backend in v0.3.3 is not proof of
+success in v0.3.9.
