@@ -349,15 +349,78 @@ class U1SaveUITests(unittest.TestCase):
 
     def test_ble_main_capture_saves_to_original_selected_button(self):
         device, button = self.prepare_button()
-        # Complete with a validated signal exactly like v0.3.3 produced.
+        # The same valid, non-NEC raw IR waveform v0.3.3 can capture.
         ir = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
         self.app.running = True
-        self.app._finish_ble_main(
-            device["id"], button["id"], (ir, "U1-Learn-Backups/old.json"))
+        with patch("irstudio.ui.core.load_library",
+                   return_value=self.app.library), \
+             patch.object(self.app, "after") as later:
+            self.app._finish_ble_main(
+                device["id"], button["id"], (ir, "U1-Learn-Backups/old.json"))
+            later.assert_called_once()
         self.assertFalse(self.app.running)
         self.assertEqual(len(button["captures"]), 1)
         self.assertEqual(button["captures"][0]["carrier_hz"], 38095)
+        self.assertIn("AUTO-SAVED", self.app.status_var.get())
+        self.assertEqual(self.app.button_tree.item(button["id"], "values")[3],
+                         "Raw IR (saved)")
         self.save_mock.assert_called()
+
+    def test_auto_save_is_read_back_from_disk_before_success_prompt(self):
+        import tempfile
+        from pathlib import Path
+        from irstudio.core import load_library as real_load_library
+        from irstudio.core import save_library as real_save_library
+        device, button = self.prepare_button()
+        ir = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.app.library_path = Path(tmp) / "library.json"
+            self.app.running = True
+            with patch("irstudio.ui.core.save_library",
+                       side_effect=real_save_library), \
+                 patch("irstudio.ui.core.load_library",
+                       side_effect=real_load_library), \
+                 patch.object(self.app, "after") as prompt:
+                self.app._finish_ble_main(
+                    device["id"], button["id"], (ir, "backup.json"))
+                prompt.assert_called_once()
+            saved = real_load_library(self.app.library_path)
+            codes = saved["devices"][0]["buttons"][0]["captures"]
+            self.assertEqual(len(codes), 1)
+            self.assertEqual(codes[0]["carrier_hz"], 38095)
+            self.assertEqual(codes[0]["timings_us"], ir.timings_us)
+            self.assertIn("AUTO-SAVED", self.app.status_var.get())
+
+    def test_failed_save_rolls_back_without_success_prompt(self):
+        device, button = self.prepare_button()
+        ir = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
+        self.save_mock.side_effect = OSError("Disk full")
+        self.app.running = True
+        with patch.object(self.app, "after") as prompt, \
+             patch("irstudio.ui.messagebox.showerror") as error:
+            self.app._finish_ble_main(
+                device["id"], button["id"], (ir, "backup.json"))
+            prompt.assert_not_called()
+            error.assert_called_once()
+        self.assertEqual(button["captures"], [])
+        self.assertIn("saving it failed", self.app.status_var.get())
+
+    def test_success_prompt_another_or_finish_does_not_auto_rearm(self):
+        device, button = self.prepare_button()
+        with patch("irstudio.ui.messagebox.askyesno", return_value=False) as ask, \
+             patch.object(self.app, "learn_another") as next_capture, \
+             patch.object(self.app, "after") as schedule:
+            self.app._after_successful_ble_capture(
+                device["id"], button["id"], 2)
+            ask.assert_called_once()
+            schedule.assert_not_called()
+            next_capture.assert_not_called()
+            self.assertIn("Learning finished", self.app.status_var.get())
+        with patch("irstudio.ui.messagebox.askyesno", return_value=True), \
+             patch.object(self.app, "after") as schedule:
+            self.app._after_successful_ble_capture(
+                device["id"], button["id"], 2)
+            schedule.assert_called_once_with(0, self.app.learn_another)
 
     def test_u1_reader_action_prompts_before_queries(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
