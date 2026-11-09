@@ -5,6 +5,9 @@ import unittest
 from unittest.mock import patch
 
 from irstudio import core
+# Save the unmocked functions before setUp patches the shared core module.
+from irstudio.core import load_library as real_load_library
+from irstudio.core import save_library as real_save_library
 from irstudio.sofabaton_u1_read import IrRead
 from irstudio.sofabaton_ble import BleEntry
 
@@ -369,8 +372,6 @@ class U1SaveUITests(unittest.TestCase):
     def test_auto_save_is_read_back_from_disk_before_success_prompt(self):
         import tempfile
         from pathlib import Path
-        from irstudio.core import load_library as real_load_library
-        from irstudio.core import save_library as real_save_library
         device, button = self.prepare_button()
         ir = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
         with tempfile.TemporaryDirectory() as tmp:
