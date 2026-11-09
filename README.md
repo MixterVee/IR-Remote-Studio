@@ -409,3 +409,26 @@ re-importable slot-8 preflight backup, locally autosaved commands,
 main-screen learning and existing finish sequence are retained.
 The backed-up signal **cannot restore internal U1 programming**.
 Live testing on the physical remote is still required for this fix.
+
+### Windows v0.3.6-beta: U1 silent-learning diagnostics
+
+In physical tests the U1 entered **Learning** while the Windows app
+received **zero** learning-related Bluetooth replies. Earlier v0.3.3
+worked twice with the same learn-start payload; it would be premature
+to change the U1's undocumented commands.
+
+v0.3.6 therefore records a diagnostic summary independently of parsed
+IR messages: the FFF1 BLE callback count during the successful
+previous-code preflight read, and the callback count after learn-start,
+plus up to 128 timestamped control command headers and packet lengths.
+If learning fails, a `U1-Learn-Diagnostic-*.txt` report is saved
+beside the timestamped IR backup in
+`Documents/IR Remote Studio/U1-Learn-Backups/`.
+No raw IR waveform or BLE MAC address is included in this report.
+
+The user should aim the original IR remote at the U1 receiver, press and
+release the desired button **while the U1 display says Learning**,
+and share the report if capture still fails. The capture timeout is
+extended to 35 seconds to allow positioning. No undocumented U1
+programming writes were introduced; the prior IR backup still cannot
+restore internal U1 programming.
