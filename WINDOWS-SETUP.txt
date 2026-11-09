@@ -286,3 +286,26 @@ Do not test on a U1 with irreplaceable programming or important keys.
 No signal will be saved to the Windows IR Remote Studio library until
 you choose Advanced → Save to selected button. Save the successful
 capture and verify it in IRPlus on your Android device.
+
+WINDOWS 0.3.4-BETA — SOFABATON LEARNING ON MAIN SCREEN
+------------------------------------------------------
+Connect the U1 once using SofaBaton U1 Bluetooth... (automatic scan
+and connection). Return to main IR Remote Studio, select a device and
+button, and click Capture selected button (SofaBaton U1).
+Wait until READY appears; aim the original remote at the U1 and press
+the chosen source button once. New infrared code is validated AND
+AUTOSAVED to the selected button without reopening the Bluetooth UI.
+Click Save to confirm, Save & Learn another to add/learn another named
+button, or Export Device (.irplus) to test the command on Android.
+
+The old LEARN 8 typed prompt is removed. The app transparently uses
+the known working internal U1 slot-8 command sequence and makes a
+verified local backup FIRST, on every capture, in
+Documents\IR Remote Studio\U1-Learn-Backups\
+If backup creation fails, learning does not start. This preserves the
+previous raw IR code only; it cannot restore the old U1 internal
+button configuration or entire remote profile. This sequence may
+overwrite the U1's slot 8. No firmware/profile configuration writes.
+
+Receiver set to Auto chooses connected U1; explicitly select a USB
+backend in Receiver to capture with Harmony/Ocrustar instead.
