@@ -116,11 +116,73 @@ class LiveLearningProtocolTests(unittest.TestCase):
                          [u1.LEARN_START, u1.LEARN_FINISH])
 
 
+class OfficialAppPreparationTests(unittest.TestCase):
+    """Check exact recorded pre-learning packets, not physical U1 behavior."""
+
+    def test_replays_two_acknowledged_stages_in_order(self):
+        class Fake:
+            is_connected = True
+
+            def __init__(self, q):
+                self.q = q
+                self.writes = []
+
+            async def write_gatt_char(self, uuid, data, response=False):
+                self.writes.append(bytes(data))
+                if data == u1.LEARN_PREP_ENTER or data == u1.LEARN_PREP_FRAGMENTS[-1]:
+                    self.q.put_nowait(u1.encode_frame(u1.LEARN_ACK, b"\x00"))
+
+        async def run():
+            q = asyncio.Queue()
+            client = Fake(q)
+            await u1.prepare_connected_u1_learning(client, q)
+            return client.writes
+        packets = asyncio.run(run())
+        self.assertEqual([packet.hex() for packet in packets], [
+            "a55a001413",
+            "a55a0f0701000101000300080108050000001748",
+            "a55a0f07010002a55a0100000072656d6f7465a4",
+            "a55a050701000300bdcc",
+        ])
+        self.assertNotIn(u1.LEARN_START, [u1.decode_frame(p)[0] for p in packets])
+        self.assertNotIn(0x08, [u1.decode_frame(p)[0] for p in packets])
+
+    def test_rejects_nonzero_ack_without_arming_ir(self):
+        class Reject:
+            is_connected = True
+
+            def __init__(self, q):
+                self.q = q
+                self.writes = []
+
+            async def write_gatt_char(self, uuid, data, response=False):
+                self.writes.append(bytes(data))
+                self.q.put_nowait(u1.encode_frame(u1.LEARN_ACK, b"\x01"))
+
+        async def run():
+            q = asyncio.Queue()
+            client = Reject(q)
+            with self.assertRaisesRegex(u1.U1ReadError, "non-success"):
+                await u1.prepare_connected_u1_learning(client, q)
+            return client.writes
+        writes = asyncio.run(run())
+        self.assertEqual(writes, [u1.LEARN_PREP_ENTER])
+
+
 class MockConnected:
     is_connected = True
 
 
 class PreflightBackupTests(unittest.TestCase):
+    def setUp(self):
+        # Isolate the on-device preparation from filesystem/backup tests.
+        # Real preparation packets are tested separately above.
+        patcher = patch(
+            "irstudio.sofabaton_u1_session.protocol.prepare_connected_u1_learning",
+            new_callable=AsyncMock)
+        self.preparation = patcher.start()
+        self.addCleanup(patcher.stop)
+
     async def _try(self, tmpdir):
         session = U1Session()
         session._busy = asyncio.Lock()
