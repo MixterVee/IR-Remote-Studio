@@ -238,33 +238,55 @@ class U1Session:
                 os.fsync(stream.fileno())
             # Test the just-written backup is importable before arming U1.
             core.import_capture_json(path)
-            notifications_before_learn = self._rx_counter()
+            # The official app sends 0x14 and 0x07 (three fragments)
+            # before 0x04. This may modify U1 configuration metadata.
+            # NEVER send these commands until the exact slot IR signal is
+            # durably backed up and verified above.
+            notifications_before_setup = self._rx_counter()
+            setup_notifications = 0
+            setup_events = []
+            notifications_before_learn = None
             try:
+                await protocol.prepare_connected_u1_learning(client, inbox)
+                setup_notifications, setup_events = self._rx_report(
+                    notifications_before_setup)
+                notifications_before_learn = self._rx_counter()
                 learned = await protocol.experimental_learn_connected_ir(
                     client, inbox, slot=8, timeout=35, on_ready=on_ready)
             except Exception as exc:
-                count, events = self._rx_report(notifications_before_learn)
+                if notifications_before_learn is None:
+                    # Preparation failed; U1 capture was never armed.
+                    setup_notifications, setup_events = self._rx_report(
+                        notifications_before_setup)
+                    count, events = 0, []
+                    phase = "preparation"
+                else:
+                    count, events = self._rx_report(notifications_before_learn)
+                    phase = "capture"
                 diagnostic_path = folder / f"U1-Learn-Diagnostic-{stamp}.txt"
                 diagnostics = [
-                    "IR Remote Studio v0.3.6 — U1 receive diagnostics",
-                    "No remote configuration/firmware changes requested.",
+                    "IR Remote Studio v0.3.7 — U1 learning diagnostics",
+                    "Official-app PRE-learn 0x14/0x07 setup is experimental.",
+                    "0x07 may alter remote profile metadata; no 0x08 sent.",
                     f"Backup (preserves IR waveform ONLY): {path}",
                     f"U1 connected at failure: {bool(client.is_connected)}",
+                    f"Failed phase: {phase}",
                     f"BLE notifications during previous-slot read: {preflight_notifications}",
                     "Preflight reply headers: " + (
-                        ", ".join(event["command"] for event in preflight_events[:8])
-                        or "none"),
+                        ", ".join(event["command"]
+                                  for event in preflight_events[:8]) or "none"),
+                    f"BLE notifications during preparation: {setup_notifications}",
+                    "Preparation reply headers: " + (
+                        ", ".join(event["command"]
+                                  for event in setup_events[:8]) or "none"),
                     f"BLE notifications after learning start: {count}",
-                    f"Incoming control frame summaries (newest 128 at most):",
-                    *[f"  {event['at']}  {event['command']}  {event['bytes']} bytes"
+                    "Learning replies (up to 128):",
+                    *[f"  {event['at']} {event['command']} {event['bytes']} bytes"
                       for event in events],
                     f"Protocol error: {exc}",
-                    "If BLE notifications after learning start are zero,",
-                    "the app received no FFF1 notifications despite entering Learning mode.",
-                    "No IR signal bytes or device-identifying BLE addresses are included.",
+                    "The backup cannot restore the remote's internal profile.",
+                    "No raw IR data or device-identifying BLE addresses recorded.",
                 ]
-                # Diagnostic recording is best effort: a logging failure must
-                # never hide the original Bluetooth learning failure.
                 try:
                     with diagnostic_path.open("x", encoding="utf-8") as stream:
                         stream.write("\n".join(diagnostics) + "\n")
@@ -272,17 +294,18 @@ class U1Session:
                 except OSError:
                     note = "Could not write the diagnostic report."
                 raise RuntimeError(
-                    f"Learning failed: {exc} "
-                    f"BLE preflight notifications: {preflight_notifications}; "
-                    f"learning notifications: {count}. {note} "
-                    f"Previous U1 IR backed up to {path}; this cannot "
-                    "restore the U1's own programmed slot.") from exc
+                    f"Learning failed during {phase}: {exc} "
+                    f"BLE preflight: {preflight_notifications}; "
+                    f"preparation: {setup_notifications}; "
+                    f"learning: {count}. {note} "
+                    f"Previous U1 IR saved to {path}; this cannot restore "
+                    "the U1's internal programming or profile.") from exc
             return learned, str(path)
 
     def learn_ir_experimental(self, backup_folder, on_ready=None):
         """User-initiated U1 live learning with mandatory local preflight backup."""
         return self._submit(self._learn_async(
-            backup_folder, on_ready=on_ready)).result(timeout=65)
+            backup_folder, on_ready=on_ready)).result(timeout=85)
 
     async def _disconnect_async(self):
         async with self._busy:
