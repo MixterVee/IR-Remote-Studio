@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, simpledialog, ttk
+from tkinter import filedialog, messagebox, ttk
 
 from irstudio import sofabaton_ble as ble
 from irstudio import sofabaton_u1_read as u1
@@ -112,12 +112,11 @@ class SofaBatonBleDialog(tk.Toplevel):
         self.save_capture_button.pack(
             side="left", padx=(10, 0), ipadx=7, ipady=4)
 
-        # Opt-in test is separate from the normal, not-yet-validated Learn IR.
-        # It can overwrite the U1's IR slot 8 and must never run on Connect.
+        # Invisible compatibility widget for the original dialog worker.
+        # All learning actions now live on the main Studio screen.
         self.experimental_learn_button = ttk.Button(
-            self.advanced_panel, text="Experimental: learn IR in slot 8 (risk of overwrite)",
-            command=self.learn_ir_experimental, state="disabled")
-        self.experimental_learn_button.pack(fill="x", pady=(0, 8))
+            self.advanced_panel, text="Learn on main screen",
+            state="disabled")
 
         tools_row = ttk.Frame(self.advanced_panel)
         tools_row.pack(fill="x", pady=(0, 5))
@@ -157,8 +156,8 @@ class SofaBatonBleDialog(tk.Toplevel):
             "   window displays green CONNECTED. No extra click needed.\n"
             "4. Advanced: optionally read a stored IR code (slot 1–8), "
             "then Save to selected button in the main library.\n"
-            "5. Advanced offers a FIRST, high-risk experimental live learning "
-            "test for slot 8 only. It may overwrite that U1 slot.\n"
+            "5. Learn IR from the main window. Bluetooth connection and "
+            "pairing stay in this window only.\n"
             "6. The app must read and back up the existing code locally "
             "before sending the observed start/finish commands. It cannot "
             "restore the U1's original programming.\n"
@@ -248,13 +247,12 @@ class SofaBatonBleDialog(tk.Toplevel):
             state="normal" if selected and not snap.connected else "disabled")
         self.read_button.configure(
             state="normal" if active_selection else "disabled")
-        self.experimental_learn_button.configure(
-            state="normal" if active_selection else "disabled")
+        self.experimental_learn_button.configure(state="disabled")
         self.save_capture_button.configure(
             state="normal" if self._capture is not None and not self._busy
             else "disabled")
 
-    def _run(self, name, task, complete):
+    def _run(self, name, task, complete, on_error=None):
         if self._busy:
             return
         self._busy = True
@@ -295,6 +293,8 @@ class SofaBatonBleDialog(tk.Toplevel):
                     else:
                         self.status_var.set(name + " failed. See report.")
                     self._append(name + " FAILED: " + error + "\n")
+                    if on_error is not None:
+                        on_error(error)
                 else:
                     complete(result)
             try:
@@ -449,61 +449,54 @@ class SofaBatonBleDialog(tk.Toplevel):
         self._run("Disconnecting U1",
                   self.master.u1_session.disconnect, complete)
 
-    def learn_ir_experimental(self):
-        """Explicit high-risk live IR test; backs up existing slot before arming."""
-        selection = self.device_list.curselection()
-        if not selection or self._busy:
+    def start_main_capture(self, on_complete, on_error):
+        """Run the exact v0.3.3 dialog worker, but report to main Studio.
+
+        Preserve the original connection, notify, preflight backup, and
+        learning implementation, including its thread scheduling.
+        No LEARN 8 prompt and no Bluetooth protocol changes.
+        """
+        if self._busy:
+            on_error("Bluetooth learning is already running.")
             return
-        device = self._devices[selection[0]]
         snap = self.master.u1_session.snapshot()
-        if not snap.connected or snap.address != device.address:
-            self.status_var.set("Connect your verified U1 first.")
+        if not snap.connected:
+            on_error("Connect your verified SofaBaton U1 first.")
             return
-        if not messagebox.askokcancel(
-            "Experimental SofaBaton U1 learning — slot 8",
-            "This is the FIRST live learning test in IR Remote Studio.\n\n"
-            "The official SofaBaton app's captured Bluetooth commands suggest "
-            "slot 8 can learn a signal, but this has NOT been hardware tested.\n\n"
-            "WARNING: learning may overwrite whatever the U1 currently "
-            "stores in slot 8, potentially affecting a physical remote key.\n\n"
-            "IR Remote Studio will first READ and BACK UP the current IR "
-            "code to a local JSON file. It CANNOT write that original "
-            "programming back into the SofaBaton remote.\n\n"
-            "Proceed only if you accept this possible permanent change?",
-            icon="warning", parent=self):
-            return
-        response = simpledialog.askstring(
-            "Confirm risk to U1 slot 8",
-            "To authorize the test, type LEARN 8.\n"
-            "If slot 8 is important to your setup, CANCEL.",
-            parent=self)
-        if response != "LEARN 8":
-            self.status_var.set("Experimental learning cancelled; nothing sent.")
+        selection = self.device_list.curselection()
+        if not selection or self._devices[selection[0]].address != snap.address:
+            on_error("The selected U1 is not the active Bluetooth connection.")
             return
         self._capture = None
         self.save_capture_button.configure(state="disabled")
         self._append(
-            "EXPERIMENT: Backing up U1 slot 8 before sending the recorded "
-            "learning-start inquiry. Prepare the original IR remote nearby.\n")
+            "Reading and backing up U1 slot 8, then using the original "
+            "v0.3.3 learning routine.\n")
         self.status_var.set(
-            "Backing up U1 slot 8; then aim original remote at U1 "
-            "and press the button when it enters learning mode...")
+            "When SofaBaton enters Learning, aim the original IR remote "
+            "and press and release the command.")
 
         def complete(pair):
-            capture, backup = pair
-            self._capture = capture
-            self._select_device()
-            self._append(
-                f"EXPERIMENT captured {len(capture.timings_us)} timings at "
-                f"{capture.carrier_hz:,} Hz. Saved PREVIOUS code to: {backup}\n")
-            self.status_var.set(
-                f"New signal validated ({capture.carrier_hz:,} Hz). "
-                "To add it to IR Remote Studio, select the desired "
-                "device/button in the main window and choose "
-                "Advanced → Save to selected button.")
-        self._run("Experimental learning — slot 8",
-                  lambda: self.master.u1_session.learn_ir_experimental(
-                      self.master.folder), complete)
+            try:
+                self._capture = pair[0]
+                on_complete(pair)
+            finally:
+                self.destroy()
+
+        def failed(error):
+            try:
+                on_error(error)
+            finally:
+                self.destroy()
+
+        self._run("SofaBaton learning", lambda:
+                  self.master.u1_session.learn_ir_experimental(
+                      self.master.folder), complete, on_error=failed)
+
+    def learn_ir_experimental(self):
+        """Legacy method retained, main UI owns the learning operation."""
+        self.master.status_var.set(
+            "Select a device and button, then click Capture on the main screen.")
 
     def read_ir(self):
         """Opt-in query of IR already stored in the selected U1 slot."""
