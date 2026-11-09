@@ -406,22 +406,81 @@ class U1SaveUITests(unittest.TestCase):
         self.assertEqual(button["captures"], [])
         self.assertIn("saving it failed", self.app.status_var.get())
 
-    def test_success_prompt_another_or_finish_does_not_auto_rearm(self):
+    def test_autosave_followup_offers_new_existing_finish(self):
+        from tkinter import ttk
         device, button = self.prepare_button()
-        with patch("irstudio.ui.messagebox.askyesno", return_value=False) as ask, \
-             patch.object(self.app, "learn_another") as next_capture, \
-             patch.object(self.app, "after") as schedule:
-            self.app._after_successful_ble_capture(
-                device["id"], button["id"], 2)
-            ask.assert_called_once()
-            schedule.assert_not_called()
-            next_capture.assert_not_called()
-            self.assertIn("Learning finished", self.app.status_var.get())
-        with patch("irstudio.ui.messagebox.askyesno", return_value=True), \
-             patch.object(self.app, "after") as schedule:
-            self.app._after_successful_ble_capture(
-                device["id"], button["id"], 2)
-            schedule.assert_called_once_with(0, self.app.learn_another)
+        older = core.new_button("Previous button")
+        device["buttons"].append(older)
+        self.app._reload_buttons(button["id"])
+        dialog = self.app._after_successful_ble_capture(
+            device["id"], button["id"], 2)
+        self.assertTrue(dialog.winfo_exists())
+        self.assertEqual(dialog.title(), "IR command auto-saved")
+        widgets = []
+        def walk(parent):
+            for child in parent.winfo_children():
+                widgets.append(child)
+                walk(child)
+        walk(dialog)
+        labels = [x.cget("text") for x in widgets
+                  if isinstance(x, ttk.Button)]
+        self.assertEqual(labels, [
+            "Learn selected existing", "New button", "Finish"])
+        combo = next(x for x in widgets if isinstance(x, ttk.Combobox))
+        self.assertEqual(tuple(combo["values"]),
+                         ("1. Power", "2. Previous button"))
+        self.assertEqual(combo.current(), 0)
+        combo.current(1)
+        with patch.object(self.app, "after") as schedule, \
+             patch.object(self.app, "capture") as do_capture:
+            next_existing = next(
+                x for x in widgets if isinstance(x, ttk.Button)
+                and x.cget("text") == "Learn selected existing")
+            next_existing.invoke()
+            self.assertFalse(dialog.winfo_exists())
+            self.assertEqual(self.app.active_button, older["id"])
+            self.assertEqual(len(device["buttons"]), 2)
+            schedule.assert_called_once_with(0, self.app.capture)
+            do_capture.assert_not_called()
+        self.assertIn("Previous button", self.app.status_var.get())
+
+    def test_new_button_choice_still_uses_existing_name_prompt(self):
+        from tkinter import ttk
+        device, button = self.prepare_button()
+        dialog = self.app._after_successful_ble_capture(
+            device["id"], button["id"], 2)
+        with patch.object(self.app, "after") as scheduled:
+            def find_action(parent):
+                for child in parent.winfo_children():
+                    if (isinstance(child, ttk.Button)
+                            and child.cget("text") == "New button"):
+                        return child
+                    found = find_action(child)
+                    if found:
+                        return found
+            find_action(dialog).invoke()
+            scheduled.assert_called_once_with(0, self.app.learn_another)
+        self.assertFalse(dialog.winfo_exists())
+        self.assertEqual(len(device["buttons"]), 1)
+
+    def test_finish_choice_does_not_start_capture(self):
+        from tkinter import ttk
+        device, button = self.prepare_button()
+        dialog = self.app._after_successful_ble_capture(
+            device["id"], button["id"], 2)
+        with patch.object(self.app, "after") as scheduled:
+            def find_action(parent):
+                for child in parent.winfo_children():
+                    if (isinstance(child, ttk.Button)
+                            and child.cget("text") == "Finish"):
+                        return child
+                    found = find_action(child)
+                    if found:
+                        return found
+            find_action(dialog).invoke()
+            scheduled.assert_not_called()
+        self.assertFalse(dialog.winfo_exists())
+        self.assertIn("Learning finished", self.app.status_var.get())
 
     def test_clear_mismatched_captures_keeps_button_and_layout(self):
         device, button = self.prepare_button()
