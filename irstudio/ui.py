@@ -76,7 +76,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.3.9-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.3.10-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -224,7 +224,7 @@ class Studio(tk.Tk):
             ("label", "Custom label", 130, 70),
             ("status", "Capture status", 102, 85),
             ("count", "Samples", 61, 52),
-            ("code", "Decoded code", 120, 80),
+            ("code", "IR code / format", 120, 80),
         ):
             self.button_tree.heading(key, text=caption)
             self.button_tree.column(key, width=width, minwidth=minimum,
@@ -394,7 +394,10 @@ class Studio(tk.Tk):
                 match, total = core.match_count(b)
                 cap = core.selected_capture(b)
                 decoded = core.decode_nec(cap["timings_us"]) if cap else None
-                code = decoded["bytes"] if decoded else ("Pronto" if b.get("pronto_hex") else "Not learned")
+                code = (decoded["bytes"] if decoded else
+                        "Raw IR (saved)" if cap else
+                        "Pronto (saved)" if b.get("pronto_hex") else
+                        "Not learned")
                 state = core.capture_status(b)
                 self.button_tree.insert("", "end", iid=b["id"],
                                         values=(b["label"], state,
@@ -443,7 +446,9 @@ class Studio(tk.Tk):
                     lines += [f"Protocol: {decoded['protocol']}", f"Address: {decoded['address']}",
                               f"Command: {decoded['command']}", f"Bytes: {decoded['bytes']}", ""]
                 else:
-                    lines += ["Protocol: unknown (raw timings)", ""]
+                    lines += [
+                        "Protocol: not NEC-decoded (raw IR saved)",
+                        "Ready for export to .irplus", ""]
                 lines.append("Tip: capture a button 2-3 times for confidence.")
             elif button.get("pronto_hex"):
                 lines += ["Imported Pronto Hex code", "Ready for .irplus export", ""]
@@ -957,7 +962,17 @@ class Studio(tk.Tk):
             button["captures"].append(cap)
             button["selected"] = core.best_capture_index(button)
             try:
+                # Saving is automatic. Read the library back from disk so a
+                # visible "Saved" confirmation is only shown for durable data.
                 self._save()
+                disk = core.load_library(self.library_path)
+                disk_device = next((d for d in disk["devices"]
+                                    if d["id"] == device_id), None)
+                disk_button = next((b for b in disk_device["buttons"]
+                                    if b["id"] == button_id), None) if disk_device else None
+                if (disk_button is None or not disk_button["captures"]
+                        or disk_button["captures"][-1] != cap):
+                    raise OSError("The new IR sample is not present in the saved library.")
             except Exception:
                 button["captures"].pop()
                 button["selected"] = previous_selected
@@ -965,14 +980,43 @@ class Studio(tk.Tk):
             if self.active_device == device_id:
                 self._reload_buttons(button_id)
             self.status_var.set(
-                f"Captured and saved '{button['label']}': "
+                f"AUTO-SAVED '{button['label']}' to library.json: "
                 f"{learned.carrier_hz:,} Hz, {len(learned.timings_us)} timings. "
-                f"Ready to learn another button or export .irplus. "
-                f"Previous U1 IR backup: {backup}")
+                f"Ready to export .irplus. Previous U1 IR backup: {backup}")
+            # The original v0.3.3 dialog closes after this completion
+            # callback. Ask on the next UI turn, after it is destroyed.
+            self.after(0, lambda: self._after_successful_ble_capture(
+                device_id, button_id, len(disk_button["captures"])))
         except Exception as exc:
             self.status_var.set("Capture succeeded, but saving it failed.")
             messagebox.showerror("Could not save U1 capture", str(exc),
                                  parent=self)
+
+    def _after_successful_ble_capture(self, device_id, button_id, samples):
+        """Confirm autosave and choose next learning step, without rearming."""
+        device = next((d for d in self.library["devices"]
+                       if d["id"] == device_id), None)
+        button = next((b for b in device["buttons"]
+                       if b["id"] == button_id), None) if device else None
+        if not button:
+            return
+        another = messagebox.askyesno(
+            "IR command auto-saved",
+            f"'{button['label']}' was automatically saved to your IR library.\n"
+            f"Stored captures for this button: {samples}.\n\n"
+            "Learn another NEW button?\n\n"
+            "Yes — Name and learn another button\n"
+            "No — Finish learning (keep SofaBaton connected)",
+            parent=self)
+        if another:
+            # Existing Save & Learn another action creates a named button
+            # before initiating capture; no second capture is started
+            # without the user's explicit choice.
+            self.after(0, self.learn_another)
+        else:
+            self.status_var.set(
+                f"Learning finished. '{button['label']}' was auto-saved "
+                "and is ready for .irplus export. U1 remains connected.")
 
     def _capture_ble_main(self):
         """Use the original v0.3.3 dialog's task runner invisibly.
