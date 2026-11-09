@@ -3,9 +3,9 @@
 The optional Windows OS pairing flag is OFF by default: this U1 has
 already been proven to communicate with Windows without a pair request.
 Normal operations use only observed device-identity (0x01) and stored-code
-inquiry (0x0C). A separately confirmed Advanced experimental learning
-operation additionally sends the observed 0x04 learn start and 0x05
-finish after read/validation and saving a slot-8 backup on disk.
+inquiry (0x0C). Main-window user-initiated U1 learning additionally sends the verified
+0x04 learn start and 0x05 finish after automatically reading and saving
+a slot-8 backup to local disk.
 It may overwrite the U1's slot 8 and cannot restore that programming.
 No unverified profile or firmware configuration commands are sent.
 
@@ -172,7 +172,7 @@ class U1Session:
         """Use the already-connected BLE session; do not disconnect after reading."""
         return self._submit(self._read_async(slot)).result(timeout=25)
 
-    async def _learn_async(self, backup_folder):
+    async def _learn_async(self, backup_folder, on_ready=None):
         """Read/back up slot 8 BEFORE sending the experimental learn command."""
         async with self._busy:
             client, inbox = self._client, self._rx
@@ -209,7 +209,7 @@ class U1Session:
             core.import_capture_json(path)
             try:
                 learned = await protocol.experimental_learn_connected_ir(
-                    client, inbox, slot=8)
+                    client, inbox, slot=8, on_ready=on_ready)
             except Exception as exc:
                 raise RuntimeError(
                     f"Learning failed: {exc}. Previous IR was saved at "
@@ -217,9 +217,10 @@ class U1Session:
                     "programmed slot.") from exc
             return learned, str(path)
 
-    def learn_ir_experimental(self, backup_folder):
-        """Explicit test only, from a user-approved UI action."""
-        return self._submit(self._learn_async(backup_folder)).result(timeout=53)
+    def learn_ir_experimental(self, backup_folder, on_ready=None):
+        """User-initiated U1 live learning with mandatory local preflight backup."""
+        return self._submit(self._learn_async(
+            backup_folder, on_ready=on_ready)).result(timeout=53)
 
     async def _disconnect_async(self):
         async with self._busy:
