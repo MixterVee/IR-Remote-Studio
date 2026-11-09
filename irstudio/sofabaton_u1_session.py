@@ -263,7 +263,7 @@ class U1Session:
                 # never hide the original Bluetooth learning failure.
                 try:
                     with diagnostic_path.open("x", encoding="utf-8") as stream:
-                        stream.write("\\n".join(diagnostics) + "\\n")
+                        stream.write("\n".join(diagnostics) + "\n")
                     note = f"Diagnostics: {diagnostic_path}"
                 except OSError:
                     note = "Could not write the diagnostic report."
