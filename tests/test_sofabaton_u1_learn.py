@@ -241,7 +241,7 @@ class PreflightBackupTests(unittest.TestCase):
                  patch("irstudio.sofabaton_u1_session.protocol.experimental_learn_connected_ir",
                        side_effect=no_reply):
                 with self.assertRaisesRegex(
-                    RuntimeError, "learning notifications: 0"
+                    RuntimeError, "learning: 0"
                 ) as caught:
                     await session._learn_async(root)
             return str(caught.exception)
