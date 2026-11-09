@@ -76,7 +76,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.3.4-beta\n\nDirect learning backends: SofaBaton U1 Bluetooth, Harmony 300/350 USB HID (046D:C124), and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.3.5-beta\n\nDirect learning backends: SofaBaton U1 Bluetooth, Harmony 300/350 USB HID (046D:C124), and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -278,7 +278,7 @@ class Studio(tk.Tk):
             self.capture_btn.configure(text="Capture selected button (SofaBaton U1)")
             self.aim_var.set(
                 "Aim the original remote at the SofaBaton U1. "
-                "When READY appears, press and release the source button.")
+                "When the U1 screen shows Learning, press and release the source button.")
         else:
             self.capture_btn.configure(text="Capture selected button (USB)")
             self.aim_var.set(
@@ -938,8 +938,8 @@ class Studio(tk.Tk):
         if operation_id != self._active_operation or not self.running:
             return
         self.status_var.set(
-            "READY — aim the original remote at the SofaBaton U1 and "
-            "press and release the button NOW!")
+            "LEARNING START SENT — when the SofaBaton screen says Learning, "
+            "aim the original remote at the U1 and press and release the button NOW!")
 
     def _finish_bluetooth_capture(self, device_id, button_id, result, error):
         """Autosave to the originally selected button, never a later selection."""
@@ -1008,7 +1008,7 @@ class Studio(tk.Tk):
             widget.configure(state="disabled")
         self.status_var.set(
             "Reading and backing up the previous U1 IR signal... "
-            "Keep the original remote ready. Wait for READY before pressing.")
+            "Wait until the SofaBaton screen displays Learning before pressing.")
         def job():
             try:
                 result = self.u1_session.learn_ir_experimental(
