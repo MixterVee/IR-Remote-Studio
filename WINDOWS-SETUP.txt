@@ -351,3 +351,21 @@ A verified local backup is still required before entering Learning,
 but it cannot restore the U1's internal programming.
 
 IMPORTANT: No new or speculative U1 programming commands were added.
+
+
+WINDOWS 0.3.8-BETA — RESTORE THE EARLIER WORKING LEARNING PATH
+-------------------------------------------------------------
+After v0.3.7 rejected 0x07 with ACK 02, this build rolls back the
+Bluetooth learning engine to the exact v0.3.3 routine, the version
+that successfully learned two commands on the physical U1.
+No 0x14 / 0x07 / 0x08 configuration or device/profile writes.
+Keep the new main screen and local preflight JSON backup.
+
+Use the main screen's Capture selected button (SofaBaton U1).
+When the U1 screen enters Learning, press and release the button
+on the original IR remote. The app accepts only the original
+v0.3.3 READY -> COMPLETE -> validated waveform notification sequence.
+
+This is a ROLLBACK and RECONNECTION/STATE diagnostic, not a guaranteed
+hardware fix. If this path still shows Learning -> Fail! -> Learning,
+do not repeatedly run it. A backup does NOT restore U1 programming.
