@@ -398,3 +398,28 @@ added. Automated tests exercise the original task route and main
 library autosave. Physical U1 validation of the *new UI flow* remains
 required; success with the same backend in v0.3.3 is not proof of
 success in v0.3.9.
+
+### Windows v0.3.10-beta — disk-verified autosave and mismatch recovery
+
+When the original v0.3.3 U1 backend completes a validated learning
+operation, the main screen atomically saves the IR capture into
+`library.json`, **reads it back and checks the same sample exists**
+before confirming success. It then offers **Learn another NEW button**
+or **Finish learning** (leave U1 connected). A save failure rolls the
+sample back in memory and never displays a success confirmation.
+
+An unrecognized waveform is now marked **Raw IR (saved)** instead of
+the contradictory **Not learned**, because many legitimate captured
+remotes are not NEC-decodable but export as Pronto to IRplus.
+
+For short-press mismatches, **Remove last** undoes the newest sample
+without deleting the button. **Clear captures for selected button...**
+removes all its captured samples with confirmation while preserving
+its label and layout. Then select the same button and capture again.
+Neither correction sends BLE commands to the U1 or changes its
+programming. Both modifications save the library immediately; a failed
+disk save restores the previous list in memory.
+
+The original v0.3.3 U1 BLE session, learning coroutine and original
+dialog worker are unchanged. Physical confirmation on the main-screen
+workflow still matters.
