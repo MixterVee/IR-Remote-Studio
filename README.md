@@ -423,3 +423,19 @@ disk save restores the previous list in memory.
 The original v0.3.3 U1 BLE session, learning coroutine and original
 dialog worker are unchanged. Physical confirmation on the main-screen
 workflow still matters.
+
+### Windows v0.3.11-beta — learn into any existing library button
+
+The successful U1 autosave dialog now has **three explicit choices**:
+**Learn selected existing**, **New button**, and **Finish**.
+A dropdown lists all existing buttons of the just-saved remote,
+defaulting to the button just learned. Choosing an existing button
+selects it on the main screen and uses the same Capture pathway as
+before, adding another sample without creating or deleting its label,
+layout or other samples. To replace old/mismatched samples first, use
+**Clear captures for selected button**.
+
+**New button** uses the existing naming workflow. **Finish** (also
+window Close) ends this learning sequence while keeping U1 connected.
+Only actions chosen by the user can trigger additional learning.
+The known-working v0.3.3 U1 Bluetooth learning engine is unchanged.
