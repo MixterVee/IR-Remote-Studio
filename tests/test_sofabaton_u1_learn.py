@@ -155,6 +155,50 @@ class PreflightBackupTests(unittest.TestCase):
             data = json.loads(Path(backup).read_text(encoding="utf-8"))
             self.assertIn("cannot automatically", data["note"].lower())
 
+    def test_no_live_ble_reply_generates_raw_callback_diagnostic(self):
+        # The preflight read callback can succeed while the U1 sends no
+        # response to the subsequent learn request. Do not invent an ACK.
+        previous = u1.IrRead(
+            8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
+
+        async def scenario(root):
+            session = U1Session()
+            session._busy = asyncio.Lock()
+            session._client = MockConnected()
+            session._rx = asyncio.Queue()
+
+            async def old_read(*args):
+                session._receive(None, u1.encode_frame(u1.LEARN_ACK))
+                return previous
+
+            async def no_reply(*args, **kwargs):
+                raise u1.U1ReadError("BLE replies: none")
+
+            with patch("irstudio.sofabaton_u1_session.protocol.read_connected_ir",
+                       side_effect=old_read), \
+                 patch("irstudio.sofabaton_u1_session.protocol.experimental_learn_connected_ir",
+                       side_effect=no_reply):
+                with self.assertRaisesRegex(
+                    RuntimeError, "learning notifications: 0"
+                ) as caught:
+                    await session._learn_async(root)
+            return str(caught.exception)
+
+        with TemporaryDirectory() as root:
+            msg = asyncio.run(scenario(root))
+            files = list(Path(root).glob(
+                "U1-Learn-Backups/U1-Learn-Diagnostic-*.txt"))
+            self.assertEqual(len(files), 1)
+            report = files[0].read_text(encoding="utf-8")
+            self.assertIn("BLE notifications during previous-slot read: 1",
+                          report)
+            self.assertIn("BLE notifications after learning start: 0",
+                          report)
+            self.assertIn("U1 connected at failure: True", report)
+            self.assertIn("0x03", report)
+            self.assertIn("Diagnostics:", msg)
+            self.assertIn("BLE replies: none", report)
+
     def test_failed_preflight_has_no_learning_write(self):
         async def failed_read(*args):
             raise u1.U1ReadError("unreadable slot 8")
