@@ -330,7 +330,7 @@ class U1SaveUITests(unittest.TestCase):
             capture_ble.assert_called_once_with()
             capture_usb.assert_not_called()
         # Users can still explicitly choose USB if both learners are present.
-        self.app.receiver_var.set("Harmony 300/350 (direct HID)")
+        self.app.receiver_var.set("Harmony 300/350 — standalone HID")
         self.app._receiver_changed()
         self.assertIn("(USB)", self.app.capture_btn.cget("text"))
         with patch.object(self.app, "_capture_bluetooth") as capture_ble, \
