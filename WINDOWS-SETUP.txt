@@ -287,25 +287,66 @@ No signal will be saved to the Windows IR Remote Studio library until
 you choose Advanced → Save to selected button. Save the successful
 capture and verify it in IRPlus on your Android device.
 
-WINDOWS 0.3.4-BETA — SOFABATON LEARNING ON MAIN SCREEN
-------------------------------------------------------
-Connect the U1 once using SofaBaton U1 Bluetooth... (automatic scan
-and connection). Return to main IR Remote Studio, select a device and
-button, and click Capture selected button (SofaBaton U1).
-Wait until READY appears; aim the original remote at the U1 and press
-the chosen source button once. New infrared code is validated AND
-AUTOSAVED to the selected button without reopening the Bluetooth UI.
-Click Save to confirm, Save & Learn another to add/learn another named
-button, or Export Device (.irplus) to test the command on Android.
+WINDOWS v0.3.9-BETA — MINIMAL UI CHANGE FROM VERIFIED v0.3.3
+-----------------------------------------------------------
+On Nov 9, the actual SofaBaton U1 successfully learned FOUR different
+IR commands using Windows v0.3.3. Exported .irplus commands then worked.
 
-The old LEARN 8 typed prompt is removed. The app transparently uses
-the known working internal U1 slot-8 command sequence and makes a
-verified local backup FIRST, on every capture, in
-Documents\IR Remote Studio\U1-Learn-Backups\
-If backup creation fails, learning does not start. This preserves the
-previous raw IR code only; it cannot restore the old U1 internal
-button configuration or entire remote profile. This sequence may
-overwrite the U1's slot 8. No firmware/profile configuration writes.
+This build is deliberately based directly on v0.3.3 (NOT v0.3.4-0.3.8).
+It keeps the original BLE client/session, packet bytes, live-learning
+routine and the original Bluetooth dialog's background _run() worker.
 
-Receiver set to Auto chooses connected U1; explicitly select a USB
-backend in Receiver to capture with Harmony/Ocrustar instead.
+Connect U1 using SofaBaton U1 Bluetooth... then return to main screen.
+Select an existing device and button, then click
+Capture selected button (SofaBaton U1).
+The app quietly uses the v0.3.3 worker; there is no extra Bluetooth
+window or LEARN 8 typed confirmation for normal capture. Wait until the
+U1 screen displays Learning, then transmit the source IR command.
+
+After a successful validated capture, the IR signal autosaves to the
+selected button in the main library. Export the device to .irplus.
+The previous U1 slot-8 IR waveform is backed up before each attempt.
+
+IMPORTANT: The same internal physical slot 8 is still used, and can
+be overwritten. Backup JSON does NOT restore U1 device/profile
+programming. Do not assume physical learning is verified on this new
+UI route until tested. No 0x07/0x08/0x14 configuration commands.
+
+WINDOWS v0.3.10-BETA — AUTOSAVE, CLEAR MISMATCHED CAPTURES
+---------------------------------------------------------
+Uses the original v0.3.3 proven SofaBaton live-learning backend unchanged.
+After learning a new IR command on the main screen, the app saves the
+capture to library.json, reads it back from disk and only then confirms
+IR command auto-saved; asks whether to name/learn a NEW button or
+finish learning (keeps U1 Bluetooth connected).
+
+The IR code/format column now shows "Raw IR (saved)" for unrecognized
+IR protocols, not the misleading "Not learned". Raw IR exports to
+.irplus just fine.
+
+If a short press causes mismatched samples for a button:
+  - "Remove last" removes the latest capture sample only.
+  - "Clear captures for selected button..." removes ALL samples for
+    that button after confirmation, retaining label/position/layout.
+  - Select the existing button and click Capture to learn again.
+These controls change only the Windows library, NEVER U1 programming.
+If saving fails the original capture list is restored.
+
+As before, slot 8 is read and backed up before each live learn;
+that saved waveform cannot restore the U1's device/profile mapping.
+
+WINDOWS v0.3.11-BETA — LEARN AN EXISTING BUTTON AFTER AUTOSAVE
+--------------------------------------------------------------
+After every successful, disk-confirmed U1 learning session the popup now
+offers three explicit actions:
+    Learn selected existing  |  New button  |  Finish
+
+To learn into an existing button, choose its name from the dropdown and
+click Learn selected existing. This uses the SAME v0.3.3 U1 capture
+routine and adds a new sample to that button (does not rename/delete it).
+If you want to replace all earlier samples, use "Clear captures for
+selected button..." on the main screen before Capture.
+
+New button opens the existing name dialog, then begins capture.
+Finish leaves the U1 Bluetooth connection active. The X acts as Finish.
+No new U1 commands, profiles or programming writes have been added.
