@@ -286,3 +286,28 @@ Do not test on a U1 with irreplaceable programming or important keys.
 No signal will be saved to the Windows IR Remote Studio library until
 you choose Advanced → Save to selected button. Save the successful
 capture and verify it in IRPlus on your Android device.
+
+WINDOWS v0.3.9-BETA — MINIMAL UI CHANGE FROM VERIFIED v0.3.3
+-----------------------------------------------------------
+On Nov 9, the actual SofaBaton U1 successfully learned FOUR different
+IR commands using Windows v0.3.3. Exported .irplus commands then worked.
+
+This build is deliberately based directly on v0.3.3 (NOT v0.3.4-0.3.8).
+It keeps the original BLE client/session, packet bytes, live-learning
+routine and the original Bluetooth dialog's background _run() worker.
+
+Connect U1 using SofaBaton U1 Bluetooth... then return to main screen.
+Select an existing device and button, then click
+Capture selected button (SofaBaton U1).
+The app quietly uses the v0.3.3 worker; there is no extra Bluetooth
+window or LEARN 8 typed confirmation for normal capture. Wait until the
+U1 screen displays Learning, then transmit the source IR command.
+
+After a successful validated capture, the IR signal autosaves to the
+selected button in the main library. Export the device to .irplus.
+The previous U1 slot-8 IR waveform is backed up before each attempt.
+
+IMPORTANT: The same internal physical slot 8 is still used, and can
+be overwritten. Backup JSON does NOT restore U1 device/profile
+programming. Do not assume physical learning is verified on this new
+UI route until tested. No 0x07/0x08/0x14 configuration commands.
