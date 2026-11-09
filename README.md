@@ -432,3 +432,24 @@ and share the report if capture still fails. The capture timeout is
 extended to 35 seconds to allow positioning. No undocumented U1
 programming writes were introduced; the prior IR backup still cannot
 restore internal U1 programming.
+
+
+### Windows v0.3.8-beta — v0.3.3 learning engine restored
+
+The user's physical U1 successfully completed two live learning operations
+with the v0.3.3 experimental backend (104 IR durations each: 38,095 and
+38,004 Hz). Versions 0.3.4–0.3.6 rearranged the UI and relaxed the READY
+notification handling but could not complete a capture. v0.3.7 replayed
+a configuration command 0x07 from an older official-app trace and the U1
+rejected it with ACK status 02 before capture could start.
+
+v0.3.8 **restores the exact v0.3.3 learning function, original timeout,
+notification acceptance rules, and 0x04 start/0x05 finish bytes**,
+while retaining the main-screen button workflow and the preflight
+slot-8 raw IR backup and receive diagnostics. No 0x07/0x08/0x14
+configuration requests or other new hardware writes are transmitted.
+
+This is an investigative software rollback, not proof that the U1's
+current internal state is identical to November 8. Do not repeatedly
+retry if the physical remote still displays Fail! The backup saves
+one IR waveform only, not the complete U1 configuration.
