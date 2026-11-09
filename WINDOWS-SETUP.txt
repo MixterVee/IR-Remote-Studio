@@ -331,3 +331,23 @@ If nothing is captured, the error now lists the BLE command replies
 seen during learning. Copy this diagnostic into your bug report.
 The connection stays open and each attempt backs up slot 8 again.
 The backup is local only and cannot restore U1 internal programming.
+
+WINDOWS 0.3.6-BETA — DIAGNOSE SILENT U1 LEARNING
+------------------------------------------------
+When the U1 screen says Learning but Windows receives no BLE response:
+  1. Keep the original IR remote aimed at the receiving end of the U1.
+  2. With the U1 screen still saying Learning, press and release
+     the original remote button (not a button on the U1).
+  3. If no result, read the automatically written diagnostic report in
+     Documents\\IR Remote Studio\\U1-Learn-Backups\\
+     (file U1-Learn-Diagnostic-YYYYMMDD_*.txt).
+
+This report distinguishes BLE notifications received during the existing
+slot 8 preflight READ from those after LEARN START. It contains only
+time, command numbers, packet sizes and error metadata — no captured
+IR waveforms, BLE addresses or sensitive hardware identifiers.
+A failed attempt does not add a partial capture to the library.
+A verified local backup is still required before entering Learning,
+but it cannot restore the U1's internal programming.
+
+IMPORTANT: No new or speculative U1 programming commands were added.
