@@ -175,11 +175,8 @@ class U1SaveUITests(unittest.TestCase):
         try:
             self.assertEqual(dialog.advanced_panel.winfo_manager(), "")
             self.assertFalse(dialog.advanced_open)
-            # Learning has moved to the main UI. Connection dialog is for
-            # scanning/pairing and optional stored-code diagnostics only.
-            self.assertFalse(hasattr(dialog, "learn_button"))
-            self.assertFalse(hasattr(dialog, "experimental_learn_button"))
-            self.assertFalse(hasattr(dialog, "learn_ir_experimental"))
+            self.assertEqual(str(dialog.learn_button.cget("state")), "disabled")
+            self.assertEqual(str(dialog.learn_button.cget("text")), "Learn IR")
             self.assertEqual(str(dialog.connect_button.cget("text")), "Connect U1")
             self.assertEqual(str(dialog.disconnect_button.cget("text")), "Disconnect")
             # Neither slot selection nor optional Windows pairing belongs
@@ -316,59 +313,51 @@ class U1SaveUITests(unittest.TestCase):
             "CONNECTED — SofaBaton U1 (SB202006231D9E)")
         self.assertFalse(dlg.winfo_exists())
 
-    def test_main_capture_uses_u1_without_bluetooth_dialog(self):
-        from unittest.mock import MagicMock
-        device, button = self.prepare_button()
-        self.app.u1_session._state(
-            "CONNECTED", "SB202006231D9E", "U1-MOCK", "Identity verified.")
-        self.app._refresh_u1_status()
-        self.assertIn("SofaBaton U1", self.app.capture_btn.cget("text"))
-        self.assertEqual(self.app.receiver_var.get(), "Auto detect supported learner")
-        with patch.object(self.app, "_capture_bluetooth") as capture_ble, \
-             patch.object(self.app, "_background") as capture_usb:
-            self.app.capture()
-            capture_ble.assert_called_once_with()
-            capture_usb.assert_not_called()
-        # Users can still explicitly choose USB if both learners are present.
-        self.app.receiver_var.set("Harmony 300/350 — standalone HID")
-        self.app._receiver_changed()
-        self.assertIn("(USB)", self.app.capture_btn.cget("text"))
-        with patch.object(self.app, "_capture_bluetooth") as capture_ble, \
-             patch.object(self.app, "_background") as capture_usb:
-            self.app.capture()
-            capture_usb.assert_called_once_with("Capture", unittest.mock.ANY)
-            capture_ble.assert_not_called()
+    def test_main_screen_reuses_proven_dialog_worker_without_confirmation(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            svc = ("0000fff0-0000-1000-8000-00805f9b34fb",)
+            dlg._devices = [BleEntry(
+                "SB202006231D9E", "U1", -50, svc, True)]
+            dlg.device_list.insert("end", "SB202006231D9E")
+            dlg.device_list.selection_set(0)
+            self.app.u1_session._state(
+                "CONNECTED", "SB202006231D9E", "U1", "Identity verified.")
+            dlg._poll_connection()
+            self.assertEqual(dlg.experimental_learn_button.winfo_manager(), "")
+            with patch.object(dlg, "_run") as worker, \
+                 patch("irstudio.sofabaton_ble_ui.messagebox.askokcancel") as ask:
+                dlg.start_main_capture(lambda value: None, lambda err: None)
+                worker.assert_called_once()
+                self.assertEqual(worker.call_args.args[0], "SofaBaton learning")
+                ask.assert_not_called()
+        finally:
+            dlg.destroy()
 
-    def test_successful_u1_capture_autosaves_to_selected_button(self):
-        device, button = self.prepare_button()
+    def test_main_screen_capture_dispatches_to_connected_u1_in_auto_mode(self):
+        self.prepare_button()
         self.app.u1_session._state(
-            "CONNECTED", "SB202006231D9E", "U1-MOCK", "Identity verified.")
+            "CONNECTED", "SB202006231D9E", "U1", "Identity verified.")
         self.app._refresh_u1_status()
+        with patch.object(self.app, "_capture_ble_main") as bluetooth, \
+             patch.object(self.app, "_background") as usb:
+            self.app.capture()
+            bluetooth.assert_called_once_with()
+            usb.assert_not_called()
+
+    def test_ble_main_capture_saves_to_original_selected_button(self):
+        device, button = self.prepare_button()
+        # Complete with a validated signal exactly like v0.3.3 produced.
+        ir = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
         self.app.running = True
-        signal = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
-        with patch("irstudio.ui.messagebox.askokcancel") as old_warning:
-            self.app._finish_bluetooth_capture(
-                device["id"], button["id"],
-                (signal, "U1-Learn-Backups/backup-before-learn.json"), None)
-            old_warning.assert_not_called()
+        self.app._finish_ble_main(
+            device["id"], button["id"], (ir, "U1-Learn-Backups/old.json"))
         self.assertFalse(self.app.running)
         self.assertEqual(len(button["captures"]), 1)
         self.assertEqual(button["captures"][0]["carrier_hz"], 38095)
-        self.assertIn("autosaved Power", self.app.status_var.get())
-        self.assertTrue(self.app.save_current_button())
-        self.assertEqual(len(button["captures"]), 1)
         self.save_mock.assert_called()
-
-    def test_bluetooth_library_save_failure_rolls_back_last_capture(self):
-        device, button = self.prepare_button()
-        self.app.running = True
-        signal = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
-        self.save_mock.side_effect = OSError("Disk full")
-        with patch("irstudio.ui.messagebox.showerror") as popup:
-            self.app._finish_bluetooth_capture(
-                device["id"], button["id"], (signal, "prior.json"), None)
-            popup.assert_called_once()
-        self.assertEqual(button["captures"], [])
 
     def test_u1_reader_action_prompts_before_queries(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog

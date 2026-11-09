@@ -76,7 +76,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.3.4-beta\n\nDirect learning backends: SofaBaton U1 Bluetooth, Harmony 300/350 USB HID (046D:C124), and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.3.9-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -90,7 +90,7 @@ class Studio(tk.Tk):
         heading = ttk.Frame(identity)
         heading.pack(side="left", fill="x", expand=True)
         ttk.Label(heading, text="IR Remote Studio", font=("Segoe UI Semibold", 20)).pack(anchor="w")
-        ttk.Label(heading, text="Create remotes, learn IR with Bluetooth or USB, and export .irplus.",
+        ttk.Label(heading, text="Create remotes, capture IR by USB, read saved SofaBaton U1 codes via Bluetooth, and export .irplus.",
                   foreground="#505b69").pack(anchor="w", pady=(2, 0))
 
         toolbar = ttk.Frame(self, padding=(16, 10, 16, 10))
@@ -263,27 +263,8 @@ class Studio(tk.Tk):
 
 
     def open_sofabaton_ble(self):
-        """Connect the U1; all subsequent IR learning happens in this window."""
+        """Opt-in U1 connection/pairing and previously saved IR read-back."""
         SofaBatonBleDialog(self)
-
-    def _using_bluetooth_learner(self) -> bool:
-        """Auto selects the verified U1; explicit USB receivers stay USB."""
-        return (self.u1_session.snapshot().connected
-                and self.receiver_var.get() == AUTO)
-
-    def _refresh_capture_mode(self):
-        if not hasattr(self, "capture_btn"):
-            return
-        if self._using_bluetooth_learner():
-            self.capture_btn.configure(text="Capture selected button (SofaBaton U1)")
-            self.aim_var.set(
-                "Aim the original remote at the SofaBaton U1. "
-                "When READY appears, press and release the source button.")
-        else:
-            self.capture_btn.configure(text="Capture selected button (USB)")
-            self.aim_var.set(
-                "USB: aim the original remote at the learning receiver, "
-                "about 5–10 cm away.")
 
     def _refresh_u1_status(self):
         """Only the Tk main thread updates UI; snapshot is thread-safe."""
@@ -291,6 +272,17 @@ class Studio(tk.Tk):
         new_state = (snapshot.state, snapshot.name, snapshot.address, snapshot.detail)
         if new_state != self._u1_last_status:
             self._u1_last_status = new_state
+            if snapshot.connected and self.receiver_var.get() == AUTO:
+                self.capture_btn.configure(
+                    text="Capture selected button (SofaBaton U1)")
+                self.aim_var.set(
+                    "When the U1 displays Learning, aim the original IR "
+                    "remote at it and press and release one button.")
+            else:
+                self.capture_btn.configure(text="Capture selected button (USB)")
+                self.aim_var.set(
+                    "USB: aim the original remote at the learning receiver, "
+                    "about 5–10 cm away.")
             self.u1_state_var.set(
                 f"CONNECTED — READY ({snapshot.name})" if snapshot.connected
                 else "BLUETOOTH — CONNECTING..." if snapshot.state == "CONNECTING"
@@ -299,7 +291,6 @@ class Studio(tk.Tk):
                 else "BLUETOOTH — NOT CONNECTED")
             self.u1_detail_var.set(snapshot.detail)
             self._render_connection_status()
-            self._refresh_capture_mode()
         # Re-arm one timer only. Manual refresh after Connect must not create
         # a second independent polling loop.
         if self._u1_poll_after is not None:
@@ -308,7 +299,7 @@ class Studio(tk.Tk):
 
     def disconnect_u1(self):
         """Disconnect on a worker so Bluetooth cleanup never freezes Tk."""
-        if not self.u1_session.snapshot().connected or self.running:
+        if not self.u1_session.snapshot().connected:
             return
         self.u1_disconnect_btn.configure(state="disabled")
 
@@ -740,8 +731,7 @@ class Studio(tk.Tk):
         self.connection_heading.configure(foreground=color)
         # Disconnect is relevant only when there is a real active U1 session.
         if snap.connected:
-            self.u1_disconnect_btn.configure(
-                state="disabled" if self.running else "normal")
+            self.u1_disconnect_btn.configure(state="normal")
             if not self.u1_disconnect_btn.winfo_manager():
                 self.u1_disconnect_btn.pack(side="left", padx=(14, 0))
         else:
@@ -756,14 +746,18 @@ class Studio(tk.Tk):
         self._render_connection_status()
 
     def _receiver_changed(self, event=None) -> None:
-        """Changing receiver invalidates an old USB probe, not U1 Bluetooth."""
+        """Changing receiver invalidates any previous handshake result."""
+        snap = self.u1_session.snapshot()
+        if snap.connected and self.receiver_var.get() == AUTO:
+            self.capture_btn.configure(text="Capture selected button (SofaBaton U1)")
+        else:
+            self.capture_btn.configure(text="Capture selected button (USB)")
         if self.running or self._scan_in_progress:
             return
         self.connected_model = None
         self._set_connection(
             "not-connected", "Receiver selection changed. Click Connect / Retry "
-            "to verify the selected USB hardware before learning.")
-        self._refresh_capture_mode()
+            "to verify the selected hardware before learning.")
 
     def _capture_ready(self, operation_id: int) -> None:
         # Ignore queued READY callbacks that arrived after capture completed.
@@ -809,9 +803,6 @@ class Studio(tk.Tk):
         self.probe_btn.configure(state="normal")
         self.capture_btn.configure(state="normal")
         self.detect_btn.configure(state="normal")
-        self.receiver_picker.configure(state="readonly")
-        self.sofabaton_ble_btn.configure(state="normal")
-        self._refresh_capture_mode()
 
     def detect_learner(self):
         """Read-only enumeration; never starts USB communication or IR capture."""
@@ -884,10 +875,13 @@ class Studio(tk.Tk):
         self._background("Probe", done)
 
     def capture(self):
+        # A connected U1 takes priority only in Auto receiver mode; a USB
+        # backend explicitly selected by the user is never overridden.
+        if (self.u1_session.snapshot().connected
+                and self.receiver_var.get() == AUTO):
+            return self._capture_ble_main()
         if self._scan_in_progress or self.running:
             return
-        if self._using_bluetooth_learner():
-            return self._capture_bluetooth()
         b = self._selected_button()
         if not b:
             return messagebox.showwarning("Select button", "Choose a button before capturing")
@@ -934,94 +928,89 @@ class Studio(tk.Tk):
                 "Choose Save to finish or Save & Learn another to continue.")
         self._background("Capture", done)
 
-    def _bluetooth_capture_ready(self, operation_id):
-        if operation_id != self._active_operation or not self.running:
-            return
-        self.status_var.set(
-            "READY — aim the original remote at the SofaBaton U1 and "
-            "press and release the button NOW!")
-
-    def _finish_bluetooth_capture(self, device_id, button_id, result, error):
-        """Autosave to the originally selected button, never a later selection."""
+    def _finish_ble_main(self, device_id, button_id, pair=None, error=None):
+        """Complete the original U1 dialog worker into a fixed destination."""
         self._end_background()
-        if error:
+        self.receiver_picker.configure(state="readonly")
+        self.sofabaton_ble_btn.configure(state="normal")
+        if error is not None:
             self.status_var.set(
-                "SofaBaton learning failed. No new IR command saved. "
-                f"{error}")
+                "SofaBaton learning failed. No new IR was saved. " + str(error))
             messagebox.showerror(
-                "SofaBaton IR learning failed",
-                f"{error}\n\nThe app preserves the previous local backup "
-                "whenever the preflight read succeeded.", parent=self)
+                "SofaBaton learning failed",
+                str(error) + "\n\nExisting IR was backed up when preflight "
+                "read succeeded. That backup cannot restore U1 programming.",
+                parent=self)
             return
         try:
-            capture, backup_path = result
+            learned, backup = pair
             device = next((d for d in self.library["devices"]
                            if d["id"] == device_id), None)
             button = next((b for b in device["buttons"]
                            if b["id"] == button_id), None) if device else None
             if button is None:
-                raise ValueError(
-                    "The selected destination button was deleted during learning.")
+                raise ValueError("Destination button was removed during learning.")
             cap = core.make_capture(
-                int(capture.carrier_hz), capture.timings_us,
-                "SofaBaton U1 Bluetooth — learned IR")
-            before_selection = button.get("selected", 0)
+                int(learned.carrier_hz), learned.timings_us,
+                "SofaBaton U1 live capture (original v0.3.3 engine)")
+            previous_selected = button.get("selected", 0)
             button["captures"].append(cap)
             button["selected"] = core.best_capture_index(button)
             try:
                 self._save()
             except Exception:
                 button["captures"].pop()
-                button["selected"] = before_selection
+                button["selected"] = previous_selected
                 raise
             if self.active_device == device_id:
                 self._reload_buttons(button_id)
             self.status_var.set(
-                f"Captured and autosaved {button['label']} via SofaBaton U1 "
-                f"({capture.carrier_hz:,} Hz, {len(capture.timings_us)} timings). "
-                "Ready to export .irplus or Save & Learn another. "
-                f"Prior U1 IR backed up to {backup_path}")
+                f"Captured and saved '{button['label']}': "
+                f"{learned.carrier_hz:,} Hz, {len(learned.timings_us)} timings. "
+                f"Ready to learn another button or export .irplus. "
+                f"Previous U1 IR backup: {backup}")
         except Exception as exc:
-            messagebox.showerror("Save failed",
-                                 f"Bluetooth capture completed but the "
-                                 f"library could not be saved:\n{exc}",
+            self.status_var.set("Capture succeeded, but saving it failed.")
+            messagebox.showerror("Could not save U1 capture", str(exc),
                                  parent=self)
-            self.status_var.set("Bluetooth capture not saved to the library.")
 
-    def _capture_bluetooth(self):
-        """Capture directly from main screen, with automatic U1 preflight backup."""
-        if not self._using_bluetooth_learner() or self.running:
+    def _capture_ble_main(self):
+        """Use the original v0.3.3 dialog's task runner invisibly.
+
+        The dialog's BLE worker and session logic stay identical to
+        the proven v0.3.3 behavior, with no LEARN 8 confirmation.
+        """
+        if self.running:
             return
         button = self._selected_button()
         device = self._selected_device()
         if not device or not button:
-            messagebox.showwarning("Select button",
-                                   "Choose a device and button to learn first.",
+            messagebox.showwarning("Choose a button",
+                                   "Select a device and button to capture.",
                                    parent=self)
             return
         device_id, button_id = device["id"], button["id"]
         self.running = True
-        self._active_operation += 1
-        operation_id = self._active_operation
-        for widget in (self.probe_btn, self.capture_btn, self.detect_btn,
-                       self.receiver_picker, self.sofabaton_ble_btn):
-            widget.configure(state="disabled")
+        self.probe_btn.configure(state="disabled")
+        self.capture_btn.configure(state="disabled")
+        self.detect_btn.configure(state="disabled")
+        self.receiver_picker.configure(state="disabled")
+        self.sofabaton_ble_btn.configure(state="disabled")
         self.status_var.set(
-            "Reading and backing up the previous U1 IR signal... "
-            "Keep the original remote ready. Wait for READY before pressing.")
-        def job():
-            try:
-                result = self.u1_session.learn_ir_experimental(
-                    self.folder,
-                    on_ready=lambda: self.after(
-                        0, lambda: self._bluetooth_capture_ready(operation_id)))
-                self.after(0, lambda: self._finish_bluetooth_capture(
-                    device_id, button_id, result, None))
-            except Exception as exc:
-                err = str(exc)
-                self.after(0, lambda: self._finish_bluetooth_capture(
-                    device_id, button_id, None, err))
-        threading.Thread(target=job, daemon=True).start()
+            "Backing up previous U1 IR. When the SofaBaton displays Learning, "
+            "press and release the source remote's button.")
+        try:
+            # A withdrawn controller uses the same _run/background worker
+            # pathway as the working v0.3.3 Advanced learning button.
+            dialog = SofaBatonBleDialog(self, auto_scan=False)
+            dialog.withdraw()
+            dialog.start_main_capture(
+                on_complete=lambda result: self._finish_ble_main(
+                    device_id, button_id, pair=result),
+                on_error=lambda error: self._finish_ble_main(
+                    device_id, button_id, error=error))
+        except Exception as exc:
+            self._finish_ble_main(device_id, button_id, error=str(exc))
 
     def save_current_button(self) -> bool:
         """Confirm durable storage of one learned button; never starts learning.
