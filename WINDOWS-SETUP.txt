@@ -311,3 +311,26 @@ IMPORTANT: The same internal physical slot 8 is still used, and can
 be overwritten. Backup JSON does NOT restore U1 device/profile
 programming. Do not assume physical learning is verified on this new
 UI route until tested. No 0x07/0x08/0x14 configuration commands.
+
+WINDOWS v0.3.10-BETA — AUTOSAVE, CLEAR MISMATCHED CAPTURES
+---------------------------------------------------------
+Uses the original v0.3.3 proven SofaBaton live-learning backend unchanged.
+After learning a new IR command on the main screen, the app saves the
+capture to library.json, reads it back from disk and only then confirms
+IR command auto-saved; asks whether to name/learn a NEW button or
+finish learning (keeps U1 Bluetooth connected).
+
+The IR code/format column now shows "Raw IR (saved)" for unrecognized
+IR protocols, not the misleading "Not learned". Raw IR exports to
+.irplus just fine.
+
+If a short press causes mismatched samples for a button:
+  - "Remove last" removes the latest capture sample only.
+  - "Clear captures for selected button..." removes ALL samples for
+    that button after confirmation, retaining label/position/layout.
+  - Select the existing button and click Capture to learn again.
+These controls change only the Windows library, NEVER U1 programming.
+If saving fails the original capture list is restored.
+
+As before, slot 8 is read and backed up before each live learn;
+that saved waveform cannot restore the U1's device/profile mapping.
