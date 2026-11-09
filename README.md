@@ -386,3 +386,26 @@ USB backend. When Receiver is set to **Auto detect supported learner**
 and a verified U1 BLE connection is active, Capture uses the U1 by
 default. The Bluetooth popup now only connects/disconnects and offers
 Advanced existing-stored-code reading for troubleshooting.
+
+
+### Windows v0.3.5-beta: U1 Learning-display readiness fix
+
+Some physical U1 remotes enter **Learning** on their own display but
+do not send the separate `0x04` READY notification that v0.3.4 awaited.
+As soon as the observed learning-start write returns, the main window
+now prompts the user to press and release the **original remote**
+while the SofaBaton screen displays **Learning**. Do not wait for
+a separate READY indication from the Windows application.
+
+A missing READY event alone no longer prevents success. **The U1 must
+still send a successful `0x06` capture-complete event, followed by a
+strictly validated, complete `0x0D` waveform**; nothing incomplete
+will be added to the Windows library. Failed attempts report the
+control-response commands actually observed, assisting hardware
+diagnostics without dumping complete IR codes.
+
+The persistent Bluetooth connection, mandatory durable and
+re-importable slot-8 preflight backup, locally autosaved commands,
+main-screen learning and existing finish sequence are retained.
+The backed-up signal **cannot restore internal U1 programming**.
+Live testing on the physical remote is still required for this fix.

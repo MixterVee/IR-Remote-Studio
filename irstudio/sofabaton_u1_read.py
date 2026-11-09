@@ -205,7 +205,9 @@ async def experimental_learn_connected_ir(client, inbox: asyncio.Queue[bytes],
 
     Sends only the observed 0x04 start and 0x05 finish/exit, not the
     associated unverified 0x07/0x08/0x14 configuration transactions.
-    Requires 0x04 ready, 0x06 completion and valid 0x0D fragments.
+    Some U1s show Learning on their display without sending a 0x04 ready
+    notification. Treat 0x04 as optional; require 0x06 success and fully
+    validated 0x0D fragments before accepting any learned signal.
     """
     if slot != EXPERIMENT_SLOT:
         raise ValueError("Experimental learning is limited to recorded slot 8.")
@@ -220,12 +222,20 @@ async def experimental_learn_connected_ir(client, inbox: asyncio.Queue[bytes],
     result = None
     ready = False
     learned = False
+    # Keep a compact record of non-IR notifications for diagnosing U1
+    # variants that display 'Learning' but do not emit LEARN_READY.
+    observed = []
     assembler = IrAssembler(slot)
     try:
         await client.write_gatt_char(
             WRITE, encode_frame(LEARN_START, EXPERIMENT_START_PAYLOAD),
             response=False)
         started = True
+        # This callback reports that the start write returned, NOT that the
+        # U1 acknowledged readiness. The remote's display is authoritative:
+        # the user should press the original remote once it says Learning.
+        if on_ready is not None:
+            on_ready()
         loop = asyncio.get_running_loop()
         deadline = loop.time() + timeout
         while loop.time() < deadline:
@@ -237,14 +247,13 @@ async def experimental_learn_connected_ir(client, inbox: asyncio.Queue[bytes],
             except asyncio.TimeoutError:
                 break
             command, payload = decode_frame(raw)
-            if command == LEARN_READY and payload == b"":
-                if not ready:
-                    ready = True
-                    if on_ready is not None:
-                        on_ready()
+            if command != IR_DATA and len(observed) < 24:
+                observed.append(f"{command:02X}:{payload[:8].hex()}")
+            if command == LEARN_READY and payload in (b"", b"\x00"):
+                ready = True
             elif command == LEARN_CAPTURED and payload == b"\x00":
-                if not ready:
-                    raise U1ReadError("Learning completed without ready indication.")
+                # Unlike READY, the completion ACK is mandatory. The U1 may
+                # show Learning without ever notifying that it is ready.
                 learned = True
             elif command == IR_DATA and learned:
                 result = assembler.add(payload)
@@ -254,14 +263,15 @@ async def experimental_learn_connected_ir(client, inbox: asyncio.Queue[bytes],
         if result is None:
             raise U1ReadError(
                 "No complete validated live IR arrived. "
-                f"Ready: {ready}; captured: {learned}; "
-                f"fragments: {assembler.next_fragment-1}. "
-                "The app will attempt the observed finish command.")
+                f"Ready notification: {ready}; completion: {learned}; "
+                f"fragments: {assembler.next_fragment-1}; "
+                f"BLE replies: {', '.join(observed) or 'none'}. "
+                "If the U1 display says Learning, press the source remote "
+                "while that screen is visible.")
     finally:
         if started and client.is_connected:
-            # The official app sent 0x05 [01] after the 0x0D capture.
-            # On a timeout we try the same finish/exit to avoid leaving
-            # the U1 armed. Do not send any profile/configuration writes.
+            # Finish the observed learning sequence even on timeout. Never
+            # send unverified configuration or programming commands.
             await client.write_gatt_char(
                 WRITE, encode_frame(LEARN_FINISH, EXPERIMENT_FINISH_PAYLOAD),
                 response=False)

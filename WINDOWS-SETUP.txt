@@ -309,3 +309,25 @@ overwrite the U1's slot 8. No firmware/profile configuration writes.
 
 Receiver set to Auto chooses connected U1; explicitly select a USB
 backend in Receiver to capture with Harmony/Ocrustar instead.
+
+
+WINDOWS 0.3.5-BETA — U1 DISPLAY SAYS LEARNING (IMPORTANT)
+--------------------------------------------------------
+In 0.3.4 the app could wait forever for a BLE READY packet even when
+the U1 itself already displayed Learning. This prevented the main UI
+from telling you when to press the ORIGINAL remote.
+
+In 0.3.5, after the timestamped slot-8 backup is verified and the
+learning-start command is sent, IR Remote Studio shows:
+  LEARNING START SENT — when SofaBaton says Learning, press and
+  release the ORIGINAL remote's target button NOW.
+
+Do NOT wait for a separate READY status in the Windows app.
+Aim the original remote at the SofaBaton while its display says
+Learning. Captures are accepted only after the U1 sends successful
+completion and the received IR data passes strict validation.
+
+If nothing is captured, the error now lists the BLE command replies
+seen during learning. Copy this diagnostic into your bug report.
+The connection stays open and each attempt backs up slot 8 again.
+The backup is local only and cannot restore U1 internal programming.
