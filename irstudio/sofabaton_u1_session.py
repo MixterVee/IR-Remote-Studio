@@ -214,7 +214,8 @@ class U1Session:
             # contents of this exact slot. We cannot program a backup into U1.
             notifications_before_read = self._rx_counter()
             previous = await protocol.read_connected_ir(client, inbox, 8)
-            preflight_notifications, _ = self._rx_report(notifications_before_read)
+            preflight_notifications, preflight_events = self._rx_report(
+                notifications_before_read)
             folder = Path(backup_folder) / "U1-Learn-Backups"
             folder.mkdir(parents=True, exist_ok=True)
             stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
@@ -250,6 +251,9 @@ class U1Session:
                     f"Backup (preserves IR waveform ONLY): {path}",
                     f"U1 connected at failure: {bool(client.is_connected)}",
                     f"BLE notifications during previous-slot read: {preflight_notifications}",
+                    "Preflight reply headers: " + (
+                        ", ".join(event["command"] for event in preflight_events[:8])
+                        or "none"),
                     f"BLE notifications after learning start: {count}",
                     f"Incoming control frame summaries (newest 128 at most):",
                     *[f"  {event['at']}  {event['command']}  {event['bytes']} bytes"
