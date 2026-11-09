@@ -76,7 +76,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.3.10-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.3.11-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -996,31 +996,105 @@ class Studio(tk.Tk):
             messagebox.showerror("Could not save U1 capture", str(exc),
                                  parent=self)
 
+    def _capture_existing_ble_button(self, device_id, target_button_id):
+        """Select a previously created button; add a sample using normal Capture.
+
+        Never creates or deletes a button and never clears existing samples.
+        The ordinary Capture path checks that Bluetooth is still connected.
+        """
+        device = next((d for d in self.library["devices"]
+                       if d["id"] == device_id), None)
+        button = next((b for b in device["buttons"]
+                       if b["id"] == target_button_id), None) if device else None
+        if self.running or not button:
+            return
+        if self.active_device != device_id:
+            self._reload_devices(device_id)
+        self._reload_buttons(target_button_id)
+        self.status_var.set(
+            f"Learning another IR sample for existing button '{button['label']}'. "
+            "Previously saved samples are retained.")
+        self.after(0, self.capture)
+
     def _after_successful_ble_capture(self, device_id, button_id, samples):
-        """Confirm autosave and choose next learning step, without rearming."""
+        """Offer New, Existing, or Finish after disk-verified autosave."""
         device = next((d for d in self.library["devices"]
                        if d["id"] == device_id), None)
         button = next((b for b in device["buttons"]
                        if b["id"] == button_id), None) if device else None
         if not button:
             return
-        another = messagebox.askyesno(
-            "IR command auto-saved",
-            f"'{button['label']}' was automatically saved to your IR library.\n"
-            f"Stored captures for this button: {samples}.\n\n"
-            "Learn another NEW button?\n\n"
-            "Yes — Name and learn another button\n"
-            "No — Finish learning (keep SofaBaton connected)",
-            parent=self)
-        if another:
-            # Existing Save & Learn another action creates a named button
-            # before initiating capture; no second capture is started
-            # without the user's explicit choice.
-            self.after(0, self.learn_another)
-        else:
+        all_buttons = list(device["buttons"])
+        chooser = tk.Toplevel(self)
+        chooser.title("IR command auto-saved")
+        chooser.resizable(False, False)
+        chooser.transient(self)
+        frame = ttk.Frame(chooser, padding=18)
+        frame.pack(fill="both", expand=True)
+        ttk.Label(
+            frame,
+            text=(f"'{button['label']}' was auto-saved to your IR library.\n"
+                  f"Stored samples for this button: {samples}."),
+            justify="left", wraplength=495).pack(anchor="w")
+        ttk.Separator(frame).pack(fill="x", pady=(13, 12))
+        ttk.Label(
+            frame,
+            text="To learn a button you've already created, select it here:",
+            wraplength=495).pack(anchor="w")
+        names = [f"{i + 1}. {b['label']}"
+                 for i, b in enumerate(all_buttons)]
+        selection = ttk.Combobox(
+            frame, values=names, width=52, state="readonly")
+        selection.pack(fill="x", pady=(6, 5))
+        initial = next((i for i, b in enumerate(all_buttons)
+                        if b["id"] == button_id), 0)
+        selection.current(initial)
+        ttk.Label(
+            frame,
+            text="Learning an existing button adds a sample. Use Clear captures "
+                 "first to replace its old samples.",
+            foreground="#536277", wraplength=495).pack(
+                anchor="w", pady=(0, 14))
+        actions = ttk.Frame(frame)
+        actions.pack(fill="x")
+
+        def finish():
+            chooser.destroy()
             self.status_var.set(
                 f"Learning finished. '{button['label']}' was auto-saved "
                 "and is ready for .irplus export. U1 remains connected.")
+
+        def new_button():
+            chooser.destroy()
+            self.after(0, self.learn_another)
+
+        def existing_button():
+            index = selection.current()
+            if not 0 <= index < len(all_buttons):
+                messagebox.showwarning(
+                    "Select existing button",
+                    "Choose a button to learn from the list.",
+                    parent=chooser)
+                return
+            target_id = all_buttons[index]["id"]
+            chooser.destroy()
+            self._capture_existing_ble_button(device_id, target_id)
+
+        ttk.Button(
+            actions, text="Learn selected existing",
+            command=existing_button).pack(
+                side="left", fill="x", expand=True, padx=(0, 5))
+        ttk.Button(
+            actions, text="New button", command=new_button).pack(
+                side="left", fill="x", expand=True, padx=5)
+        ttk.Button(
+            actions, text="Finish", command=finish).pack(
+                side="left", fill="x", expand=True, padx=(5, 0))
+        chooser.protocol("WM_DELETE_WINDOW", finish)
+        chooser.update_idletasks()
+        if chooser.winfo_viewable():
+            chooser.grab_set()
+        return chooser
 
     def _capture_ble_main(self):
         """Use the original v0.3.3 dialog's task runner invisibly.
