@@ -422,6 +422,64 @@ class U1SaveUITests(unittest.TestCase):
                 device["id"], button["id"], 2)
             schedule.assert_called_once_with(0, self.app.learn_another)
 
+    def test_clear_mismatched_captures_keeps_button_and_layout(self):
+        device, button = self.prepare_button()
+        button["span"] = 4
+        button["captures"] = [
+            core.make_capture(38095, [3996, 3999] + [469, 2000] * 51),
+            core.make_capture(38095, [4000, 4000] + [560, 1600] * 51),
+        ]
+        button["selected"] = 1
+        self.app._reload_buttons(button["id"])
+        self.assertEqual(core.capture_status(button), "Mismatch")
+        with patch("irstudio.ui.messagebox.askyesno",
+                   return_value=True) as confirm, \
+             patch.object(self.app, "_capture_ble_main") as rearm:
+            self.app.clear_button_captures()
+            confirm.assert_called_once()
+            rearm.assert_not_called()
+        self.assertEqual(device["buttons"], [button])
+        self.assertEqual(button["label"], "Power")
+        self.assertEqual(button["span"], 4)
+        self.assertEqual(button["captures"], [])
+        self.assertEqual(button["selected"], 0)
+        self.assertEqual(self.app.active_button, button["id"])
+        self.assertEqual(core.capture_status(button), "Not learned")
+        self.assertIn("Button retained", self.app.status_var.get())
+        self.save_mock.assert_called()
+
+    def test_clear_captures_cancel_and_disk_failure_preserve_samples(self):
+        _, button = self.prepare_button()
+        button["captures"] = [
+            core.make_capture(38095, [3996, 3999] + [469, 2000] * 51)]
+        original = list(button["captures"])
+        with patch("irstudio.ui.messagebox.askyesno", return_value=False):
+            self.app.clear_button_captures()
+        self.assertEqual(button["captures"], original)
+        self.save_mock.assert_not_called()
+        self.save_mock.side_effect = OSError("Disk full")
+        with patch("irstudio.ui.messagebox.askyesno", return_value=True), \
+             patch("irstudio.ui.messagebox.showerror") as error:
+            self.app.clear_button_captures()
+            error.assert_called_once()
+        self.assertEqual(button["captures"], original)
+
+    def test_remove_last_can_fix_mismatch_without_deleting_button(self):
+        device, button = self.prepare_button()
+        original = core.make_capture(
+            38095, [3996, 3999] + [469, 2000] * 51)
+        bad = core.make_capture(
+            38095, [4000, 4000] + [560, 1600] * 51)
+        button["captures"] = [original, original.copy(), bad]
+        self.app._reload_buttons(button["id"])
+        self.assertEqual(core.capture_status(button), "Mismatch")
+        with patch("irstudio.ui.messagebox.askyesno", return_value=True):
+            self.app.remove_capture()
+        self.assertEqual(device["buttons"], [button])
+        self.assertEqual(button["captures"], [original, original.copy()])
+        self.assertEqual(core.capture_status(button), "Verified")
+        self.assertEqual(self.app.active_button, button["id"])
+
     def test_u1_reader_action_prompts_before_queries(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
         dialog = SofaBatonBleDialog(self.app, auto_scan=False)
