@@ -6,12 +6,15 @@ The read-back path has already been verified on the user's physical U1.
 LIMITED SAFETY SCOPE:
 - Requires an identity-verified U1 FFF0/FFF1/FFF2 Bluetooth session.
 - Normal read operations send only observed 0x01 status and 0x0C inquiry.
-- Main-screen user-initiated live learning sends the observed 0x04
-  start and 0x05 finish for slot 8, only after a verified local IR backup.
+- Main-screen learning runs a verified local IR backup, then the exact
+  PRE-LEARNING 0x14 and 3-fragment 0x07 sequence from the recorded official
+  app session (EXPERIMENTAL: these may alter U1 configuration), followed by
+  the observed 0x04 start / 0x05 finish for slot 8.
   Live capture has been validated with the physical U1 and IRPlus.
   This MAY overwrite the U1's slot 8; the local backup CANNOT restore
   internal U1 programming.
-- Never sends unverified 0x07/0x08/0x14 configuration/firmware writes.
+- NEVER sends 0x08 or unknown firmware writes. The 0x14/0x07 setup
+  packets are reverse-engineered, not proven safe on every U1 profile.
 - Validates frame checksums, fragment ordering and IR timing waveforms.
 """
 from __future__ import annotations
@@ -39,6 +42,16 @@ LEARN_CAPTURED = 0x06
 LEARN_ACK = 0x03
 EXPERIMENT_START_PAYLOAD = bytes.fromhex("081802000000000000")
 EXPERIMENT_FINISH_PAYLOAD = b"\x01"
+# Exact official-app frames preceding the successful slot-8 capture,
+# from SofaBaton-U1-ATT.txt at t=806.760-807.126.
+# IMPORTANT: 0x07 may update the U1's internal key/profile configuration.
+# It is not a read-only probe; previous IR waveform backup cannot undo it.
+LEARN_PREP_ENTER = bytes.fromhex("a55a001413")
+LEARN_PREP_FRAGMENTS = (
+    bytes.fromhex("a55a0f0701000101000300080108050000001748"),
+    bytes.fromhex("a55a0f07010002a55a0100000072656d6f7465a4"),
+    bytes.fromhex("a55a050701000300bdcc"),
+)
 MAX_FRAGMENTS = 80
 MAX_SAMPLES = 4096
 ALLOWED_SLOTS = tuple(range(1, 9))
@@ -194,6 +207,54 @@ async def read_connected_ir(client, inbox: asyncio.Queue[bytes],
         "Use a slot containing an existing learned IR command.")
 
 
+async def _await_preparation_ack(
+        inbox: asyncio.Queue[bytes], phase: str, seconds: float = 5.0) -> None:
+    """Accept only the zero-status 0x03 acknowledgement seen in the trace."""
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + seconds
+    while loop.time() < deadline:
+        try:
+            raw = await asyncio.wait_for(
+                inbox.get(), timeout=max(.05, deadline - loop.time()))
+        except asyncio.TimeoutError:
+            break
+        command, payload = decode_frame(raw)
+        if command == LEARN_ACK:
+            if payload != b"\x00":
+                raise U1ReadError(
+                    f"U1 {phase} returned non-success acknowledgement: "
+                    f"{payload.hex()}. Capture was NOT started.")
+            return
+    raise U1ReadError(
+        f"U1 {phase} did not acknowledge preparation. "
+        "Capture was NOT started.")
+
+
+async def prepare_connected_u1_learning(
+        client, inbox: asyncio.Queue[bytes]) -> None:
+    """Replay the official-app PRE-learn 0x14/0x07 sequence (experimental).
+
+    Must only be called AFTER the original slot-8 IR waveform has been
+    durably saved and validated. May overwrite configuration metadata.
+    No 0x04 IR-start command is sent unless both ACK stages succeeded.
+    """
+    if not client.is_connected:
+        raise U1ReadError("U1 disconnected before preparing learning.")
+    # Clear stale notifications to ensure the two ACKs correspond to
+    # these requests, not the preceding 37-fragment slot-8 read.
+    while not inbox.empty():
+        inbox.get_nowait()
+    await client.write_gatt_char(WRITE, LEARN_PREP_ENTER, response=False)
+    await _await_preparation_ack(inbox, "0x14 enter", seconds=5.0)
+    for packet in LEARN_PREP_FRAGMENTS:
+        command, payload = decode_frame(packet)
+        if command != 0x07 or len(packet) > 20:
+            raise U1ReadError("Corrupted official-app preparation packet.")
+        await client.write_gatt_char(WRITE, packet, response=False)
+        await asyncio.sleep(.006)
+    await _await_preparation_ack(inbox, "0x07 configuration", seconds=5.0)
+
+
 async def experimental_learn_connected_ir(client, inbox: asyncio.Queue[bytes],
                                           slot: int = EXPERIMENT_SLOT,
                                           timeout: float = 25,
@@ -203,8 +264,9 @@ async def experimental_learn_connected_ir(client, inbox: asyncio.Queue[bytes],
     WARNING: May overwrite the remote's slot 8. Caller must save and
     verify a local backup before starting a user-initiated learn.
 
-    Sends only the observed 0x04 start and 0x05 finish/exit, not the
-    associated unverified 0x07/0x08/0x14 configuration transactions.
+    This operation sends the observed 0x04 start and 0x05 finish/exit.
+    The CALLER may have run the recorded experimental 0x14/0x07 preparation
+    sequence first; no 0x08 or other profile-finalization writes here.
     Some U1s show Learning on their display without sending a 0x04 ready
     notification. Treat 0x04 as optional; require 0x06 success and fully
     validated 0x0D fragments before accepting any learned signal.
@@ -270,8 +332,8 @@ async def experimental_learn_connected_ir(client, inbox: asyncio.Queue[bytes],
                 "while that screen is visible.")
     finally:
         if started and client.is_connected:
-            # Finish the observed learning sequence even on timeout. Never
-            # send unverified configuration or programming commands.
+            # Finish the observed learning sequence even on timeout.
+            # No profile-finalization (0x08) or firmware writes.
             await client.write_gatt_char(
                 WRITE, encode_frame(LEARN_FINISH, EXPERIMENT_FINISH_PAYLOAD),
                 response=False)
