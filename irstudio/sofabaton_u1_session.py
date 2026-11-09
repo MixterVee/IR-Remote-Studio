@@ -200,7 +200,7 @@ class U1Session:
         """Use the already-connected BLE session; do not disconnect after reading."""
         return self._submit(self._read_async(slot)).result(timeout=25)
 
-    async def _learn_async(self, backup_folder, on_ready=None):
+    async def _learn_async(self, backup_folder):
         """Read/back up slot 8 BEFORE sending the experimental learn command."""
         async with self._busy:
             client, inbox = self._client, self._rx
@@ -241,12 +241,12 @@ class U1Session:
             notifications_before_learn = self._rx_counter()
             try:
                 learned = await protocol.experimental_learn_connected_ir(
-                    client, inbox, slot=8, timeout=35, on_ready=on_ready)
+                    client, inbox, slot=8, timeout=25)
             except Exception as exc:
                 count, events = self._rx_report(notifications_before_learn)
                 diagnostic_path = folder / f"U1-Learn-Diagnostic-{stamp}.txt"
                 diagnostics = [
-                    "IR Remote Studio v0.3.6 — U1 receive diagnostics",
+                    "IR Remote Studio v0.3.8 — legacy capture receive diagnostics",
                     "No remote configuration/firmware changes requested.",
                     f"Backup (preserves IR waveform ONLY): {path}",
                     f"U1 connected at failure: {bool(client.is_connected)}",
@@ -279,10 +279,10 @@ class U1Session:
                     "restore the U1's own programmed slot.") from exc
             return learned, str(path)
 
-    def learn_ir_experimental(self, backup_folder, on_ready=None):
+    def learn_ir_experimental(self, backup_folder):
         """User-initiated U1 live learning with mandatory local preflight backup."""
         return self._submit(self._learn_async(
-            backup_folder, on_ready=on_ready)).result(timeout=65)
+            backup_folder)).result(timeout=53)
 
     async def _disconnect_async(self):
         async with self._busy:
