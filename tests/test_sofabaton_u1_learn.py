@@ -86,21 +86,16 @@ class LiveLearningProtocolTests(unittest.TestCase):
         client = asyncio.run(run())
         self.assertEqual(client.writes, [])
 
-    def test_u1_screen_learning_without_ready_notification_can_capture(self):
-        # Hardware may show Learning even if it never notifies 0x04 ready.
-        # We still require explicit 0x06 success and verified IR fragments.
+    def test_legacy_requires_ready_before_accepting_capture(self):
+        # Return to exact v0.3.3 parser behavior. Do not silently change
+        # acceptance rules while determining the physical U1 state issue.
         async def run():
             q = asyncio.Queue()
             fake = MockLearnClient(q, missing_ready=True)
-            prompted = []
-            result = await u1.experimental_learn_connected_ir(
-                fake, q, on_ready=lambda: prompted.append("start sent"))
-            return fake, result, prompted
-        client, result, prompted = asyncio.run(run())
-        self.assertEqual(prompted, ["start sent"])
-        self.assertEqual(result.slot, 8)
-        self.assertEqual(result.carrier_hz, 38095)
-        self.assertEqual(len(result.timings_us), 104)
+            with self.assertRaisesRegex(u1.U1ReadError, "without ready"):
+                await u1.experimental_learn_connected_ir(fake, q)
+            return fake
+        client = asyncio.run(run())
         self.assertEqual([u1.decode_frame(f)[0] for f in client.writes],
                          [u1.LEARN_START, u1.LEARN_FINISH])
 
