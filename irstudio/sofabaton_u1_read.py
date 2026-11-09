@@ -6,10 +6,11 @@ The read-back path has already been verified on the user's physical U1.
 LIMITED SAFETY SCOPE:
 - Requires an identity-verified U1 FFF0/FFF1/FFF2 Bluetooth session.
 - Normal read operations send only observed 0x01 status and 0x0C inquiry.
-- A separate Advanced-only, explicitly confirmed and locally backed-up
-  experimental operation sends recorded 0x04 start/0x05 finish for slot 8.
-  The live test has not yet been tried on hardware and MAY overwrite
-  the U1's slot 8; a local backup CANNOT restore that U1 programming.
+- Main-screen user-initiated live learning sends the observed 0x04
+  start and 0x05 finish for slot 8, only after a verified local IR backup.
+  Live capture has been validated with the physical U1 and IRPlus.
+  This MAY overwrite the U1's slot 8; the local backup CANNOT restore
+  internal U1 programming.
 - Never sends unverified 0x07/0x08/0x14 configuration/firmware writes.
 - Validates frame checksums, fragment ordering and IR timing waveforms.
 """
@@ -28,8 +29,8 @@ BANNER = 0x02
 READ_IR = 0x0C
 IR_DATA = 0x0D
 # Single observed U1 live-learning sequence, not a general learning API.
-# These commands MAY change a U1's programmed slot. Never send without
-# explicit acknowledgment and saving a preflight backup.
+# These commands MAY change the U1 programmed slot. The caller must
+# save and verify the preflight backup before sending learn-start.
 EXPERIMENT_SLOT = 8
 LEARN_START = 0x04
 LEARN_FINISH = 0x05
@@ -195,12 +196,12 @@ async def read_connected_ir(client, inbox: asyncio.Queue[bytes],
 
 async def experimental_learn_connected_ir(client, inbox: asyncio.Queue[bytes],
                                           slot: int = EXPERIMENT_SLOT,
-                                          timeout: float = 25) -> IrRead:
+                                          timeout: float = 25,
+                                          on_ready: Callable[[], None] | None = None) -> IrRead:
     """One explicit, high-risk experimental learn using the recorded slot-8 frames.
 
-    WARNING: May overwrite the remote's slot 8. Must not be called until
-    a local backup has been written AND the user explicitly accepts that
-    the remote's original programming may not be recoverable.
+    WARNING: May overwrite the remote's slot 8. Caller must save and
+    verify a local backup before starting a user-initiated learn.
 
     Sends only the observed 0x04 start and 0x05 finish/exit, not the
     associated unverified 0x07/0x08/0x14 configuration transactions.
@@ -237,7 +238,10 @@ async def experimental_learn_connected_ir(client, inbox: asyncio.Queue[bytes],
                 break
             command, payload = decode_frame(raw)
             if command == LEARN_READY and payload == b"":
-                ready = True
+                if not ready:
+                    ready = True
+                    if on_ready is not None:
+                        on_ready()
             elif command == LEARN_CAPTURED and payload == b"\x00":
                 if not ready:
                     raise U1ReadError("Learning completed without ready indication.")
