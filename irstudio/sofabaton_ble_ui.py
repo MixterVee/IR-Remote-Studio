@@ -71,16 +71,16 @@ class SofaBatonBleDialog(tk.Toplevel):
         learning.pack(fill="x", pady=(0, 12))
         learning_row = ttk.Frame(learning)
         learning_row.pack(fill="x")
-        # Never present an unverified write command as a functioning learner.
+        # Compatibility widget: no learning controls appear in the
+        # Bluetooth connection window. All learning starts on main Studio.
         self.learn_button = ttk.Button(
             learning_row, text="Learn IR", state="disabled")
-        self.learn_button.pack(side="left", ipadx=30, ipady=5)
         ttk.Label(
             learning_row,
-            text="Advanced has a guarded slot-8 learning test. "
-                 "Normal Learn IR is disabled until hardware-verified.",
-            foreground="#806019", wraplength=520).pack(
-                side="left", padx=(15, 0))
+            text="Learn commands from the main IR Remote Studio window. "
+                 "Connect once here, then return to the main screen.",
+            foreground="#536277", wraplength=760).pack(
+                side="left")
         ttk.Label(
             learning, text="You can still read commands already stored in the "
                            "U1 using Advanced.",
