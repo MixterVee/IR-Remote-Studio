@@ -351,3 +351,33 @@ A verified local backup is still required before entering Learning,
 but it cannot restore the U1's internal programming.
 
 IMPORTANT: No new or speculative U1 programming commands were added.
+
+WINDOWS 0.3.7-BETA — REPLAY THE OFFICIAL APP'S LEARNING PREPARATION
+-------------------------------------------------------------------
+Observed: on Windows 0.3.6, U1 goes to Learning, flashes Fail!
+when you press the original IR remote, then returns to Learning.
+Our preflight backup receives 37 packets; the learning stage none.
+The official SofaBaton phone app can learn correctly with this U1.
+
+Our saved official-app ATT trace contained the sequence:
+  0x14 enter/setup -> 0x03 successful acknowledgement
+  0x07 three-fragment preparation -> 0x03 acknowledgement
+  0x04 begin learning -> 0x04 ready -> 0x06 complete -> IR waveform
+  0x05 finish -> 0x03 acknowledgement
+Earlier Windows builds skipped both preparation stages.
+
+VERSION 0.3.7 NOW SENDS THE EXACT RECORDED 0x14/0x07
+PREPARATION FRAMES AFTER SAVING AND VALIDATING A SLOT-8 IR BACKUP.
+Both preparation stages must ACK successfully before capture starts.
+It does NOT send the later 0x08 profile-configuration update.
+
+IMPORTANT — EXPERIMENTAL: 0x07 may change the U1's internal
+button/profile configuration and the app cannot restore that metadata.
+Existing JSON backups preserve only one raw slot-8 IR waveform.
+Only test if you are comfortable potentially altering old U1 mappings.
+
+In the main screen, select a device/button and click Capture.
+Wait for U1 to show Learning, then press the ORIGINAL remote's IR key.
+If U1 shows Fail! or capture fails, provide the newest
+Documents\\IR Remote Studio\\U1-Learn-Backups\\U1-Learn-Diagnostic-*.txt
+and report exactly what the remote's screen showed.
