@@ -344,45 +344,82 @@ action bars now wrap their controls into two columns so **Delete** and
 When there is enough width, buttons return to three columns. This
 preserves the vertical-taskbar sizing fix.
 
-**Original 0.3.3 U1 learning test:** The first live U1 capture was
-subsequently validated on the user's physical hardware and confirmed to
-control the intended IR device in IRPlus. Starting in Windows v0.3.4,
-the awkward diagnostic slot selector and LEARN 8 typed confirmation are
-replaced by main-screen capture. The original slot-8 recorded BLE sequence
-and automatic backup requirement remain in effect.
+**Experimental U1 live learning, NOT production-ready:** The normal
+**Learn IR** remains disabled because the U1 learning sequence has not
+yet been verified on live hardware. A guarded
+**Advanced → Experimental: learn IR in slot 8 (risk of overwrite)**
+operation is now available after connecting a verified U1. The
+only learning sequence currently implemented is the exact one
+observed in the official SofaBaton phone app's captured BLE exchange:
+
+- Recorded start: `a5 5a 09 04 08 18 02 00 00 00 00 00 2e`
+- Observed ready acknowledgment: `a5 5a 00 04 03`
+- Observed capture event: `a5 5a 01 06 00 06`
+- Strict ordered and checksummed IR waveform fragments use `0x0d`.
+- Recorded finish/exit: `a5 5a 01 05 01 06`
+
+The app **refuses to start** until it successfully reads slot 8,
+writes a timestamped JSON backup to `Documents/IR Remote Studio/
+U1-Learn-Backups`, fsyncs it, and verifies it is importable. The
+user must then accept a warning and **type LEARN 8**. The experimental
+learning operation may overwrite U1 slot 8 and alter an unknown
+physical key/device assignment. The local IR backup **cannot be
+automatically restored to the U1**. The test does NOT send unknown
+0x07/0x08/0x14 configuration/firmware instructions; it uses
+only the observed start/finish commands and record stream. A successful
+capture still requires selecting the destination button and pressing
+**Advanced → Save to selected button** to save it in the local
+library. Cancel, failed backup, and invalid reply never send start.
 
 **Important:** The tested protocol slot range 1–8 is an application
 restriction, not a documented limit of the U1 or a known 1:1 mapping
 to physical buttons. Real-hardware validation remains outstanding.
 
-### Windows v0.3.4-beta: SofaBaton U1 is now a main-screen IR learner
+### Windows v0.3.9-beta: verified v0.3.3 backend, main-screen capture
 
-Connect the SofaBaton U1 Bluetooth remote once; its connection stays
-active. In the **main window**, select or add a device and a button,
-then click **Capture selected button (SofaBaton U1)**. The app
-automatically (a) reads the previous slot-8 IR code, (b) saves and
-verifies a timestamped JSON backup in
-`Documents/IR Remote Studio/U1-Learn-Backups`, (c) starts the
-hardware-validated U1 learn sequence, (d) displays READY after the U1
-sends its ready event, (e) captures and validates the infrared signal,
-and (f) **autosaves** the new command into the selected device/button
-in the local IR Remote Studio library. The Save button just confirms
-the persisted code; **Save & Learn another** adds a named new button
-and immediately starts the next capture. Export the device to .irplus
-directly from this main screen.
+On Nov 9, a fresh physical U1 test of Windows v0.3.3 **learned four
+IR commands**, exported an `.irplus` remote and verified the commands
+worked in IRplus. This demonstrates the original U1 capture pathway
+still functions with the user's current remote.
 
-**No LEARN 8 dialog, no return to Bluetooth diagnostics, no manual slot
-entry.** Internally the tested U1 sequence still operates on slot 8,
-which may overwrite the previous U1 slot code. The automatically
-saved JSON backup preserves its raw IR code but **cannot restore the
-remote's U1 programming**. If backup read/write/validation fails, the
-app refuses to arm learning. The U1's actual complete device/profile
-configuration is not backed up. No unverified configuration or firmware
-writes are introduced.
+Unlike attempted v0.3.4–v0.3.8 revisions, v0.3.9 **branches directly
+from v0.3.3** and preserves both the original U1 BLE session and the
+original connection dialog `_run` task-scheduling path. The dialog
+runs withdrawn (not visible) during learning, allowing the user to
+select any device/button and **Capture directly from the main screen**.
+The old LEARN 8 typed-confirmation UI is removed entirely. A completed,
+validated capture autosaves to the original selected library button
+and can be exported to IRplus. Explicit USB selection still uses USB.
 
-For an explicit Harmony/USB learning session, choose the corresponding
-USB receiver from the Receiver selector; capture then follows that
-USB backend. When Receiver is set to **Auto detect supported learner**
-and a verified U1 BLE connection is active, Capture uses the U1 by
-default. The Bluetooth popup now only connects/disconnects and offers
-Advanced existing-stored-code reading for troubleshooting.
+The preflight reads and backs up the previous slot-8 waveform as before;
+the stored U1 profile cannot be restored from it. No speculative
+0x14/0x07/0x08 configuration commands or altered BLE parsers were
+added. Automated tests exercise the original task route and main
+library autosave. Physical U1 validation of the *new UI flow* remains
+required; success with the same backend in v0.3.3 is not proof of
+success in v0.3.9.
+
+### Windows v0.3.10-beta — disk-verified autosave and mismatch recovery
+
+When the original v0.3.3 U1 backend completes a validated learning
+operation, the main screen atomically saves the IR capture into
+`library.json`, **reads it back and checks the same sample exists**
+before confirming success. It then offers **Learn another NEW button**
+or **Finish learning** (leave U1 connected). A save failure rolls the
+sample back in memory and never displays a success confirmation.
+
+An unrecognized waveform is now marked **Raw IR (saved)** instead of
+the contradictory **Not learned**, because many legitimate captured
+remotes are not NEC-decodable but export as Pronto to IRplus.
+
+For short-press mismatches, **Remove last** undoes the newest sample
+without deleting the button. **Clear captures for selected button...**
+removes all its captured samples with confirmation while preserving
+its label and layout. Then select the same button and capture again.
+Neither correction sends BLE commands to the U1 or changes its
+programming. Both modifications save the library immediately; a failed
+disk save restores the previous list in memory.
+
+The original v0.3.3 U1 BLE session, learning coroutine and original
+dialog worker are unchanged. Physical confirmation on the main-screen
+workflow still matters.
