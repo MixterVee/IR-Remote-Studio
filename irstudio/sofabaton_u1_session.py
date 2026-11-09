@@ -16,9 +16,11 @@ only invoke synchronous entry points and read immutable snapshots.
 from __future__ import annotations
 
 import asyncio
+from collections import deque
 from concurrent.futures import Future
 from dataclasses import dataclass
 import threading
+import time
 
 from irstudio import sofabaton_u1_read as protocol
 
@@ -48,6 +50,11 @@ class U1Session:
         self._rx = None
         self._busy = None
         self._disconnecting = False
+        # Keep BLE receive diagnostics separate from the protocol inbox.
+        # Store only timestamps, command headers and lengths, never IR timings.
+        self._rx_diag_lock = threading.Lock()
+        self._rx_total = 0
+        self._rx_recent = deque(maxlen=128)
 
     def snapshot(self) -> ConnectionSnapshot:
         with self._lock:
@@ -86,10 +93,31 @@ class U1Session:
 
     def _receive(self, _sender, data):
         # Bleak's notification callback may arrive on a backend-specific thread.
+        raw = bytes(data)
+        event = {
+            "at": time.strftime("%H:%M:%S", time.localtime()),
+            "bytes": len(raw),
+            "command": f"0x{raw[3]:02X}" if len(raw) >= 4
+                       and raw[:2] == protocol.PREFIX else "unframed",
+        }
+        with self._rx_diag_lock:
+            self._rx_total += 1
+            self._rx_recent.append((self._rx_total, event))
         loop = self._loop
         inbox = self._rx
         if loop and not loop.is_closed() and inbox is not None:
-            loop.call_soon_threadsafe(inbox.put_nowait, bytes(data))
+            loop.call_soon_threadsafe(inbox.put_nowait, raw)
+
+    def _rx_report(self, since: int):
+        """Count the ACTUAL FFF1 callback notifications, not parsed packets."""
+        with self._rx_diag_lock:
+            total = self._rx_total
+            recent = [item for n, item in self._rx_recent if n > since]
+        return total - since, recent
+
+    def _rx_counter(self):
+        with self._rx_diag_lock:
+            return self._rx_total
 
     def _disconnected(self, client):
         if self._client is client and not self._disconnecting:
@@ -184,7 +212,10 @@ class U1Session:
             from irstudio import core
             # Do not arm a learner unless we can verify and save the previous
             # contents of this exact slot. We cannot program a backup into U1.
+            notifications_before_read = self._rx_counter()
             previous = await protocol.read_connected_ir(client, inbox, 8)
+            preflight_notifications, preflight_events = self._rx_report(
+                notifications_before_read)
             folder = Path(backup_folder) / "U1-Learn-Backups"
             folder.mkdir(parents=True, exist_ok=True)
             stamp = datetime.datetime.now(datetime.timezone.utc).strftime(
@@ -207,20 +238,51 @@ class U1Session:
                 os.fsync(stream.fileno())
             # Test the just-written backup is importable before arming U1.
             core.import_capture_json(path)
+            notifications_before_learn = self._rx_counter()
             try:
                 learned = await protocol.experimental_learn_connected_ir(
-                    client, inbox, slot=8, on_ready=on_ready)
+                    client, inbox, slot=8, timeout=35, on_ready=on_ready)
             except Exception as exc:
+                count, events = self._rx_report(notifications_before_learn)
+                diagnostic_path = folder / f"U1-Learn-Diagnostic-{stamp}.txt"
+                diagnostics = [
+                    "IR Remote Studio v0.3.6 — U1 receive diagnostics",
+                    "No remote configuration/firmware changes requested.",
+                    f"Backup (preserves IR waveform ONLY): {path}",
+                    f"U1 connected at failure: {bool(client.is_connected)}",
+                    f"BLE notifications during previous-slot read: {preflight_notifications}",
+                    "Preflight reply headers: " + (
+                        ", ".join(event["command"] for event in preflight_events[:8])
+                        or "none"),
+                    f"BLE notifications after learning start: {count}",
+                    f"Incoming control frame summaries (newest 128 at most):",
+                    *[f"  {event['at']}  {event['command']}  {event['bytes']} bytes"
+                      for event in events],
+                    f"Protocol error: {exc}",
+                    "If BLE notifications after learning start are zero,",
+                    "the app received no FFF1 notifications despite entering Learning mode.",
+                    "No IR signal bytes or device-identifying BLE addresses are included.",
+                ]
+                # Diagnostic recording is best effort: a logging failure must
+                # never hide the original Bluetooth learning failure.
+                try:
+                    with diagnostic_path.open("x", encoding="utf-8") as stream:
+                        stream.write("\n".join(diagnostics) + "\n")
+                    note = f"Diagnostics: {diagnostic_path}"
+                except OSError:
+                    note = "Could not write the diagnostic report."
                 raise RuntimeError(
-                    f"Learning failed: {exc}. Previous IR was saved at "
-                    f"{path}. This file cannot restore the U1's own "
-                    "programmed slot.") from exc
+                    f"Learning failed: {exc} "
+                    f"BLE preflight notifications: {preflight_notifications}; "
+                    f"learning notifications: {count}. {note} "
+                    f"Previous U1 IR backed up to {path}; this cannot "
+                    "restore the U1's own programmed slot.") from exc
             return learned, str(path)
 
     def learn_ir_experimental(self, backup_folder, on_ready=None):
         """User-initiated U1 live learning with mandatory local preflight backup."""
         return self._submit(self._learn_async(
-            backup_folder, on_ready=on_ready)).result(timeout=53)
+            backup_folder, on_ready=on_ready)).result(timeout=65)
 
     async def _disconnect_async(self):
         async with self._busy:
