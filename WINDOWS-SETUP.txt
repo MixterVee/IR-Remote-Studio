@@ -334,3 +334,19 @@ If saving fails the original capture list is restored.
 
 As before, slot 8 is read and backed up before each live learn;
 that saved waveform cannot restore the U1's device/profile mapping.
+
+WINDOWS v0.3.11-BETA — LEARN AN EXISTING BUTTON AFTER AUTOSAVE
+--------------------------------------------------------------
+After every successful, disk-confirmed U1 learning session the popup now
+offers three explicit actions:
+    Learn selected existing  |  New button  |  Finish
+
+To learn into an existing button, choose its name from the dropdown and
+click Learn selected existing. This uses the SAME v0.3.3 U1 capture
+routine and adds a new sample to that button (does not rename/delete it).
+If you want to replace all earlier samples, use "Clear captures for
+selected button..." on the main screen before Capture.
+
+New button opens the existing name dialog, then begins capture.
+Finish leaves the U1 Bluetooth connection active. The X acts as Finish.
+No new U1 commands, profiles or programming writes have been added.
