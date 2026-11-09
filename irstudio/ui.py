@@ -76,7 +76,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.3.6-beta\n\nDirect learning backends: SofaBaton U1 Bluetooth, Harmony 300/350 USB HID (046D:C124), and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.3.8-beta\n\nDirect learning backends: SofaBaton U1 Bluetooth, Harmony 300/350 USB HID (046D:C124), and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -1002,7 +1002,6 @@ class Studio(tk.Tk):
         device_id, button_id = device["id"], button["id"]
         self.running = True
         self._active_operation += 1
-        operation_id = self._active_operation
         for widget in (self.probe_btn, self.capture_btn, self.detect_btn,
                        self.receiver_picker, self.sofabaton_ble_btn):
             widget.configure(state="disabled")
@@ -1011,10 +1010,9 @@ class Studio(tk.Tk):
             "Wait until the SofaBaton screen displays Learning before pressing.")
         def job():
             try:
-                result = self.u1_session.learn_ir_experimental(
-                    self.folder,
-                    on_ready=lambda: self.after(
-                        0, lambda: self._bluetooth_capture_ready(operation_id)))
+                # Preserve the original v0.3.3 legacy learning engine without
+                # on_ready callbacks or speculative configuration writes.
+                result = self.u1_session.learn_ir_experimental(self.folder)
                 self.after(0, lambda: self._finish_bluetooth_capture(
                     device_id, button_id, result, None))
             except Exception as exc:
