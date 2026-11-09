@@ -432,3 +432,28 @@ and share the report if capture still fails. The capture timeout is
 extended to 35 seconds to allow positioning. No undocumented U1
 programming writes were introduced; the prior IR backup still cannot
 restore internal U1 programming.
+
+### Windows v0.3.7-beta — experimental official-app preparation before learning
+
+Following physical U1 tests showing **Learning → Fail! → Learning**,
+the stored 2026-11-08 official-app ATT capture identified an omitted
+preparation sequence. The official app sends `0x14` and waits for a
+successful `0x03` ACK, then sends three frames of `0x07`, waits for
+another `0x03` ACK, and only then starts learning with `0x04`.
+Previous Windows builds only sent `0x04`/`0x05`.
+
+v0.3.7 sends the **exact captured** preparation packets after a
+durable, verified raw IR backup. Both acknowledgments are required
+before `0x04`; an error aborts capture. It preserves the existing
+Bluetooth connection, command capture, signal validation, and local
+autosave behavior. The diagnostic report distinguishes BLE replies
+during stored-code read, preparation, and capture. **The 0x08
+post-learning profile-update command is NOT sent.**
+
+**Experimental configuration-write warning:** opcode `0x07` has
+not been independently decoded; it may modify profile or button
+metadata in the U1. The automatic slot-8 JSON backup cannot restore
+remote programming or metadata. The test should use a U1 whose
+previous configuration is expendable, and users must verify behavior
+on physical hardware. Successful automated tests prove packet handling
+and safeguards only, not actual device compatibility.
