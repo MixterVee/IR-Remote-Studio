@@ -257,6 +257,10 @@ class Studio(tk.Tk):
                            ("Remove last", self.remove_capture)):
             ttk.Button(capture_tools, text=label, command=cmd).pack(
                 side="left", expand=True, fill="x", padx=1)
+        ttk.Button(
+            controls, text="Clear captures for selected button...",
+            command=self.clear_button_captures).pack(
+                fill="x", pady=(5, 0))
         self.details = tk.Text(right, wrap="word", height=8, state="disabled", relief="flat",
                                background="#f5f6f8", foreground="#222222", padx=12, pady=12)
         self.details.pack(fill="both", expand=True)
@@ -1127,12 +1131,77 @@ class Studio(tk.Tk):
         self.status_var.set(f"Selected best matching sample for {b['label']}")
 
     def remove_capture(self):
+        """Undo only the newest local capture; never delete the button."""
+        if self.running:
+            return
         b = self._selected_button()
-        if b and b["captures"] and messagebox.askyesno("Remove sample", "Remove the last recorded sample?"):
-            b["captures"].pop()
-            b["selected"] = core.best_capture_index(b)
+        if not b or not b["captures"]:
+            return
+        if not messagebox.askyesno(
+                "Remove last capture",
+                f"Remove the newest sample from '{b['label']}'?\n\n"
+                "Its other samples and button label will be kept.",
+                parent=self):
+            return
+        previous = list(b["captures"])
+        selected = b.get("selected", 0)
+        b["captures"].pop()
+        b["selected"] = core.best_capture_index(b)
+        try:
             self._save()
-            self._reload_buttons(b["id"])
+        except Exception as exc:
+            b["captures"] = previous
+            b["selected"] = selected
+            messagebox.showerror("Could not remove capture", str(exc), parent=self)
+            return
+        self._reload_buttons(b["id"])
+        self.status_var.set(
+            f"Removed latest sample from '{b['label']}'. "
+            f"{len(b['captures'])} sample(s) remain.")
+
+    def clear_button_captures(self):
+        """Clear only selected button's library samples, not its definition.
+
+        No Bluetooth write or physical remote programming change is made.
+        This is the fast recovery path after mismatched or short IR presses.
+        """
+        if self.running:
+            return
+        b = self._selected_button()
+        if not b:
+            messagebox.showwarning("Select button",
+                                   "Select the button whose captures you want to clear.",
+                                   parent=self)
+            return
+        count = len(b.get("captures", []))
+        if not count:
+            self.status_var.set(
+                f"'{b['label']}' has no captured samples to clear.")
+            return
+        if not messagebox.askyesno(
+                "Clear button captures",
+                f"Clear all {count} captured IR sample(s) from '{b['label']}'?\n\n"
+                "The button name and layout will be preserved.\n"
+                "Only the Windows library captures will be cleared; "
+                "this does not erase or reprogram the SofaBaton U1.",
+                parent=self):
+            return
+        previous = list(b["captures"])
+        selected = b.get("selected", 0)
+        b["captures"] = []
+        b["selected"] = 0
+        try:
+            self._save()
+        except Exception as exc:
+            b["captures"] = previous
+            b["selected"] = selected
+            messagebox.showerror("Could not clear captures", str(exc),
+                                 parent=self)
+            return
+        self._reload_buttons(b["id"])
+        self.status_var.set(
+            f"Cleared {count} captured IR sample(s) for '{b['label']}'. "
+            "Button retained. Click Capture to learn it again.")
 
     def import_capture(self):
         path = filedialog.askopenfilename(title="Import IR Capture (.json)", filetypes=[("IR Capture (*.json)", "*.json")])
