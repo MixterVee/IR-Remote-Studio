@@ -155,6 +155,11 @@ public class MainActivity extends Activity {
         setStatus(availability);
     }
 
+    @Override protected void onDestroy() {
+        if (u1Ble != null) u1Ble.close();
+        super.onDestroy();
+    }
+
     private int dp(float value) {
         return Math.round(getResources().getDisplayMetrics().density * value);
     }
@@ -768,8 +773,11 @@ public class MainActivity extends Activity {
     private void showAbout() {
         String capabilities = "Android " + BuildConfig.VERSION_NAME
                 + "\n\nLearn: compatible Logitech Harmony 300/350 over USB. "
-                + "SofaBaton U1 Bluetooth learning is available on Windows; "
-                + "Android BLE learning has not been validated or ported yet."
+                + "SofaBaton U1 Bluetooth scan, identity verification and "
+                + "backup-before-learning are included as an Android test feature. "
+                + "U1 physical capture has not yet been confirmed on Android. "
+                + "A waveform backup can restore to the Android library, "
+                + "not the U1's internal programming."
                 + "\n\nLibrary: named remotes, raw IR captures, comparison, "
                 + "layout order and width, full JSON library backup and .irplus import/export."
                 + "\n\nLocal data: " + getFilesDir().getAbsolutePath()
@@ -1640,6 +1648,44 @@ public class MainActivity extends Activity {
                         + "If it still fails, send us this exact error message.")
                     .setPositiveButton("OK", null)
                     .show();
+            }
+        } else if (requestCode == IMPORT_U1_BACKUP) {
+            File temporary = new File(getCacheDir(), "u1-import-pending.json");
+            try {
+                try (InputStream input = getContentResolver().openInputStream(uri);
+                     FileOutputStream output = new FileOutputStream(temporary)) {
+                    if (input == null) throw new IllegalStateException("Cannot open U1 backup");
+                    byte[] bytes = readLimited(input, 131072);
+                    output.write(bytes);
+                    output.flush();
+                }
+                U1Protocol.Signal restored = U1BackupStore.read(temporary);
+                File saved = U1BackupStore.save(u1BackupFolder(), restored);
+                setStatus("Imported U1 waveform backup: " + saved.getName()
+                        + ". Use U1 Backups / Restore to add it to a library button.");
+                showU1BackupActions(saved);
+            } catch (Exception failure) {
+                toast("U1 waveform import failed: " + failure.getMessage());
+            } finally {
+                if (temporary.exists()) temporary.delete();
+            }
+        } else if (requestCode == EXPORT_U1_BACKUP) {
+            File backup = pendingU1BackupExport;
+            pendingU1BackupExport = null;
+            try {
+                U1BackupStore.read(backup); // validate before sharing
+                try (InputStream input = new FileInputStream(backup);
+                     OutputStream output = getContentResolver().openOutputStream(uri)) {
+                    if (output == null) throw new IllegalStateException("Cannot write backup");
+                    byte[] bytes = new byte[8192];
+                    int n;
+                    while ((n = input.read(bytes)) != -1) output.write(bytes, 0, n);
+                    output.flush();
+                }
+                setStatus("U1 slot-8 waveform exported to JSON. "
+                        + "This is NOT a complete U1 programming restore.");
+            } catch (Exception failure) {
+                toast("U1 backup export failed: " + failure.getMessage());
             }
         } else if (requestCode == BACKUP_LIBRARY) {
             try (OutputStream output = getContentResolver().openOutputStream(uri)) {
