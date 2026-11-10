@@ -21,7 +21,7 @@ Hardware verification was completed for the original v0.3.3 SofaBaton learning e
 
 USB hardware compatibility depends on the device and driver. The Ocrustar/ElkSmart adapter remains **experimental**. U1 slot-8 backups preserve the previous raw waveform only and **cannot restore the remote's full internal programming**.
 
-Automated checks include full Python protocol/GUI test suites on Windows and a Linux virtual-display UI smoke run. Both must pass before distributing the candidate.
+Automated checks include the complete protocol and GUI test modules in isolated processes on Windows and under a Linux virtual display. Both must pass before distributing the candidate.
 
 ## Installation
 
