@@ -47,6 +47,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MainActivity extends Activity {
     private static final int IMPORT_DEVICE = 1001;
     private static final int EXPORT_DEVICE = 1002;
+    private static final int BACKUP_LIBRARY = 1003;
+    private static final int RESTORE_LIBRARY = 1004;
     private static final int DARK = Color.rgb(9, 18, 34);
     private static final int SURFACE = Color.rgb(24, 40, 64);
     private static final int WHITE = Color.rgb(244, 247, 252);
@@ -480,6 +482,7 @@ public class MainActivity extends Activity {
         new AlertDialog.Builder(this).setTitle("About IR Remote Studio")
                 .setMessage(capabilities)
                 .setNegativeButton("Close", null)
+                .setNeutralButton("Library backup...", (d, w) -> showLibraryBackupMenu())
                 .setPositiveButton("Project on GitHub", (d, w) -> {
                     Intent open = new Intent(Intent.ACTION_VIEW,
                         Uri.parse("https://github.com/MixterVee/IR-Remote-Studio"));
@@ -1147,6 +1150,80 @@ public class MainActivity extends Activity {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
+    private void showLibraryBackupMenu() {
+        new AlertDialog.Builder(this)
+                .setTitle("IR library backup")
+                .setMessage("Save every remote, button, layout width and captured "
+                        + "sample as a JSON backup before upgrading or uninstalling. "
+                        + "Unlike .irplus, this preserves full capture history.")
+                .setPositiveButton("Back up library", (d, w) -> {
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.setType("application/json");
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.putExtra(Intent.EXTRA_TITLE,
+                            "IR-Remote-Studio-Android-library.json");
+                    startActivityForResult(intent, BACKUP_LIBRARY);
+                })
+                .setNeutralButton("Restore backup", (d, w) -> {
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    intent.setType("*/*");
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    startActivityForResult(intent, RESTORE_LIBRARY);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void restoreLibraryFromDocument(Uri uri) throws Exception {
+        final byte[] raw;
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            if (input == null) throw new IllegalStateException("Cannot open backup file.");
+            raw = readLimited(input, 2_000_000);
+        }
+        final List<IrplusCodec.Remote> incoming = parseLibraryJson(
+                new String(raw, StandardCharsets.UTF_8));
+        new AlertDialog.Builder(this)
+                .setTitle("Replace local library?")
+                .setMessage("This backup contains " + incoming.size()
+                        + " remote(s). It will replace the current Android library. "
+                        + "A local recovery copy will be written first.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Restore", (d, w) -> {
+                    List<IrplusCodec.Remote> old = new ArrayList<>(remotes);
+                    int previousSelected = selectedDevice;
+                    try {
+                        File currentFile = new File(getFilesDir(), "remotes.json");
+                        if (currentFile.exists()) {
+                            File backup = new File(getFilesDir(),
+                                    "remotes-before-restore.json");
+                            try (InputStream input = new FileInputStream(currentFile);
+                                 OutputStream output = new FileOutputStream(backup)) {
+                                byte[] block = new byte[8192];
+                                int n;
+                                while ((n = input.read(block)) != -1) {
+                                    output.write(block, 0, n);
+                                }
+                                output.flush();
+                            }
+                        }
+                        remotes.clear();
+                        remotes.addAll(incoming);
+                        selectedDevice = 0;
+                        saveRemotes();
+                        refreshDevices();
+                        setStatus("Restored " + incoming.size()
+                                + " remote(s) and all capture samples.");
+                    } catch (Exception error) {
+                        remotes.clear();
+                        remotes.addAll(old);
+                        selectedDevice = previousSelected;
+                        refreshDevices();
+                        toast("Restore failed; previous library retained: "
+                                + error.getMessage());
+                    }
+                }).show();
+    }
+
     private void openImport() {
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.setType("*/*");
@@ -1199,6 +1276,24 @@ public class MainActivity extends Activity {
                         + "If it still fails, send us this exact error message.")
                     .setPositiveButton("OK", null)
                     .show();
+            }
+        } else if (requestCode == BACKUP_LIBRARY) {
+            try (OutputStream output = getContentResolver().openOutputStream(uri)) {
+                if (output == null) throw new IllegalStateException("Cannot open backup destination.");
+                output.write(libraryJson().getBytes(StandardCharsets.UTF_8));
+                output.flush();
+                setStatus("Full Android library backup saved, including capture history.");
+            } catch (Exception error) {
+                setStatus("Library backup failed: " + error.getMessage());
+                toast("Backup failed: " + error.getMessage());
+            }
+        } else if (requestCode == RESTORE_LIBRARY) {
+            try {
+                restoreLibraryFromDocument(uri);
+            } catch (Exception error) {
+                new AlertDialog.Builder(this).setTitle("Invalid library backup")
+                        .setMessage(error.getMessage()).setPositiveButton("OK", null)
+                        .show();
             }
         } else if (requestCode == EXPORT_DEVICE) {
             try (OutputStream output = getContentResolver().openOutputStream(uri)) {
