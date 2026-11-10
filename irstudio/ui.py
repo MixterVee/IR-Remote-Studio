@@ -8,6 +8,8 @@ import sys
 import threading
 import tkinter as tk
 from pathlib import Path
+import platform
+import webbrowser
 from tkinter import filedialog, font as tkfont, messagebox, simpledialog, ttk
 
 from irstudio import __version__
@@ -75,8 +77,7 @@ class Studio(tk.Tk):
         file_menu.add_command(label="Exit", command=self._close)
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
-        help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.3.12-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+        help_menu.add_command(label="About IR Remote Studio...", command=self.show_about)
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -90,7 +91,7 @@ class Studio(tk.Tk):
         heading = ttk.Frame(identity)
         heading.pack(side="left", fill="x", expand=True)
         ttk.Label(heading, text="IR Remote Studio", font=("Segoe UI Semibold", 20)).pack(anchor="w")
-        ttk.Label(heading, text="Create remotes, capture IR by USB, read saved SofaBaton U1 codes via Bluetooth, and export .irplus.",
+        ttk.Label(heading, text="Learn infrared commands, organize buttons, and export remotes to IRplus.",
                   foreground="#505b69").pack(anchor="w", pady=(2, 0))
 
         toolbar = ttk.Frame(self, padding=(16, 10, 16, 10))
@@ -98,12 +99,12 @@ class Studio(tk.Tk):
         ttk.Button(toolbar, text="Import IR Capture (.json)", command=self.import_capture).pack(side="left", padx=(0, 6))
         ttk.Button(toolbar, text="Import Device (.irplus)", command=self.import_irplus).pack(side="left")
         ttk.Button(toolbar, text="Export Device (.irplus)", command=self.export_irplus).pack(side="right")
-        ttk.Label(toolbar, text="NEC repeat frames:").pack(side="right", padx=(15, 6))
+        ttk.Label(toolbar, text="NEC repeats:").pack(side="right", padx=(15, 6))
         ttk.Combobox(toolbar, textvariable=self.repeat_var, values=("0", "1", "2"),
                      width=4, state="readonly").pack(side="right")
 
         # Make USB connectivity a first-class workflow, not a toolbar detail.
-        connection = ttk.LabelFrame(self, text="IR LEARNER CONNECTION", padding=(16, 10))
+        connection = ttk.LabelFrame(self, text="IR learner connection", padding=(16, 10))
         connection.pack(fill="x", padx=16, pady=(2, 11))
         connection_top = ttk.Frame(connection)
         connection_top.pack(fill="x")
@@ -114,13 +115,13 @@ class Studio(tk.Tk):
         self.receiver_picker.pack(side="left", padx=(0, 12))
         self.receiver_picker.bind("<<ComboboxSelected>>", self._receiver_changed)
         self.probe_btn = ttk.Button(
-            connection_top, text="Connect / Retry", command=self.probe)
+            connection_top, text="Connect USB", command=self.probe)
         self.probe_btn.pack(side="left", ipadx=18, ipady=7)
         self.detect_btn = ttk.Button(
-            connection_top, text="Refresh USB", command=self.detect_learner)
+            connection_top, text="Detect USB", command=self.detect_learner)
         self.detect_btn.pack(side="left", padx=(10, 0), ipadx=8, ipady=7)
         self.sofabaton_ble_btn = ttk.Button(
-            connection_top, text="SofaBaton U1 Bluetooth...",
+            connection_top, text="SofaBaton U1...",
             command=self.open_sofabaton_ble)
         self.sofabaton_ble_btn.pack(side="left", padx=(10, 0), ipady=7)
 
@@ -219,9 +220,9 @@ class Studio(tk.Tk):
                                          show="headings", selectmode="browse")
         for key, caption, width, minimum in (
             ("label", "Custom label", 130, 70),
-            ("status", "Capture status", 102, 85),
-            ("count", "Samples", 61, 52),
-            ("code", "IR code / format", 120, 80),
+            ("status", "Samples", 102, 85),
+            ("count", "Matches", 61, 52),
+            ("code", "Signal format", 120, 80),
         ):
             self.button_tree.heading(key, text=caption)
             self.button_tree.column(key, width=width, minwidth=minimum,
@@ -239,29 +240,91 @@ class Studio(tk.Tk):
                   justify="left").pack(fill="x", pady=(6, 8))
         self.capture_btn = ttk.Button(controls, text="Capture selected button (USB)", command=self.capture)
         self.capture_btn.pack(fill="x", ipady=7)
-        save_actions = ttk.Frame(controls)
-        save_actions.pack(fill="x", pady=(6, 0))
-        self.save_button_btn = ttk.Button(save_actions, text="Save",
-                                          command=self.save_current_button)
-        self.save_button_btn.pack(side="left", fill="x", expand=True, padx=(0, 4), ipady=5)
-        self.save_next_btn = ttk.Button(save_actions, text="Save & Learn another",
-                                         command=self.learn_another)
-        self.save_next_btn.pack(side="left", fill="x", expand=True, padx=(4, 0), ipady=5)
+        ttk.Label(
+            controls, text="Successful captures save automatically.",
+            foreground="#536277").pack(fill="x", pady=(5, 1))
         capture_tools = ttk.Frame(controls)
         capture_tools.pack(fill="x", pady=(6, 0))
-        for label, cmd in (("Review captures...", self.browse_samples),
-                           ("Use best match", self.choose_best),
-                           ("Remove last", self.remove_capture)):
+        for label, cmd in (("Review samples...", self.browse_samples),
+                           ("Choose best", self.choose_best),
+                           ("Undo last", self.remove_capture)):
             ttk.Button(capture_tools, text=label, command=cmd).pack(
                 side="left", expand=True, fill="x", padx=1)
         ttk.Button(
-            controls, text="Clear captures for selected button...",
+            controls, text="Clear all samples for this button...",
             command=self.clear_button_captures).pack(
                 fill="x", pady=(5, 0))
         self.details = tk.Text(right, wrap="word", height=8, state="disabled", relief="flat",
                                background="#f5f6f8", foreground="#222222", padx=12, pady=12)
         self.details.pack(fill="both", expand=True)
 
+
+    def show_about(self):
+        """Non-blocking About / Version window with accurate release details."""
+        dlg = tk.Toplevel(self)
+        dlg.title("About IR Remote Studio")
+        dlg.geometry("570x475")
+        dlg.minsize(510, 410)
+        dlg.transient(self)
+        body = ttk.Frame(dlg, padding=20)
+        body.pack(fill="both", expand=True)
+        ttk.Label(
+            body, text="IR Remote Studio",
+            font=("Segoe UI Semibold", 21)).pack(anchor="w")
+        ttk.Label(
+            body, text=f"Version {__version__}  •  Windows x64",
+            foreground="#315c88",
+            font=("Segoe UI Semibold", 12)).pack(
+                anchor="w", pady=(3, 12))
+        ttk.Separator(body).pack(fill="x", pady=(0, 13))
+        ttk.Label(
+            body,
+            text="Create remotes, capture infrared commands, arrange "
+                 "buttons and export to IRplus.",
+            wraplength=520, justify="left").pack(anchor="w", pady=(0, 12))
+        hardware = (
+            "SofaBaton U1 — Bluetooth learning, based on the "
+            "hardware-tested v0.3.3 capture engine.\n"
+            "Logitech Harmony 300/350 — direct USB learning.\n"
+            "Ocrustar / ElkSmart — experimental USB support; "
+            "compatibility depends on the actual device and driver.\n"
+            "Other learners — optional legacy Concordance integration."
+        )
+        ttk.Label(body, text="SUPPORTED LEARNING METHODS",
+                  font=("Segoe UI Semibold", 10)).pack(anchor="w")
+        ttk.Label(
+            body, text=hardware, justify="left", wraplength=520).pack(
+                anchor="w", pady=(4, 13))
+        ttk.Label(
+            body, text="DATA LOCATION",
+            font=("Segoe UI Semibold", 10)).pack(anchor="w")
+        ttk.Label(
+            body, text=str(self.folder), wraplength=520,
+            foreground="#536277").pack(anchor="w", pady=(3, 10))
+        ttk.Label(
+            body,
+            text=f"Platform: Windows ({platform.machine()})   •   "
+                 "License: MIT   •   Portable application",
+            wraplength=520).pack(anchor="w", pady=(0, 10))
+        bottom = ttk.Frame(body)
+        bottom.pack(side="bottom", fill="x")
+        ttk.Button(
+            bottom, text="Project on GitHub",
+            command=lambda: webbrowser.open(
+                "https://github.com/MixterVee/IR-Remote-Studio")
+        ).pack(side="left")
+        ttk.Button(
+            bottom, text="Open data folder",
+            command=self.open_folder).pack(side="left", padx=(10, 0))
+        ttk.Button(
+            bottom, text="Close", command=dlg.destroy).pack(side="right")
+        dlg.protocol("WM_DELETE_WINDOW", dlg.destroy)
+        dlg.update_idletasks()
+        self.update_idletasks()
+        x = self.winfo_rootx() + max(0, (self.winfo_width() - 570) // 2)
+        y = self.winfo_rooty() + max(0, (self.winfo_height() - 475) // 2)
+        dlg.geometry(f"+{x}+{y}")
+        return dlg
 
     def open_sofabaton_ble(self):
         """Opt-in U1 connection/pairing and previously saved IR read-back."""
@@ -1146,8 +1209,8 @@ class Studio(tk.Tk):
             self.status_var.set("Save unsuccessful; previous library not replaced.")
             return False
         self.status_var.set(
-            f"Saved {button['label']} to {device['name']}. "
-            "Finished — no new capture started. You can export this remote as .irplus."
+            f"Saved '{button['label']}' to '{device['name']}'. "
+            "No extra capture started; the button is ready for IRplus export."
         )
         return True
 
