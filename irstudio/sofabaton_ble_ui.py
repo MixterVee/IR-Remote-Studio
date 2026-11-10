@@ -144,7 +144,7 @@ class SofaBatonBleDialog(tk.Toplevel):
         self._poll_connection()
         # Schedule after construction so controls, lists and callbacks exist.
         # Do not scan when reopening an already connected session: users may
-        # be opening Advanced to read an existing stored IR command.
+        # be opening Troubleshooting to read an existing stored IR command.
         if auto_scan and not snap.connected:
             self.after(250, self._auto_scan_on_open)
 
@@ -227,7 +227,6 @@ class SofaBatonBleDialog(tk.Toplevel):
         self.disconnect_button.configure(state="disabled")
         self.inspect_button.configure(state="disabled")
         self.read_button.configure(state="disabled")
-        self.experimental_learn_button.configure(state="disabled")
         self.save_capture_button.configure(state="disabled")
         self.status_var.set(name + "...")
 
@@ -482,7 +481,7 @@ class SofaBatonBleDialog(tk.Toplevel):
             "Read stored U1 infrared code?",
             f"Read the IR code already stored in slot {slot} of {device.name}?\n\n"
             "Experimental: uses the verified active Bluetooth connection "
-            "to send read-code (0x0C) only. No new learning, profile updates "
+            "to send read-code (0x0C) only. No new learning or profile updates "
             "or firmware commands are sent.\n\n"
             "Only proceed if this really is your SofaBaton U1. "
             "Disconnect the SofaBaton phone app first.",
