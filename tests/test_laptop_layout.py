@@ -94,8 +94,7 @@ class LaptopControlsTests(unittest.TestCase):
                     (app._device_action_buttons,), 350)
                 app._fit_action_bars(
                     app.button_actions, 760,
-                    (app._primary_action_buttons,
-                     app._secondary_action_buttons), 415)
+                    (app._primary_action_buttons,), 415)
                 # Grid placement changes immediately. Calling app.update() on
                 # this deliberately still-narrow window re-triggers <Configure>
                 # and legitimately puts it back in two-column mode.
@@ -165,6 +164,127 @@ class LaptopControlsTests(unittest.TestCase):
                 if dialog is not None and dialog.winfo_exists():
                     dialog.destroy()
                 app.destroy()
+
+
+class LayoutOrderTests(unittest.TestCase):
+    """Appearance controls must be transactional and affect IRplus order."""
+
+    @staticmethod
+    def _device():
+        device = core.new_device("Layout test")
+        for label in ("Select", "Right", "Input"):
+            button = core.new_button(label)
+            button["pronto_hex"] = "0000 006D 0002 0000 0157 0057 0016 4DFA"
+            device["buttons"].append(button)
+        return device
+
+    def test_move_preview_then_cancel_preserves_actual_device(self):
+        require_display(self)
+        import tkinter as tk
+        from irstudio.layout_preview import LayoutDialog
+        root = tk.Tk()
+        device = self._device()
+        original = [b["id"] for b in device["buttons"]]
+        callbacks = []
+        try:
+            dlg = LayoutDialog(root, device, lambda: callbacks.append("saved"))
+            target = device["buttons"][1]["id"]
+            dlg.tree.selection_set(target)
+            dlg._select()
+            self.assertEqual(str(dlg.move_up_btn.cget("state")), "normal")
+            dlg._move_selected(-1)
+            dlg.chosen_span.set("12")
+            dlg._apply_width()
+            self.assertEqual(dlg.order, [original[1], original[0], original[2]])
+            self.assertEqual(dlg.tree.get_children(), tuple(dlg.order))
+            self.assertEqual([b["label"] for row in dlg._rows()
+                              for b in row], ["Right", "Select", "Input"])
+            self.assertEqual(dlg.working[target], 12)
+            self.assertEqual([b["id"] for b in device["buttons"]], original)
+            self.assertTrue(all(b["span"] == 6 for b in device["buttons"]))
+            dlg.destroy()  # user clicks Cancel
+            self.assertEqual(callbacks, [])
+            self.assertEqual([b["id"] for b in device["buttons"]], original)
+        finally:
+            root.destroy()
+
+    def test_save_both_order_and_width_and_export_to_irplus(self):
+        require_display(self)
+        import tempfile
+        import tkinter as tk
+        import xml.etree.ElementTree as ET
+        from pathlib import Path
+        from irstudio.layout_preview import LayoutDialog
+        root = tk.Tk()
+        device = self._device()
+        library = core.default_library()
+        library["devices"].append(device)
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "library.json"
+            calls = []
+            def save():
+                core.save_library(path, library)
+                calls.append("saved")
+            try:
+                dlg = LayoutDialog(root, device, save)
+                target = device["buttons"][2]["id"]
+                dlg.tree.selection_set(target)
+                dlg._select()
+                dlg._move_selected(-1)
+                dlg._move_selected(-1)
+                self.assertEqual(
+                    str(dlg.move_up_btn.cget("state")), "disabled")
+                dlg.chosen_span.set("12")
+                dlg._apply_width()
+                dlg._save()
+                self.assertEqual(calls, ["saved"])
+                self.assertFalse(dlg.winfo_exists())
+                saved = core.load_library(path)["devices"][0]
+                self.assertEqual(
+                    [b["label"] for b in saved["buttons"]],
+                    ["Input", "Select", "Right"])
+                self.assertEqual(
+                    [b["span"] for b in saved["buttons"]],
+                    [12, 6, 6])
+                irplus = Path(temp) / "remote.irplus"
+                self.assertEqual(core.export_irplus(device, irplus), 3)
+                exported = [
+                    (b.get("label"), int(b.get("span")))
+                    for b in ET.parse(irplus).getroot().find("device")
+                    if b.tag == "button"]
+                self.assertEqual(exported, [
+                    ("Input", 12), ("Select", 6), ("Right", 6)])
+            finally:
+                if dlg.winfo_exists():
+                    dlg.destroy()
+                root.destroy()
+
+    def test_failed_save_restores_original_order_and_widths(self):
+        require_display(self)
+        import tkinter as tk
+        from irstudio.layout_preview import LayoutDialog
+        root = tk.Tk()
+        device = self._device()
+        original = list(device["buttons"])
+        try:
+            def fail():
+                raise OSError("Disk is full")
+            dlg = LayoutDialog(root, device, fail)
+            target = device["buttons"][1]["id"]
+            dlg.tree.selection_set(target)
+            dlg._select()
+            dlg._move_selected(-1)
+            dlg.chosen_span.set("4")
+            dlg._apply_width()
+            with patch("irstudio.layout_preview.messagebox.showerror") as error:
+                dlg._save()
+                error.assert_called_once()
+            self.assertTrue(dlg.winfo_exists())
+            self.assertEqual(device["buttons"], original)
+            self.assertTrue(all(b["span"] == 6 for b in device["buttons"]))
+            dlg.destroy()
+        finally:
+            root.destroy()
 
 
 if __name__ == "__main__":
