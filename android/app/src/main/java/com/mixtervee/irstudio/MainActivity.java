@@ -597,8 +597,13 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
-    /** The phone hosts the learning workflow. Harmony never receives a configuration write. */
+    /** Android uses the proven Harmony USB backend; no U1 BLE writes here. */
     private void startLearning() {
+        startLearning(null, null);
+    }
+
+    private void startLearning(IrplusCodec.Remote targetRemote,
+                               IrplusCodec.Item targetButton) {
         UsbManager usb = (UsbManager) getSystemService(USB_SERVICE);
         UsbDevice harmony = null;
         if (usb != null) {
@@ -651,12 +656,85 @@ public class MainActivity extends Activity {
                             String pronto = candidate.get();
                             if (pronto == null) {
                                 showFailedLearning(report);
+                            } else if (targetRemote != null && targetButton != null) {
+                                saveExistingCapture(targetRemote, targetButton, pronto);
                             } else {
                                 showCapturePreview(pronto, report);
                             }
                         });
                     }, "HarmonyLearnAndPreview").start();
                 }).show();
+    }
+
+    private boolean replaceButtonAndSave(IrplusCodec.Remote remote,
+                                          IrplusCodec.Item oldItem,
+                                          IrplusCodec.Item replacement) {
+        int index = remote.items.indexOf(oldItem);
+        if (index < 0) {
+            toast("The button was removed. No capture was saved.");
+            return false;
+        }
+        remote.items.set(index, replacement);
+        try {
+            saveRemotes();
+            renderRemote();
+            return true;
+        } catch (Exception error) {
+            remote.items.set(index, oldItem);
+            toast("Could not save IR library: " + error.getMessage());
+            return false;
+        }
+    }
+
+    private void saveExistingCapture(IrplusCodec.Remote remote,
+                                     IrplusCodec.Item item, String pronto) {
+        // Validates and saves to the preselected button as soon as capture ends.
+        // A failure rolls back and never reports success.
+        try {
+            IrplusCodec.Item changed = item.addCapture(pronto);
+            if (!replaceButtonAndSave(remote, item, changed)) return;
+            setStatus("Auto-saved '" + changed.label + "' ("
+                    + changed.captures.size() + " samples). "
+                    + changed.sampleStatus() + ". Ready for IRplus export.");
+            showLearningChoices(remote);
+        } catch (IllegalArgumentException error) {
+            toast("Invalid IR capture: " + error.getMessage());
+        }
+    }
+
+    private void showLearningChoices(IrplusCodec.Remote remote) {
+        new AlertDialog.Builder(this)
+                .setTitle("IR command saved")
+                .setMessage("The IR command was saved to this remote. "
+                        + "What would you like to learn next?")
+                .setPositiveButton("New button",
+                        (d, w) -> createButton(true))
+                .setNeutralButton("Existing button",
+                        (d, w) -> chooseExistingForLearning(remote))
+                .setNegativeButton("Finish",
+                        (d, w) -> setStatus(
+                                "Learning finished. Saved commands are ready for IRplus."))
+                .show();
+    }
+
+    private void chooseExistingForLearning(IrplusCodec.Remote remote) {
+        List<IrplusCodec.Item> eligible = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        for (IrplusCodec.Item item : remote.items) {
+            if (!item.space) {
+                eligible.add(item);
+                labels.add(item.label + "  •  " + item.sampleStatus());
+            }
+        }
+        if (eligible.isEmpty()) {
+            createButton(true);
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Learn an existing button")
+                .setItems(labels.toArray(new String[0]), (d, which) ->
+                        startLearning(remote, eligible.get(which)))
+                .setNegativeButton("Cancel", null).show();
     }
 
     private void showFailedLearning(String report) {
