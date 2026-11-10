@@ -39,7 +39,7 @@ The Windows app stores its library at `Documents/IR Remote Studio/library.json`;
 
 The Bluetooth connection window is for scanning and connecting. Optional **Troubleshooting** controls allow stored-slot reads, Bluetooth service inspection, pairing requests, and saving the Bluetooth activity log. Routine learning happens in the main window; no typed `LEARN 8` prompt is needed.
 
-For detailed setup, see [WINDOWS-SETUP.txt](WINDOWS-SETUP.txt). For what changed in 1.0, see [release notes](RELEASE-NOTES-v1.0.0-rc1.md). Earlier experimental progress and documentation were preserved in [pre-v1 development history](docs/DEVELOPMENT-HISTORY.md).
+For detailed setup, see [WINDOWS-SETUP.txt](WINDOWS-SETUP.txt). For what changed in 1.0, see [release notes](RELEASE-NOTES-v1.0.0-rc2.md). Earlier experimental progress and documentation were preserved in [pre-v1 development history](docs/DEVELOPMENT-HISTORY.md).
 
 ### Build from source
 
