@@ -29,17 +29,26 @@ jobs:
         run: python scripts/build_icon.py
       - name: Package portable Windows app
         run: pyinstaller --noconfirm --clean --onefile --windowed --hidden-import hid --hidden-import usb.core --hidden-import usb.util --hidden-import usb.backend.libusb1 --collect-all libusb_package --collect-all bleak --name IR-Remote-Studio --icon "assets/ir_remote_studio.ico" --add-data "assets/ir_remote_studio.png;assets" --add-data "irstudio/Xflyee_IR_Worker.ps1;." --add-data "irstudio/harmony_models.json;." run.py
-      - name: Include Windows setup information
+      - name: Package release documentation and checksum
         shell: pwsh
         run: |
           Copy-Item WINDOWS-SETUP.txt dist/WINDOWS-SETUP.txt
+          Copy-Item README.md dist/README.md
+          Copy-Item LICENSE dist/LICENSE
+          Copy-Item RELEASE-NOTES-v1.0.0-rc1.md dist/RELEASE-NOTES-v1.0.0-rc1.md
+          $hash = (Get-FileHash dist/IR-Remote-Studio.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  IR-Remote-Studio.exe" | Set-Content -Path dist/SHA256SUMS.txt -Encoding ascii
       - name: Upload downloadable Windows application
         uses: actions/upload-artifact@v4
         with:
-          name: IR-Remote-Studio-v0.3.13-beta-Windows-x64
+          name: IR-Remote-Studio-v1.0.0-rc1-Windows-x64
           path: |
             dist/IR-Remote-Studio.exe
             dist/WINDOWS-SETUP.txt
+            dist/README.md
+            dist/LICENSE
+            dist/RELEASE-NOTES-v1.0.0-rc1.md
+            dist/SHA256SUMS.txt
           retention-days: 90
 
   linux-ui-smoke:
