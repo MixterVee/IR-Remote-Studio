@@ -22,6 +22,7 @@ class SofaBatonBleDialog(tk.Toplevel):
         self.pair_var = tk.BooleanVar(value=False)
         self.link_var = tk.StringVar(value="NOT CONNECTED")
         self._last_link = None
+        self._poll_after = None
         self.advanced_open = False
         self.status_var = tk.StringVar(
             value="Searching for your SofaBaton U1 automatically...")
@@ -193,7 +194,23 @@ class SofaBatonBleDialog(tk.Toplevel):
                 "#147b3b" if snap.connected else
                 "#9a6300" if snap.state == "CONNECTING" else "#bc2525"))
             self._select_device()
-        self.after(450, self._poll_connection)
+        if self._poll_after is not None:
+            try:
+                self.after_cancel(self._poll_after)
+            except tk.TclError:
+                pass
+        self._poll_after = self.after(450, self._poll_connection)
+
+    def destroy(self):
+        """Stop connection polling before removing Tk variables/widgets."""
+        callback_id = self._poll_after
+        self._poll_after = None
+        if callback_id is not None:
+            try:
+                self.after_cancel(callback_id)
+            except tk.TclError:
+                pass
+        super().destroy()
 
     def _append(self, content: str):
         if self.winfo_exists():
