@@ -287,5 +287,114 @@ class LayoutOrderTests(unittest.TestCase):
             root.destroy()
 
 
+class LayoutEditorPositionTests(unittest.TestCase):
+    """Window placement is independent of saved remote layout and IR data."""
+
+    @staticmethod
+    def _device():
+        device = core.new_device("Example remote")
+        device["buttons"].append(core.new_button("Input"))
+        return device
+
+    def test_remembers_last_position_and_size_across_editor_instances(self):
+        require_display(self)
+        import json
+        import tempfile
+        import tkinter as tk
+        from pathlib import Path
+        from irstudio.layout_preview import LayoutDialog, WINDOW_POSITION_FILE
+        with tempfile.TemporaryDirectory() as folder:
+            root = tk.Tk()
+            root.folder = Path(folder)
+            root.geometry("960x650+15+20")
+            root.update()
+            device = self._device()
+            try:
+                dlg = LayoutDialog(root, device, lambda: None)
+                dlg.geometry("820x565+110+85")
+                dlg.update()
+                dlg.destroy()  # the Cancel button / titlebar X
+                data = json.loads(
+                    (root.folder / WINDOW_POSITION_FILE).read_text(encoding="utf-8"))
+                self.assertEqual(
+                    (data["width"], data["height"]), (820, 565))
+                self.assertAlmostEqual(data["x"], 110, delta=5)
+                self.assertAlmostEqual(data["y"], 85, delta=5)
+                reopened = LayoutDialog(root, device, lambda: None)
+                reopened.update()
+                self.assertEqual(
+                    (reopened.winfo_width(), reopened.winfo_height()),
+                    (820, 565))
+                self.assertAlmostEqual(reopened.winfo_x(), 110, delta=5)
+                self.assertAlmostEqual(reopened.winfo_y(), 85, delta=5)
+                reopened.destroy()
+            finally:
+                root.destroy()
+
+    def test_off_screen_or_corrupt_saved_location_uses_visible_fallback(self):
+        require_display(self)
+        import json
+        import tempfile
+        import tkinter as tk
+        from pathlib import Path
+        from irstudio.layout_preview import (
+            LayoutDialog, WINDOW_POSITION_FILE, _monitor_rectangles,
+            _titlebar_on_screen,
+        )
+        with tempfile.TemporaryDirectory() as folder:
+            root = tk.Tk()
+            root.folder = Path(folder)
+            root.geometry("950x650+20+20")
+            root.update()
+            device = self._device()
+            try:
+                preference = root.folder / WINDOW_POSITION_FILE
+                for raw in (
+                    json.dumps({"width": 930, "height": 690,
+                                "x": 4500, "y": 3300}),
+                    "not valid JSON"):
+                    preference.write_text(raw, encoding="utf-8")
+                    dlg = LayoutDialog(root, device, lambda: None)
+                    dlg.update()
+                    self.assertTrue(_titlebar_on_screen(
+                        dlg.winfo_x(), dlg.winfo_y(),
+                        dlg.winfo_width(), _monitor_rectangles(dlg)))
+                    dlg.destroy()
+            finally:
+                root.destroy()
+
+    def test_secondary_monitor_negative_coordinates_are_considered_visible(self):
+        from irstudio.layout_preview import _titlebar_on_screen
+        displays = [(-1920, 0, 0, 1080), (0, 0, 1920, 1080)]
+        self.assertTrue(_titlebar_on_screen(-1000, 150, 860, displays))
+        self.assertTrue(_titlebar_on_screen(100, 150, 860, displays))
+        self.assertFalse(_titlebar_on_screen(-3500, 150, 860, displays))
+        self.assertFalse(_titlebar_on_screen(-1000, -900, 860, displays))
+
+    def test_saved_position_does_not_write_to_remote_library(self):
+        require_display(self)
+        import tempfile
+        import tkinter as tk
+        from pathlib import Path
+        from irstudio.layout_preview import LayoutDialog, WINDOW_POSITION_FILE
+        with tempfile.TemporaryDirectory() as folder:
+            root = tk.Tk()
+            root.folder = Path(folder)
+            device = self._device()
+            layout_calls = []
+            try:
+                dlg = LayoutDialog(
+                    root, device, lambda: layout_calls.append("saved"))
+                dlg.geometry("800x550+92+80")
+                dlg.update()
+                dlg.destroy()
+                self.assertEqual(layout_calls, [])
+                self.assertTrue(
+                    (root.folder / WINDOW_POSITION_FILE).is_file())
+                self.assertFalse((root.folder / "library.json").exists())
+            finally:
+                root.destroy()
+
+
 if __name__ == "__main__":
     unittest.main()
