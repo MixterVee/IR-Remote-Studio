@@ -707,7 +707,7 @@ class Studio(tk.Tk):
         """Offer actionable USB recovery steps after a failed probe/capture.
 
         Never retry USB commands automatically: the user must reconnect or
-        select a port and explicitly press Connect / Retry again.
+        select a port and explicitly press Connect USB again.
         """
         details = str(error).strip() or "No technical details available."
         is_ocrustar = ("Ocrustar" in self.receiver_var.get()
@@ -718,7 +718,7 @@ class Studio(tk.Tk):
             "batteries, if battery-powered.\n"
             "2. Disconnect the receiver from USB, then reconnect it.\n"
             "3. If that fails, try a different USB port directly on your PC.\n"
-            "4. Click Refresh USB, then Connect / Retry.\n"
+            "4. Click Detect USB, then Connect USB.\n"
             "5. Close any other Harmony or IR-learning software.\n"
         )
         if is_ocrustar:
@@ -814,7 +814,7 @@ class Studio(tk.Tk):
             return
         self.connected_model = None
         self._set_connection(
-            "not-connected", "Receiver selection changed. Click Connect / Retry "
+            "not-connected", "Receiver selection changed. Click Connect USB "
             "to verify the selected hardware before learning.")
 
     def _capture_ready(self, operation_id: int) -> None:
@@ -885,24 +885,24 @@ class Studio(tk.Tk):
                 if h and o:
                     self._set_connection(
                         "detected", "Two supported USB learners found. Choose one "
-                        "in Receiver, then click Connect / Retry.")
+                        "in Receiver, then click Connect USB.")
                     self.status_var.set("Harmony 300/350 AND Ocrustar detected. Select the receiver explicitly.")
                 elif h:
                     self.receiver_var.set(BACKENDS[1])
                     self._set_connection(
                         "detected", "Harmony 300/350 detected (046D:C124). "
-                        "Click Connect / Retry to verify communication.")
+                        "Click Connect USB to verify communication.")
                     self.status_var.set("Detected Harmony 300/350 USB HID (046D:C124).")
                 elif o:
                     self.receiver_var.set(BACKENDS[2])
                     self._set_connection(
                         "detected", "Ocrustar/ElkSmart detected (045C:02AA). "
-                        "Click Connect / Retry to verify communication.")
+                        "Click Connect USB to verify communication.")
                     self.status_var.set("Detected Ocrustar/ElkSmart USB (045C:02AA). Windows USB driver access still needs testing.")
                 else:
                     self._set_connection(
                         "not-connected", "No supported USB learner found. "
-                        "Try unplugging and reconnecting it, then Refresh USB.")
+                        "Try unplugging and reconnecting it, then Detect USB.")
                     self.status_var.set("No supported direct learner found. Check USB and Windows drivers. Unlisted dongles need individual adapters.")
             self.after(0, done)
         threading.Thread(target=job, daemon=True).start()
@@ -916,7 +916,7 @@ class Studio(tk.Tk):
                 self.connected_model = None
                 self._set_connection(
                     "failed", "Could not verify the selected receiver. "
-                    "Unplug and reconnect USB, then click Connect / Retry. "
+                    "Unplug and reconnect USB, then click Connect USB. "
                     "No Harmony programming was changed.")
                 self.status_var.set("IR learner handshake failed. See the error message.")
                 self._harmony_error(error)
@@ -950,7 +950,7 @@ class Studio(tk.Tk):
             if error:
                 self._set_connection(
                     "capture-failed", "No usable capture was saved. "
-                    "Check the receiver or source remote and use Connect / Retry "
+                    "Check the receiver or source remote and use Connect USB "
                     "if USB communication has been interrupted.")
                 self.status_var.set("Capture failed - no changes were saved.")
                 self._harmony_error(error)
@@ -1172,7 +1172,7 @@ class Studio(tk.Tk):
             "press and release the source remote's button.")
         try:
             # A withdrawn controller uses the same _run/background worker
-            # pathway as the working v0.3.3 Advanced learning button.
+            # pathway as the working v0.3.3 learning worker.
             dialog = SofaBatonBleDialog(self, auto_scan=False)
             dialog.withdraw()
             dialog.start_main_capture(
