@@ -254,6 +254,75 @@ class U1SaveUITests(unittest.TestCase):
             self.app.connection_state_var.get(),
             "CONNECTED — SofaBaton U1 (SB202006231D9E)")
 
+    def test_scan_shows_only_searching_then_connected_not_other_devices(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        svc = ("0000fff0-0000-1000-8000-00805f9b34fb",)
+        target = BleEntry("SB202006231D9E", "U1-MAC", -49, svc, True)
+        unrelated = BleEntry("Neighbor's Smart TV", "TV-MAC", -36, (), False)
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            self.assertEqual(dlg.manual_frame.winfo_manager(), "")
+            self.assertEqual(dlg.connect_button.winfo_manager(), "")
+            self.assertIn("SEARCHING", dlg.link_var.get())
+            def connected(address, name, pair):
+                self.app.u1_session._state(
+                    "CONNECTED", name, address, "Verified U1")
+                return self.app.u1_session.snapshot()
+            with patch("irstudio.sofabaton_ble_ui.ble.scan_ble",
+                       return_value=[unrelated, target]), \
+                 patch.object(self.app.u1_session, "connect",
+                              side_effect=connected), \
+                 patch.object(dlg, "_run",
+                              side_effect=lambda name, task, complete:
+                                  complete(task())):
+                dlg.scan()
+            self.assertFalse(dlg.winfo_exists())
+            self.assertEqual(self.app.u1_session.snapshot().name, target.name)
+        finally:
+            if dlg.winfo_exists():
+                dlg.destroy()
+
+    def test_ambiguous_u1_scan_shows_only_u1_candidates_in_manual_fallback(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        svc = ("0000fff0-0000-1000-8000-00805f9b34fb",)
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            devices = [BleEntry("Nearby phone", "PHONE", -30, (), False),
+                       BleEntry("SB11111111", "U1-A", -61, svc, True),
+                       BleEntry("SB22222222", "U1-B", -62, svc, True)]
+            with patch("irstudio.sofabaton_ble_ui.ble.scan_ble",
+                       return_value=devices), \
+                 patch.object(dlg, "_run",
+                              side_effect=lambda name, task, complete:
+                                  complete(task())):
+                dlg.scan()
+            self.assertEqual(dlg.manual_frame.winfo_manager(), "pack")
+            self.assertEqual(dlg.connect_button.winfo_manager(), "pack")
+            self.assertEqual(list(dlg.device_list.get(0, "end")),
+                             ["SB11111111", "SB22222222"])
+            self.assertNotIn("Nearby phone", str(dlg.device_list.get(0, "end")))
+            self.assertIn("MULTIPLE U1", dlg.link_var.get())
+        finally:
+            dlg.destroy()
+
+    def test_empty_scan_hides_others_and_explains_retry(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            with patch("irstudio.sofabaton_ble_ui.ble.scan_ble",
+                       return_value=[]), \
+                 patch.object(dlg, "_run",
+                              side_effect=lambda name, task, complete:
+                                  complete(task())):
+                dlg.scan()
+            self.assertIn("NO U1 FOUND", dlg.link_var.get())
+            self.assertEqual(dlg.manual_frame.winfo_manager(), "")
+        finally:
+            dlg.destroy()
+
     def test_auto_scan_on_open_skips_redundant_scan_if_connected(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
         dlg = SofaBatonBleDialog(self.app, auto_scan=False)
