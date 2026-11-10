@@ -5,6 +5,11 @@ The simulated app chrome is illustrative: Android irplus may render differently.
 """
 from __future__ import annotations
 
+import json
+import os
+from pathlib import Path
+import sys
+import tempfile
 import tkinter as tk
 from tkinter import font as tkfont, messagebox, ttk
 
@@ -13,12 +18,65 @@ from irstudio import core
 SCREEN_SIZES = {"Small": 250, "Normal": 305, "Large": 365}
 TEXT_SIZES = {"Small": 9, "Normal": 11, "Large": 13}
 
+# Separate from library.json: moving a window is a UI preference, never a
+# remote-definition change. No IR samples, devices or button layouts go here.
+WINDOW_POSITION_FILE = "layout-editor-window.json"
+
+
+def _monitor_rectangles(widget):
+    """All active monitor rectangles in virtual desktop coordinates.
+
+    winfo_screenwidth() only covers the primary display on some Tk/Windows
+    configurations. EnumDisplayMonitors preserves positions on a monitor to
+    the left or above the primary (negative x/y).
+    """
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            callback_type = ctypes.WINFUNCTYPE(
+                ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p,
+                ctypes.POINTER(wintypes.RECT), ctypes.c_ssize_t)
+            rectangles = []
+
+            def record(_monitor, _hdc, rect, _data):
+                r = rect.contents
+                rectangles.append((r.left, r.top, r.right, r.bottom))
+                return 1
+
+            callback = callback_type(record)
+            user32 = ctypes.windll.user32
+            user32.EnumDisplayMonitors(
+                None, None, callback, 0)
+            if rectangles:
+                return rectangles
+        except (AttributeError, OSError, ValueError):
+            pass
+    return [(0, 0, widget.winfo_screenwidth(), widget.winfo_screenheight())]
+
+
+def _titlebar_on_screen(x, y, width, monitors):
+    """Permit partially overlapping windows only when the title is usable."""
+    for left, top, right, bottom in monitors:
+        horizontal = min(x + width, right) - max(x, left)
+        if horizontal >= 140 and top <= y <= bottom - 65:
+            return True
+    return False
+
 
 class LayoutDialog(tk.Toplevel):
     """Edit button order and 12-column widths; preview before applying."""
 
     def __init__(self, master, device: dict, on_save):
         super().__init__(master)
+        # Keep the Toplevel hidden until it is placed, avoiding a flash in
+        # the top-left before the saved position is restored.
+        self.withdraw()
+        owner_folder = getattr(master, "folder", None)
+        self._position_file = (
+            Path(owner_folder) / WINDOW_POSITION_FILE
+            if owner_folder is not None else None)
         self.device = device
         self.on_save = on_save
         # Both appearance settings are staged until Save layout. Cancel
@@ -39,6 +97,91 @@ class LayoutDialog(tk.Toplevel):
         self.button_font = tkfont.Font(root=self, family="Segoe UI", size=11, weight="bold")
         self._make_ui()
         self._render()
+        self._restore_window_position(master)
+        self.deiconify()
+
+    def _restore_window_position(self, master):
+        """Restore persisted geometry or center on the owner's monitor."""
+        monitors = _monitor_rectangles(self)
+        width, height = 930, 690
+        saved = None
+        if self._position_file is not None:
+            try:
+                data = json.loads(
+                    self._position_file.read_text(encoding="utf-8"))
+                values = (data["x"], data["y"],
+                          data["width"], data["height"])
+                if (all(type(value) is int for value in values)
+                        and 760 <= values[2] <= 6000
+                        and 540 <= values[3] <= 4000
+                        and abs(values[0]) <= 20000
+                        and abs(values[1]) <= 20000):
+                    saved = values
+            except (OSError, ValueError, KeyError, TypeError):
+                pass
+        if saved is not None:
+            x, y, width, height = saved
+            if _titlebar_on_screen(x, y, width, monitors):
+                self.geometry(f"{width}x{height}{x:+d}{y:+d}")
+                return
+        # No remembered position, or the old monitor has disappeared.
+        # Center relative to the main window (including a secondary monitor).
+        master.update_idletasks()
+        owner_width = master.winfo_width()
+        owner_height = master.winfo_height()
+        if owner_width >= 100 and owner_height >= 100:
+            cx = master.winfo_rootx() + owner_width // 2
+            cy = master.winfo_rooty() + owner_height // 2
+        else:
+            left, top, right, bottom = monitors[0]
+            cx, cy = (left + right) // 2, (top + bottom) // 2
+        chosen = next(
+            ((left, top, right, bottom)
+             for left, top, right, bottom in monitors
+             if left <= cx < right and top <= cy < bottom),
+            monitors[0])
+        left, top, right, bottom = chosen
+        width = min(width, max(760, right - left))
+        height = min(height, max(540, bottom - top))
+        x = max(left, min(cx - width // 2, right - width))
+        y = max(top, min(cy - height // 2, bottom - height))
+        self.geometry(f"{width}x{height}{x:+d}{y:+d}")
+
+    def _remember_window_position(self):
+        """Persist only valid window placement, never remote/library content."""
+        if self._position_file is None or not self.winfo_exists():
+            return
+        if self.state() != "normal":
+            return
+        try:
+            self.update_idletasks()
+            width, height = self.winfo_width(), self.winfo_height()
+            x, y = self.winfo_x(), self.winfo_y()
+            if (width < 760 or height < 540
+                    or not _titlebar_on_screen(
+                        x, y, width, _monitor_rectangles(self))):
+                return
+            self._position_file.parent.mkdir(parents=True, exist_ok=True)
+            temporary = None
+            try:
+                descriptor, temporary = tempfile.mkstemp(
+                    prefix=".layout-window-", suffix=".tmp",
+                    dir=str(self._position_file.parent))
+                with os.fdopen(descriptor, "w", encoding="utf-8") as output:
+                    json.dump({"x": x, "y": y, "width": width,
+                               "height": height}, output)
+                    output.write("\n")
+                os.replace(temporary, self._position_file)
+            finally:
+                if temporary is not None and os.path.exists(temporary):
+                    os.unlink(temporary)
+        except (OSError, ValueError, tk.TclError):
+            # A placement preference must never prevent closing the editor.
+            pass
+
+    def destroy(self):
+        self._remember_window_position()
+        super().destroy()
 
     def _make_ui(self):
         outer = ttk.Frame(self, padding=14)
