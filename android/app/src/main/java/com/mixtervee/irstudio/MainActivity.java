@@ -1321,7 +1321,7 @@ public class MainActivity extends Activity {
         return out.toByteArray();
     }
 
-    private void saveRemotes() throws Exception {
+    private String libraryJson() throws Exception {
         JSONArray array = new JSONArray();
         for (IrplusCodec.Remote r : remotes) {
             JSONObject entry = new JSONObject();
@@ -1341,10 +1341,14 @@ public class MainActivity extends Activity {
             entry.put("items", buttons);
             array.put(entry);
         }
+        return array.toString();
+    }
+
+    private void saveRemotes() throws Exception {
         File file = new File(getFilesDir(), "remotes.json");
         File temp = new File(getFilesDir(), "remotes.tmp");
         try (FileOutputStream out = new FileOutputStream(temp)) {
-            out.write(array.toString().getBytes(StandardCharsets.UTF_8));
+            out.write(libraryJson().getBytes(StandardCharsets.UTF_8));
             out.getFD().sync();
         }
         if (!temp.renameTo(file)) {
@@ -1352,45 +1356,68 @@ public class MainActivity extends Activity {
         }
     }
 
+    private List<IrplusCodec.Remote> parseLibraryJson(String raw) throws Exception {
+        JSONArray rows = new JSONArray(raw);
+        if (rows.length() > 100) {
+            throw new IllegalArgumentException("Backup exceeds 100 remotes.");
+        }
+        List<IrplusCodec.Remote> loaded = new ArrayList<>();
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject d = rows.getJSONObject(i);
+            IrplusCodec.Remote remote = new IrplusCodec.Remote(
+                    d.optString("manufacturer", ""), d.optString("model", ""));
+            JSONArray items = d.getJSONArray("items");
+            if (items.length() > 500) {
+                throw new IllegalArgumentException("Backup exceeds 500 buttons per remote.");
+            }
+            for (int j = 0; j < items.length(); j++) {
+                JSONObject b = items.getJSONObject(j);
+                int span = b.optInt("span", 6);
+                if (span < 1 || span > 12) {
+                    throw new IllegalArgumentException("Invalid button width in backup.");
+                }
+                String pronto = b.optString("prontoHex", "");
+                JSONArray captures = b.optJSONArray("captures");
+                if (captures == null) {
+                    // Seamlessly migrate prior Android versions.
+                    remote.items.add(new IrplusCodec.Item(
+                            b.optString("label", ""), pronto, span,
+                            b.optBoolean("space", false)));
+                } else {
+                    if (captures.length() > 100) {
+                        throw new IllegalArgumentException("Too many captures on a button.");
+                    }
+                    List<String> signals = new ArrayList<>();
+                    for (int k = 0; k < captures.length(); k++) {
+                        String sample = captures.optString(k, "");
+                        if (!sample.isEmpty()) {
+                            IrplusCodec.decodePronto(sample);
+                            signals.add(sample);
+                        }
+                    }
+                    remote.items.add(new IrplusCodec.Item(
+                            b.optString("label", ""), pronto, span,
+                            b.optBoolean("space", false),
+                            signals, b.optInt("selectedCapture", signals.size() - 1)));
+                }
+            }
+            loaded.add(remote);
+        }
+        return loaded;
+    }
+
     private void readSavedRemotes() {
         File file = new File(getFilesDir(), "remotes.json");
         if (!file.exists()) return;
-        try (FileInputStream in = new FileInputStream(file)) {
-            String data = new String(readLimited(in, 2_000_000), StandardCharsets.UTF_8);
-            JSONArray rows = new JSONArray(data);
-            for (int i = 0; i < rows.length() && i < 100; i++) {
-                JSONObject d = rows.getJSONObject(i);
-                IrplusCodec.Remote r = new IrplusCodec.Remote(
-                        d.optString("manufacturer", ""), d.optString("model", ""));
-                JSONArray items = d.getJSONArray("items");
-                for (int j = 0; j < items.length() && j < 500; j++) {
-                    JSONObject b = items.getJSONObject(j);
-                    int span = b.optInt("span", 6);
-                    if (span < 1 || span > 12) continue;
-                    String pronto = b.optString("prontoHex", "");
-                    JSONArray captures = b.optJSONArray("captures");
-                    if (captures == null) {
-                        // Seamlessly migrate pre-0.3.0 libraries.
-                        r.items.add(new IrplusCodec.Item(
-                                b.optString("label", ""), pronto,
-                                span, b.optBoolean("space", false)));
-                    } else {
-                        List<String> signals = new ArrayList<>();
-                        for (int k = 0; k < captures.length() && k < 100; k++) {
-                            String sample = captures.optString(k, "");
-                            if (!sample.isEmpty()) signals.add(sample);
-                        }
-                        r.items.add(new IrplusCodec.Item(
-                                b.optString("label", ""), pronto,
-                                span, b.optBoolean("space", false),
-                                signals, b.optInt("selectedCapture", signals.size() - 1)));
-                    }
-                }
-                remotes.add(r);
-            }
-        } catch (Exception exception) {
-            // Keep existing files intact for recovery instead of overwriting on startup.
-            Toast.makeText(this, "Saved remotes could not be read.", Toast.LENGTH_LONG).show();
+        try (FileInputStream input = new FileInputStream(file)) {
+            String data = new String(readLimited(input, 2_000_000),
+                    StandardCharsets.UTF_8);
+            remotes.addAll(parseLibraryJson(data));
+        } catch (Exception error) {
+            // Keep the file intact for recovery rather than overwrite it.
+            Toast.makeText(this, "Saved remotes could not be read.",
+                    Toast.LENGTH_LONG).show();
         }
     }
+
 }
