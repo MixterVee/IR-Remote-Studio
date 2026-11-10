@@ -530,10 +530,13 @@ public class MainActivity extends Activity {
         TextView previewTitle = text("12-COLUMN PREVIEW", 12, MUTED, true);
         previewTitle.setPadding(0, dp(18), 0, dp(7));
         body.addView(previewTitle);
-        TextView preview = text("", 13, WHITE, false);
-        preview.setPadding(dp(10), dp(10), dp(10), dp(10));
+        LinearLayout preview = new LinearLayout(this);
+        preview.setOrientation(LinearLayout.VERTICAL);
+        preview.setPadding(dp(8), dp(8), dp(8), dp(8));
         preview.setBackground(background(SURFACE, 8));
-        body.addView(preview);
+        body.addView(preview, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
 
         final int[] index = {0};
         final Runnable redraw = () -> {
@@ -552,7 +555,7 @@ public class MainActivity extends Activity {
                 picker.setSelection(index[0]);
                 widths.setSelection(draft.get(index[0]).span - 1);
             }
-            preview.setText(draft.preview());
+            renderLayoutPreview(preview, draft.items());
         };
         picker.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(
@@ -598,6 +601,50 @@ public class MainActivity extends Activity {
                     }
                 }));
         dialog.show();
+    }
+
+    /** Noninteractive twelve-column preview matches the exported button layout. */
+    private void renderLayoutPreview(LinearLayout container,
+                                     List<IrplusCodec.Item> items) {
+        container.removeAllViews();
+        LinearLayout row = newRow();
+        int used = 0;
+        for (IrplusCodec.Item item : items) {
+            if (used + item.span > 12 && used > 0) {
+                addSpace(row, 12 - used);
+                container.addView(row);
+                row = newRow();
+                used = 0;
+            }
+            if (item.space) {
+                addSpace(row, item.span);
+            } else {
+                String label = item.label;
+                if (item.prontoHex.isEmpty()) label += " (empty)";
+                TextView sample = text(label, item.span <= 3 ? 10 : 12, WHITE, true);
+                sample.setGravity(Gravity.CENTER);
+                sample.setMaxLines(2);
+                sample.setPadding(dp(2), dp(2), dp(2), dp(2));
+                sample.setBackground(background(
+                        item.prontoHex.isEmpty()
+                                ? Color.rgb(80, 90, 105)
+                                : buttonColor(item.label), 7));
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        0, dp(47), item.span);
+                params.setMargins(dp(2), dp(3), dp(2), dp(3));
+                row.addView(sample, params);
+            }
+            used += item.span;
+            if (used == 12) {
+                container.addView(row);
+                row = newRow();
+                used = 0;
+            }
+        }
+        if (used > 0) {
+            addSpace(row, 12 - used);
+            container.addView(row);
+        }
     }
 
     /** Android uses the proven Harmony USB backend; no U1 BLE writes here. */
