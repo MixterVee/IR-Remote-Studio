@@ -1,4 +1,4 @@
-"""Windows Save and Save & Learn Another are independent UI actions.
+"""Backend save/learn-another actions remain safe despite automatic UI saving.
 
 Run with a display (GitHub's Linux smoke runner provides Xvfb).
 No USB device or Harmony is contacted by these tests.
@@ -39,9 +39,11 @@ class SaveButtonUITests(unittest.TestCase):
             self.load_patch.stop()
 
     def test_standalone_save_confirms_without_recapturing_or_duplicating(self):
-        self.assertEqual(self.app.save_button_btn.cget("text"), "Save")
-        self.assertIn("Save & Learn another",
-                      self.app.save_next_btn.cget("text"))
+        # Visible Save buttons were removed in v1.0: capture autosaves.
+        self.assertFalse(hasattr(self.app, "save_button_btn"))
+        self.assertFalse(hasattr(self.app, "save_next_btn"))
+        self.assertEqual(self.app.capture_btn.cget("text"),
+                         "Capture selected button (USB)")
         self.button["pronto_hex"] = "0000 006D 0001 0000 0010 0020"
         with patch.object(self.app, "capture") as capture:
             self.assertTrue(self.app.save_current_button())
