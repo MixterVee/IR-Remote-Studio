@@ -350,3 +350,23 @@ selected button..." on the main screen before Capture.
 New button opens the existing name dialog, then begins capture.
 Finish leaves the U1 Bluetooth connection active. The X acts as Finish.
 No new U1 commands, profiles or programming writes have been added.
+
+WINDOWS v0.3.12-BETA — KEEP MAIN SCREEN FOCUSED ON LEARNING
+---------------------------------------------------------
+The main Studio Buttons section now shows creation controls:
++ Add, Rename and Delete, plus ONE "Layout editor..." entry.
+Move Up / Move Down have moved inside the Layout Editor, next to
+the existing button-width controls.
+
+In Layout Editor:
+1. Select any button in the list (including an unlearned button).
+2. Click Move Up or Move Down to reorder its place in the remote.
+3. Set Selected width and click Apply width if desired.
+4. The Phone/Grid preview updates immediately for learned buttons.
+5. Click Save layout to commit order and width together, or Cancel
+   to discard both kinds of changes.
+
+Layout Editor changes control the order/width exported to .irplus.
+They do not modify any captured IR waveform or the U1 remote.
+If disk save fails, original order and widths remain in the library.
+The original v0.3.3 live Bluetooth capture routine is unchanged.
