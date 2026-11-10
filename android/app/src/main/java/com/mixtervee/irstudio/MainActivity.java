@@ -1002,12 +1002,76 @@ public class MainActivity extends Activity {
     }
 
     private void editLearnedButton(IrplusCodec.Remote remote, IrplusCodec.Item item) {
+        if (item.space) {
+            showLayoutEditor();
+            return;
+        }
+        String details = item.captures.size() + " capture(s)  •  " + item.sampleStatus();
         new AlertDialog.Builder(this)
-                .setTitle(item.label)
-                .setItems(new String[]{"Rename button", "Delete button"}, (d, choice) -> {
-                    if (choice == 0) renameButton(remote, item);
-                    else deleteButton(remote, item);
+                .setTitle(item.label + " — " + details)
+                .setItems(new String[]{
+                        "Learn / add another sample",
+                        "Undo last capture",
+                        "Clear all captures (keep button)",
+                        "Choose best match",
+                        "Rename button",
+                        "Delete button"
+                }, (d, choice) -> {
+                    switch (choice) {
+                        case 0: startLearning(remote, item); break;
+                        case 1: changeCaptures(remote, item, 1); break;
+                        case 2: changeCaptures(remote, item, 2); break;
+                        case 3: changeCaptures(remote, item, 3); break;
+                        case 4: renameButton(remote, item); break;
+                        case 5: deleteButton(remote, item); break;
+                        default: break;
+                    }
                 }).show();
+    }
+
+    private void changeCaptures(IrplusCodec.Remote remote,
+                                IrplusCodec.Item item, int action) {
+        if (item.captures.isEmpty()) {
+            toast("This button has no saved samples.");
+            return;
+        }
+        if (action == 2) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Clear captured signals?")
+                    .setMessage("Clear all " + item.captures.size()
+                            + " sample(s) from '" + item.label
+                            + "'? The button and its layout will stay. "
+                            + "This changes only the Android library, not a remote.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Clear samples", (d, w) ->
+                            changeCapturesConfirmed(remote, item, action))
+                    .show();
+        } else if (action == 1) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Undo last capture?")
+                    .setMessage("Remove only the newest sample from '"
+                            + item.label + "'?")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Undo", (d, w) ->
+                            changeCapturesConfirmed(remote, item, action))
+                    .show();
+        } else changeCapturesConfirmed(remote, item, action);
+    }
+
+    private void changeCapturesConfirmed(IrplusCodec.Remote remote,
+                                         IrplusCodec.Item item, int action) {
+        IrplusCodec.Item replacement;
+        switch (action) {
+            case 1: replacement = item.removeLastCapture(); break;
+            case 2: replacement = item.clearCaptures(); break;
+            case 3: replacement = item.selectBestCapture(); break;
+            default: return;
+        }
+        if (replaceButtonAndSave(remote, item, replacement)) {
+            setStatus("'" + item.label + "': " + replacement.sampleStatus()
+                    + ", " + replacement.captures.size()
+                    + " saved sample(s). Button retained.");
+        }
     }
 
     private void renameButton(IrplusCodec.Remote remote, IrplusCodec.Item item) {
@@ -1036,8 +1100,7 @@ public class MainActivity extends Activity {
                     }
                     int index = remote.items.indexOf(item);
                     if (index < 0) return;
-                    remote.items.set(index, new IrplusCodec.Item(
-                            name, item.prontoHex, item.span, false));
+                    remote.items.set(index, item.withLabel(name));
                     try {
                         saveRemotes();
                         renderRemote();
