@@ -457,3 +457,20 @@ export, without touching captured IR codes, devices or U1 programming.
 
 The original v0.3.3 physical-U1-tested Bluetooth capture engine and
 the v0.3.11 post-capture choices (Existing/New/Finish) remain unchanged.
+
+### Windows v0.3.13-beta — remember Layout Editor placement
+
+The Layout Editor no longer reappears in the desktop's top-left corner.
+It remembers **last position and size** when closed via Save layout,
+Cancel, or the title-bar X, and restores them even after restarting
+IR Remote Studio. Placement is stored independently in
+`Documents/IR Remote Studio/layout-editor-window.json`; it is a
+UI preference, not part of the device library.
+
+Multiple Windows monitors are supported, including monitors with
+negative virtual-desktop coordinates (e.g. left of the primary).
+If a monitor is later disconnected or saved placement is invalid,
+the editor reopens centered over the main application on a visible
+monitor. No Bluetooth, button order, raw IR captures or .irplus export
+logic changed. GUI tests cover persistence, invalid/offscreen fallback,
+and separation from saved remote data.
