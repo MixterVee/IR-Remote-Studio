@@ -969,21 +969,31 @@ class Studio(tk.Tk):
             target = next((b for b in device["buttons"] if b["id"] == button_id), None) if device else None
             if not target:
                 return
+            previous_selected = target.get("selected", 0)
             target["captures"].append(cap)
             target["selected"] = core.best_capture_index(target)
-            self._save()
+            try:
+                self._save()
+            except Exception as exc:
+                target["captures"].pop()
+                target["selected"] = previous_selected
+                self.status_var.set("Capture succeeded but could not be saved.")
+                messagebox.showerror(
+                    "Capture not saved",
+                    f"Could not save the IR library:\n{exc}", parent=self)
+                return
             self._reload_buttons(button_id)
             self._set_connection(
-                "captured", f"Saved {target['label']} successfully. "
-                "The USB capture session has closed. "
-                "Choose Save or Save & Learn another.")
+                "captured", f"Auto-saved '{target['label']}' to the library. "
+                "The USB capture session has closed.")
             match, count = core.match_count(target)
             decoded = cap["decoded"]
-            desc = decoded["bytes"] if decoded else "raw signal (unidentified protocol)"
-            self.status_var.set(f"Captured and autosaved {target['label']}: "
-                f"{cap['carrier_hz']:,} Hz, {len(cap['timings_us'])} values, "
-                f"{desc}; matching captures {match}/{count}. "
-                "Choose Save to finish or Save & Learn another to continue.")
+            desc = decoded["bytes"] if decoded else "raw IR waveform"
+            self.status_var.set(f"Auto-saved '{target['label']}': "
+                f"{cap['carrier_hz']:,} Hz, {len(cap['timings_us'])} timings, "
+                f"{desc}. Matching samples: {match}/{count}. "
+                "Select an existing button or add a new one to learn more; "
+                "export to IRplus whenever you're ready.")
         self._background("Capture", done)
 
     def _finish_ble_main(self, device_id, button_id, pair=None, error=None):
