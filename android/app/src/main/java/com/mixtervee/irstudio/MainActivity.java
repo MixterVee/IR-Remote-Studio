@@ -820,15 +820,9 @@ public class MainActivity extends Activity {
         content.addView(copy, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
 
-        Button saveAndLearnAnother = actionButton(
-                "Save & Learn Another Button", PURPLE);
-        LinearLayout.LayoutParams nextParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(49));
-        nextParams.setMargins(0, dp(10), 0, 0);
-        content.addView(saveAndLearnAnother, nextParams);
-
-        TextView note = text("Save the current command before starting a new capture. "
-                + "Harmony programming unchanged.", 11, MUTED, false);
+        TextView note = text("Name this NEW button and save it to your "
+                + "library. Existing buttons auto-save immediately after capture. "
+                + "No Harmony programming is changed.", 11, MUTED, false);
         note.setPadding(0, dp(12), 0, dp(3));
         content.addView(note);
 
@@ -842,21 +836,6 @@ public class MainActivity extends Activity {
                         (d, w) -> copyText("Harmony learning report", report))
                 .setPositiveButton("Save button", null)
                 .create();
-        saveAndLearnAnother.setOnClickListener(v -> {
-            // Never discard the current capture: retry validation in the same
-            // local persistence path as the existing Save button.
-            if (saveLearnedButton(pronto,
-                    buttonName.getText().toString().trim(),
-                    targetSpinner.getSelectedItemPosition(),
-                    remoteName.getText().toString().trim(),
-                    buttonName, remoteName)) {
-                dialog.dismiss();
-                // Previous capture's STOP/DONE and CLOSE were already
-                // verified. Starting another capture requires explicit
-                // confirmation in the normal learning flow.
-                startLearning();
-            }
-        });
         dialog.setOnShowListener(v ->
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w -> {
                     if (saveLearnedButton(pronto,
@@ -865,6 +844,8 @@ public class MainActivity extends Activity {
                             remoteName.getText().toString().trim(),
                             buttonName, remoteName)) {
                         dialog.dismiss();
+                        IrplusCodec.Remote saved = current();
+                        if (saved != null) showLearningChoices(saved);
                     }
                 }));
         dialog.show();
@@ -914,8 +895,8 @@ public class MainActivity extends Activity {
             saveRemotes();
             selectedDevice = remotes.indexOf(target);
             refreshDevices();
-            setStatus("Saved " + label + " to " + target.displayName()
-                    + ". Long-press buttons to rename or delete. Export to back up.");
+            setStatus("Auto-saved '" + label + "' to " + target.displayName()
+                    + ". Ready for IRplus export.");
             toast("IR button saved to your phone");
             return true;
         } catch (Exception error) {
