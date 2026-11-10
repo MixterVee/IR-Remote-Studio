@@ -87,5 +87,36 @@ class SaveButtonUITests(unittest.TestCase):
             self.assertEqual(error.call_count, 2)
 
 
+    def test_usb_capture_autosaves_without_old_save_instructions(self):
+        signal = [3996, 3999] + [469, 2000] * 51
+        result = {"carrier_hz": 38095, "timings_us": signal,
+                  "model": "Synthetic USB learner"}
+        with patch.object(
+                self.app, "_background",
+                side_effect=lambda _name, callback: callback(result, None)):
+            self.app.capture()
+        self.assertEqual(len(self.button["captures"]), 1)
+        self.save_mock.assert_called()
+        message = self.app.status_var.get()
+        self.assertIn("Auto-saved", message)
+        self.assertIn("export to IRplus", message)
+        self.assertNotIn("Save & Learn another", message)
+
+    def test_usb_capture_save_error_does_not_retain_unsaved_sample(self):
+        signal = [3996, 3999] + [469, 2000] * 51
+        result = {"carrier_hz": 38095, "timings_us": signal,
+                  "model": "Synthetic USB learner"}
+        self.save_mock.side_effect = OSError("Disk full")
+        with patch.object(
+                self.app, "_background",
+                side_effect=lambda _name, callback: callback(result, None)), \
+             patch("irstudio.ui.messagebox.showerror") as error:
+            self.app.capture()
+            error.assert_called_once()
+        self.assertEqual(self.button["captures"], [])
+        self.assertEqual(self.button["selected"], 0)
+        self.assertIn("could not be saved", self.app.status_var.get())
+
+
 if __name__ == "__main__":
     unittest.main()
