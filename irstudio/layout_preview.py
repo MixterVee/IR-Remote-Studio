@@ -15,14 +15,17 @@ TEXT_SIZES = {"Small": 9, "Normal": 11, "Large": 13}
 
 
 class LayoutDialog(tk.Toplevel):
-    """Edit 12-column button widths and preview them within a mock phone."""
+    """Edit button order and 12-column widths; preview before applying."""
 
     def __init__(self, master, device: dict, on_save):
         super().__init__(master)
         self.device = device
         self.on_save = on_save
+        # Both appearance settings are staged until Save layout. Cancel
+        # leaves the real device and its captured IR waveforms untouched.
         self.working = {button["id"]: core.button_span(button)
                         for button in device["buttons"]}
+        self.order = [button["id"] for button in device["buttons"]]
         self.mode = tk.StringVar(master=self, value="Phone")
         self.screen_size = tk.StringVar(master=self, value="Normal")
         self.theme = tk.StringVar(master=self, value="Dark")
@@ -42,8 +45,12 @@ class LayoutDialog(tk.Toplevel):
         outer.pack(fill="both", expand=True)
         ttk.Label(outer, text="Remote layout editor",
                   font=("Segoe UI", 15, "bold")).pack(anchor="w")
-        ttk.Label(outer, text="Set button widths and preview the exported .irplus layout. Only buttons with IR codes appear in the preview.",
-                  wraplength=800).pack(anchor="w", pady=(3, 10))
+        ttk.Label(
+            outer,
+            text="Arrange button order and widths here. The preview follows "
+                 "the exported .irplus layout; buttons without IR codes "
+                 "remain listed but are hidden in the preview.",
+            wraplength=800).pack(anchor="w", pady=(3, 10))
         # Keep Save/Cancel reserved at the bottom when maximized on a laptop.
         self.footer = ttk.Frame(outer)
         footer = self.footer
@@ -74,8 +81,16 @@ class LayoutDialog(tk.Toplevel):
         self.width_combo.pack(side="left", padx=(10, 5))
         ttk.Button(width_bar, text="Apply width",
                    command=self._apply_width).pack(side="left")
-        ttk.Label(left, text="Use Move up / Move down in the main window to reorder buttons.",
-                  wraplength=290, foreground="#586579").pack(side="bottom", fill="x", pady=(8, 0))
+        self.order_bar = ttk.Frame(left)
+        self.order_bar.pack(side="bottom", fill="x", pady=(8, 0))
+        self.move_up_btn = ttk.Button(
+            self.order_bar, text="Move Up", command=lambda: self._move_selected(-1),
+            state="disabled")
+        self.move_up_btn.pack(side="left", fill="x", expand=True, padx=(0, 4))
+        self.move_down_btn = ttk.Button(
+            self.order_bar, text="Move Down", command=lambda: self._move_selected(1),
+            state="disabled")
+        self.move_down_btn.pack(side="left", fill="x", expand=True, padx=(4, 0))
 
         self.tree = ttk.Treeview(left, columns=("label", "width", "state"),
                                  show="headings", height=14, selectmode="browse")
@@ -138,6 +153,38 @@ class LayoutDialog(tk.Toplevel):
         ids = self.tree.selection()
         if ids:
             self.chosen_span.set(str(self.working[ids[0]]))
+        self._update_move_controls()
+        self._render()
+
+    def _update_move_controls(self):
+        ids = self.tree.selection()
+        if not ids or ids[0] not in self.order:
+            self.move_up_btn.configure(state="disabled")
+            self.move_down_btn.configure(state="disabled")
+            return
+        index = self.order.index(ids[0])
+        self.move_up_btn.configure(
+            state="normal" if index > 0 else "disabled")
+        self.move_down_btn.configure(
+            state="normal" if index < len(self.order) - 1 else "disabled")
+
+    def _move_selected(self, offset):
+        """Reorder staged appearance, not the actual library until Save."""
+        ids = self.tree.selection()
+        if not ids or offset not in (-1, 1):
+            return
+        button_id = ids[0]
+        index = self.order.index(button_id)
+        destination = index + offset
+        if not 0 <= destination < len(self.order):
+            return
+        self.order.pop(index)
+        self.order.insert(destination, button_id)
+        self.tree.move(button_id, "", destination)
+        self.tree.selection_set(button_id)
+        self.tree.focus(button_id)
+        self.tree.see(button_id)
+        self._update_move_controls()
         self._render()
 
     def _apply_width(self):
@@ -152,8 +199,9 @@ class LayoutDialog(tk.Toplevel):
         self._render()
 
     def _preview_device(self):
-        buttons = [dict(b, span=self.working[b["id"]])
-                   for b in self.device["buttons"]]
+        by_id = {b["id"]: b for b in self.device["buttons"]}
+        buttons = [dict(by_id[button_id], span=self.working[button_id])
+                   for button_id in self.order]
         return {"name": self.device["name"], "buttons": buttons}
 
     def _rows(self):
@@ -293,7 +341,24 @@ class LayoutDialog(tk.Toplevel):
                                fill=ink, font=("Segoe UI", 10))
 
     def _save(self):
-        for button in self.device["buttons"]:
-            button["span"] = self.working[button["id"]]
-        self.on_save()
+        """Apply order and widths in one library save, or roll both back."""
+        original_order = list(self.device["buttons"])
+        original_widths = {b["id"]: b.get("span", 6)
+                           for b in original_order}
+        by_id = {b["id"]: b for b in original_order}
+        try:
+            self.device["buttons"][:] = [by_id[button_id]
+                                          for button_id in self.order]
+            for button in self.device["buttons"]:
+                button["span"] = self.working[button["id"]]
+            self.on_save()
+        except Exception as exc:
+            self.device["buttons"][:] = original_order
+            for button in original_order:
+                button["span"] = original_widths[button["id"]]
+            messagebox.showerror(
+                "Layout not saved",
+                "The original button order and widths have been restored.\n\n"
+                + str(exc), parent=self)
+            return
         self.destroy()
