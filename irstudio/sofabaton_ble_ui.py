@@ -77,8 +77,8 @@ class SofaBatonBleDialog(tk.Toplevel):
             activestyle="none")
         self.device_list.pack(fill="x", pady=(4, 6))
         self.device_list.bind("<<ListboxSelect>>", self._select_device)
-        self.connect_button.pack(
-            in_=self.manual_frame, fill="x", pady=(0, 7), ipady=4)
+        # Connect U1 remains in its original toolbar parent and is
+        # visible only when manual selection becomes necessary.
 
         ttk.Label(
             outer,
@@ -277,6 +277,10 @@ class SofaBatonBleDialog(tk.Toplevel):
                 self._select_device()
                 if error is not None:
                     if name == "Connecting U1":
+                        if self._devices:
+                            self.manual_frame.pack(fill="x", pady=(4, 10))
+                            self.connect_button.pack(
+                                side="left", padx=(9, 0), ipadx=11, ipady=5)
                         self.status_var.set(
                             "Could not connect to the U1. Keep it in Pairing "
                             "mode, check the batteries, and select Scan again. "
@@ -309,6 +313,7 @@ class SofaBatonBleDialog(tk.Toplevel):
         self._devices = []
         self.device_list.delete(0, "end")
         self.manual_frame.pack_forget()
+        self.connect_button.pack_forget()
         self._scanning = True
         self._scan_completed = False
         self.link_var.set("SEARCHING FOR SOFABATON U1...")
@@ -344,6 +349,8 @@ class SofaBatonBleDialog(tk.Toplevel):
             else:
                 if self._devices:
                     self.manual_frame.pack(fill="x", pady=(4, 10))
+                    self.connect_button.pack(
+                        side="left", padx=(9, 0), ipadx=11, ipady=5)
                 sb_count = sum(
                     bool(ble.auto_connect_candidate([d])) for d in devices)
                 if sb_count > 1:
