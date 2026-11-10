@@ -50,7 +50,7 @@ class SaveButtonUITests(unittest.TestCase):
             capture.assert_not_called()
         self.assertEqual(len(self.device["buttons"]), 1)
         self.assertEqual(len(self.button["captures"]), 0)
-        self.assertIn("no new capture started",
+        self.assertIn("No extra capture started",
                       self.app.status_var.get())
         self.save_mock.assert_called()
 
