@@ -370,3 +370,22 @@ Layout Editor changes control the order/width exported to .irplus.
 They do not modify any captured IR waveform or the U1 remote.
 If disk save fails, original order and widths remain in the library.
 The original v0.3.3 live Bluetooth capture routine is unchanged.
+
+WINDOWS v0.3.13-BETA — REMEMBER LAYOUT EDITOR POSITION & SIZE
+------------------------------------------------------------
+The Layout Editor now opens in the same desktop position and with the
+same size where you last closed it, including after relaunching Studio.
+It remembers placement when you Save layout, press Cancel, or click X.
+
+The window placement is saved automatically in:
+  Documents\\IR Remote Studio\\layout-editor-window.json
+Separate from library.json. Moving the window does NOT save or alter
+the remote/button layout, captures, or the U1's programming.
+
+The app keeps windows placed on a connected secondary monitor, including
+displays to the left of the primary. If you disconnect or rearrange
+monitors and the saved title bar would be offscreen, the editor opens
+visibly centered over the main Studio window instead. A missing or
+corrupt preferences file is ignored and repaired next time you close.
+
+No BLE capture code or export data handling was changed.
