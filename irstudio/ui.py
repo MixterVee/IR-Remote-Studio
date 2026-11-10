@@ -76,7 +76,7 @@ class Studio(tk.Tk):
         menu.add_cascade(label="File", menu=file_menu)
         help_menu = tk.Menu(menu, tearoff=0)
         help_menu.add_command(label="About", command=lambda: messagebox.showinfo("About IR Remote Studio",
-            "IR Remote Studio v0.3.11-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
+            "IR Remote Studio v0.3.12-beta\n\nDirect learning backends: Harmony 300/350 USB HID (046D:C124) and experimental Ocrustar/ElkSmart bulk USB (045C:02AA). Other remotes may use the optional legacy Concordance DLL.\n\nIR capture does not change Harmony programming.\n\nProject: github.com/MixterVee/IR-Remote-Studio"))
         menu.add_cascade(label="Help", menu=help_menu)
         self.config(menu=menu)
 
@@ -198,22 +198,19 @@ class Studio(tk.Tk):
                                ("Delete", self.delete_button))
         ]
         self._flow_actions(primary, self._primary_action_buttons, columns=2)
-        secondary = ttk.Frame(button_actions)
-        secondary.pack(fill="x", pady=(3, 0))
-        self._secondary_action_buttons = [
-            ttk.Button(secondary, text=label, command=cmd)
-            for label, cmd in (("Move up", lambda: self.move_button(-1)),
-                               ("Move down", lambda: self.move_button(1)),
-                               ("Layout editor...", self.edit_layout))
-        ]
-        self._flow_actions(secondary, self._secondary_action_buttons, columns=2)
-        # PanedWindow panes may be quite narrow on a laptop. Switch between
-        # 3-wide and 2-wide action rows without clipping their final button.
+        # Keep the primary screen focused on creating/learning buttons.
+        # All appearance controls (button order, width, preview) live inside
+        # the layout editor, reached through a single full-width entry.
+        self.layout_editor_btn = ttk.Button(
+            button_actions, text="Layout editor...",
+            command=self.edit_layout)
+        self.layout_editor_btn.pack(fill="x", pady=(5, 0), ipady=3)
+        # PanedWindow panes may be narrow on laptops; primary actions reflow.
         left.bind("<Configure>", lambda event: self._fit_action_bars(
             self.device_actions, event.width, (self._device_action_buttons,), 350))
         middle.bind("<Configure>", lambda event: self._fit_action_bars(
             self.button_actions, event.width,
-            (self._primary_action_buttons, self._secondary_action_buttons), 415))
+            (self._primary_action_buttons,), 415))
 
         self.button_progress = ttk.Label(middle, textvariable=self.progress_var,
                                          foreground="#536277")
@@ -535,17 +532,6 @@ class Studio(tk.Tk):
             self.active_button = None
             self._save()
             self._reload_buttons()
-
-    def move_button(self, offset):
-        d, b = self._selected_device(), self._selected_button()
-        if not d or not b:
-            return
-        i = d["buttons"].index(b)
-        j = i + offset
-        if 0 <= j < len(d["buttons"]):
-            d["buttons"][i], d["buttons"][j] = d["buttons"][j], d["buttons"][i]
-            self._save()
-            self._reload_buttons(b["id"])
 
     def edit_layout(self):
         device = self._selected_device()
