@@ -173,6 +173,13 @@ public final class SofaBatonU1Ble {
         if (result == null || result.getDevice() == null) return;
         ScanRecord record = result.getScanRecord();
         String name = record == null ? null : record.getDeviceName();
+        if (name == null || name.trim().isEmpty()) {
+            try {
+                name = result.getDevice().getName();
+            } catch (SecurityException ignored) {
+                return;
+            }
+        }
         if (name == null || !U1_NAME.matcher(name.trim()).matches()) return;
         List<ParcelUuid> advertised = record == null ? null : record.getServiceUuids();
         if (advertised != null && !advertised.isEmpty()) {
