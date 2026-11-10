@@ -1404,6 +1404,21 @@ class Studio(tk.Tk):
         else:
             messagebox.showinfo("Data folder", str(self.folder))
 
+    def destroy(self):
+        """Cancel Tk callbacks even when tests or Windows close directly.
+
+        Pending callbacks can reference destroyed Tk variables and leave
+        background BLE tests starved by Tcl finalizers on Windows.
+        """
+        after_id = getattr(self, "_u1_poll_after", None)
+        self._u1_poll_after = None
+        if after_id is not None:
+            try:
+                self.after_cancel(after_id)
+            except tk.TclError:
+                pass
+        super().destroy()
+
     def _close(self):
         if self.running:
             if not messagebox.askyesno("Capture in progress", "A USB operation is still running. Close the app anyway?"):
