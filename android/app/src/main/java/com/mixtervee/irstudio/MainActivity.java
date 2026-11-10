@@ -417,6 +417,186 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
+    private void createButton() {
+        createButton(false);
+    }
+
+    private void createButton(boolean learnAfterCreation) {
+        IrplusCodec.Remote remote = current();
+        if (remote == null) {
+            new AlertDialog.Builder(this).setTitle("Create a remote first")
+                    .setMessage("Choose New Remote before adding buttons.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        EditText nameField = new EditText(this);
+        nameField.setSingleLine(true);
+        nameField.setHint("Power, Input, Volume Up...");
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Add button to " + remote.displayName())
+                .setMessage("Create a named button now; learn its IR code later.")
+                .setView(nameField).setNegativeButton("Cancel", null)
+                .setPositiveButton("Add button", null).create();
+        dialog.setOnShowListener(v -> dialog.getButton(
+                AlertDialog.BUTTON_POSITIVE).setOnClickListener(w -> {
+            String label = nameField.getText().toString().trim();
+            if (label.isEmpty() || label.length() > 40) {
+                nameField.setError("Enter 1-40 characters"); return;
+            }
+            if (remote.items.size() >= 500) {
+                toast("This remote already has 500 buttons."); return;
+            }
+            for (IrplusCodec.Item item : remote.items) {
+                if (!item.space && item.label.equalsIgnoreCase(label)) {
+                    nameField.setError("Button name already exists."); return;
+                }
+            }
+            IrplusCodec.Item item = new IrplusCodec.Item(label, "", 6, false);
+            remote.items.add(item);
+            try {
+                saveRemotes();
+                renderRemote();
+                setStatus("Added '" + label + "'. Tap it to learn a signal.");
+                dialog.dismiss();
+                if (learnAfterCreation) startLearning(remote, item);
+            } catch (Exception error) {
+                remote.items.remove(item);
+                toast("Could not save button: " + error.getMessage());
+            }
+        }));
+        dialog.show();
+    }
+
+    private void showAbout() {
+        String capabilities = "Android " + BuildConfig.VERSION_NAME
+                + "\n\nLearn: compatible Logitech Harmony 300/350 over USB. "
+                + "SofaBaton U1 Bluetooth learning is available on Windows; "
+                + "Android BLE learning has not been validated or ported yet."
+                + "\n\nLibrary: named remotes, raw IR captures, comparison, "
+                + "layout order and width, local backup via .irplus, import/export."
+                + "\n\nLocal data: " + getFilesDir().getAbsolutePath()
+                + "\n\nProject: github.com/MixterVee/IR-Remote-Studio"
+                + "\nLicense: MIT";
+        new AlertDialog.Builder(this).setTitle("About IR Remote Studio")
+                .setMessage(capabilities)
+                .setNegativeButton("Close", null)
+                .setPositiveButton("Project on GitHub", (d, w) -> {
+                    Intent open = new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://github.com/MixterVee/IR-Remote-Studio"));
+                    startActivity(open);
+                }).show();
+    }
+
+    private void showLayoutEditor() {
+        IrplusCodec.Remote remote = current();
+        if (remote == null) {
+            toast("Create or select a remote first."); return;
+        }
+        RemoteLayoutDraft draft = new RemoteLayoutDraft(remote);
+        if (draft.size() == 0) {
+            toast("Add a button before arranging the layout."); return;
+        }
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(17), dp(6), dp(17), dp(8));
+        body.addView(text("Button order and width are changed here, not on "
+                + "the main learning screen. Cancel discards all edits.",
+                12, MUTED, false));
+        Spinner picker = new Spinner(this);
+        body.addView(picker, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(53)));
+        Spinner widths = new Spinner(this);
+        String[] options = new String[12];
+        for (int i = 0; i < 12; i++) options[i] = (i + 1) + " columns";
+        ArrayAdapter<String> widthAdapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, options);
+        widthAdapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item);
+        widths.setAdapter(widthAdapter);
+        body.addView(widths, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(49)));
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.HORIZONTAL);
+        Button up = actionButton("Move Up");
+        Button down = actionButton("Move Down");
+        Button apply = actionButton("Apply width", TEAL);
+        controls.addView(up, new LinearLayout.LayoutParams(0, dp(50), 1));
+        controls.addView(down, new LinearLayout.LayoutParams(0, dp(50), 1));
+        controls.addView(apply, new LinearLayout.LayoutParams(0, dp(50), 1));
+        body.addView(controls);
+        TextView previewTitle = text("12-COLUMN PREVIEW", 12, MUTED, true);
+        previewTitle.setPadding(0, dp(18), 0, dp(7));
+        body.addView(previewTitle);
+        TextView preview = text("", 13, WHITE, false);
+        preview.setPadding(dp(10), dp(10), dp(10), dp(10));
+        preview.setBackground(background(SURFACE, 8));
+        body.addView(preview);
+
+        final int[] index = {0};
+        final Runnable redraw = () -> {
+            List<String> names = new ArrayList<>();
+            for (IrplusCodec.Item item : draft.items()) {
+                names.add((item.space ? "(Space)" : item.label)
+                        + "  •  " + item.span + "/12");
+            }
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                    this, android.R.layout.simple_spinner_item, names);
+            adapter.setDropDownViewResource(
+                    android.R.layout.simple_spinner_dropdown_item);
+            picker.setAdapter(adapter);
+            if (!names.isEmpty()) {
+                index[0] = Math.min(index[0], names.size() - 1);
+                picker.setSelection(index[0]);
+                widths.setSelection(draft.get(index[0]).span - 1);
+            }
+            preview.setText(draft.preview());
+        };
+        picker.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(
+                    AdapterView<?> parent, View view, int position, long id) {
+                index[0] = position;
+                widths.setSelection(draft.get(position).span - 1);
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        up.setOnClickListener(v -> {
+            index[0] = draft.move(index[0], -1);
+            redraw.run();
+        });
+        down.setOnClickListener(v -> {
+            index[0] = draft.move(index[0], 1);
+            redraw.run();
+        });
+        apply.setOnClickListener(v -> {
+            draft.setWidth(index[0], widths.getSelectedItemPosition() + 1);
+            redraw.run();
+        });
+        redraw.run();
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(body);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Layout Editor • " + remote.displayName())
+                .setView(scroll).setNegativeButton("Cancel", null)
+                .setPositiveButton("Save layout", null).create();
+        dialog.setOnShowListener(v ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(w -> {
+                    List<IrplusCodec.Item> original = new ArrayList<>(remote.items);
+                    draft.applyTo(remote);
+                    try {
+                        saveRemotes();
+                        renderRemote();
+                        setStatus("Saved button order and widths.");
+                        dialog.dismiss();
+                    } catch (Exception error) {
+                        remote.items.clear();
+                        remote.items.addAll(original);
+                        toast("Layout save failed: " + error.getMessage());
+                    }
+                }));
+        dialog.show();
+    }
+
     /** The phone hosts the learning workflow. Harmony never receives a configuration write. */
     private void startLearning() {
         UsbManager usb = (UsbManager) getSystemService(USB_SERVICE);
