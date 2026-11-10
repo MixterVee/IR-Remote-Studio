@@ -46,7 +46,7 @@ For detailed setup, see [WINDOWS-SETUP.txt](WINDOWS-SETUP.txt). For what changed
 Install Python 3.12 and compatible dependencies, then run `python run.py`. Automated tests:
 
 ```bash
-python -m unittest discover -s tests -v
+python scripts/run_release_tests.py
 ```
 
 Windows binaries are packaged by [GitHub Actions](.github/workflows/windows.yml). The standalone PyInstaller executable is not digitally code-signed; Windows may display a publisher warning.
