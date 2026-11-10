@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.content.DialogInterface;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.ConsumerIrManager;
 import android.hardware.usb.UsbDevice;
@@ -38,6 +39,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -115,7 +117,7 @@ public class MainActivity extends Activity {
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.addView(text("IR Remote Studio", 22, WHITE, true));
         titles.addView(text("LEARN  ·  ORGANIZE  ·  REPLAY", 11, MUTED, true));
-        titles.addView(text("v0.2.1-alpha  •  Harmony 300 learning", 11, MUTED, false));
+        titles.addView(text("Android " + BuildConfig.VERSION_NAME + "  •  Harmony USB learner", 11, MUTED, false));
         header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
 
@@ -145,15 +147,35 @@ public class MainActivity extends Activity {
         actions.addView(exportButton, exportParams);
         root.addView(actions);
 
-        // Read-only USB inspection is a prerequisite for future Harmony learning.
-        Button usbButton = actionButton("Harmony USB Connection & Diagnostics", Color.rgb(31, 66, 106));
+        LinearLayout editActions = new LinearLayout(this);
+        editActions.setOrientation(LinearLayout.HORIZONTAL);
+        Button addButton = actionButton("+ Add Button", PURPLE);
+        addButton.setOnClickListener(v -> createButton());
+        editActions.addView(addButton, new LinearLayout.LayoutParams(0, dp(48), 1));
+        Button layoutBtn = actionButton("Layout Editor...", Color.rgb(37, 87, 126));
+        layoutBtn.setOnClickListener(v -> showLayoutEditor());
+        LinearLayout.LayoutParams layoutParams =
+                new LinearLayout.LayoutParams(0, dp(48), 1);
+        layoutParams.setMargins(dp(8), 0, 0, 0);
+        editActions.addView(layoutBtn, layoutParams);
+        root.addView(editActions);
+
+        // USB Harmony diagnostic access remains separate from learning.
+        Button usbButton = actionButton("Harmony USB • Connect / Troubleshoot", Color.rgb(31, 66, 106));
         usbButton.setOnClickListener(v -> UsbHarmonyInspector.show(this));
         LinearLayout.LayoutParams usbParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
         usbParams.setMargins(0, 0, 0, dp(9));
         root.addView(usbButton, usbParams);
 
-        TextView section = text("MY REMOTES   •   LONG-PRESS A BUTTON TO EDIT", 11, MUTED, true);
+        Button about = actionButton("About / Version", Color.rgb(37, 60, 90));
+        about.setOnClickListener(v -> showAbout());
+        LinearLayout.LayoutParams aboutParams =
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42));
+        aboutParams.setMargins(0, 0, 0, dp(7));
+        root.addView(about, aboutParams);
+
+        TextView section = text("MY REMOTES   •   LONG-PRESS TO LEARN OR MANAGE", 11, MUTED, true);
         section.setPadding(dp(5), dp(4), dp(5), dp(9));
         root.addView(section);
         deviceSpinner = new Spinner(this);
@@ -191,7 +213,7 @@ public class MainActivity extends Activity {
         root.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
-        TextView footer = text("Learned buttons are stored locally. The Harmony's programming remains unchanged.",
+        TextView footer = text("Valid IR captures save locally. The Harmony's programming is unchanged.",
                 11, MUTED, false);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(dp(6), dp(9), dp(6), dp(5));
@@ -240,7 +262,7 @@ public class MainActivity extends Activity {
         remoteLayout.removeAllViews();
         IrplusCodec.Remote remote = current();
         if (remote == null) {
-            TextView empty = text("Your IR library is empty.\n\nTap Learn IR Button to capture a command, or New Remote to create a layout.\n\nImported .irplus files work here too.",
+            TextView empty = text("Your library is empty.\n\nCreate a remote, add named buttons, then capture IR commands. You can also import .irplus files.",
                     16, MUTED, false);
             empty.setGravity(Gravity.CENTER);
             empty.setPadding(dp(18), dp(75), dp(18), dp(30));
@@ -282,7 +304,10 @@ public class MainActivity extends Activity {
                 b.setMaxLines(2);
                 b.setPadding(dp(2), dp(4), dp(2), dp(4));
                 b.setBackground(background(buttonColor(item.label), 9));
-                b.setOnClickListener(v -> send(item));
+                b.setOnClickListener(v -> {
+                    if (item.prontoHex.isEmpty()) startLearning(remote, item);
+                    else send(item);
+                });
                 b.setOnLongClickListener(v -> {
                     editLearnedButton(remote, item);
                     return true;
@@ -382,7 +407,7 @@ public class MainActivity extends Activity {
                         saveRemotes();
                         selectedDevice = remotes.size() - 1;
                         refreshDevices();
-                        setStatus("Created " + name + ". Tap Learn IR Button to add commands.");
+                        setStatus("Created " + name + ". Add a button or learn a command.");
                         dialog.dismiss();
                     } catch (Exception error) {
                         remotes.remove(newRemote);
