@@ -475,7 +475,7 @@ public class MainActivity extends Activity {
                 + "SofaBaton U1 Bluetooth learning is available on Windows; "
                 + "Android BLE learning has not been validated or ported yet."
                 + "\n\nLibrary: named remotes, raw IR captures, comparison, "
-                + "layout order and width, local backup via .irplus, import/export."
+                + "layout order and width, full JSON library backup and .irplus import/export."
                 + "\n\nLocal data: " + getFilesDir().getAbsolutePath()
                 + "\n\nProject: github.com/MixterVee/IR-Remote-Studio"
                 + "\nLicense: MIT";
