@@ -1,4 +1,4 @@
-IR REMOTE STUDIO — WINDOWS 1.0.0 RELEASE CANDIDATE
+IR REMOTE STUDIO — WINDOWS 1.0.0 RELEASE CANDIDATE 2
 ====================================================
 Portable Windows x64. No Python installation is needed.
 
