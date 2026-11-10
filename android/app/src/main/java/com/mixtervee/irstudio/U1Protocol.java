@@ -177,7 +177,12 @@ public final class U1Protocol {
         StringBuilder out = new StringBuilder();
         out.append(String.format(Locale.US, "0000 %04X %04X 0000",
                 frequencyWord, signal.timingsUs.length / 2));
-        for (int duration : signal.timingsUs) {
+        for (int i = 0; i < signal.timingsUs.length; i++) {
+            int duration = signal.timingsUs[i];
+            // Like Windows normalize_timings: tame only terminal idle
+            // appended by a learning device, preserve real mark/space pulses.
+            if (i == signal.timingsUs.length - 1 && duration > 200000)
+                duration = 40000;
             int cycles = (int) Math.round(duration * signal.carrierHz / 1000000.0);
             if (cycles < 1 || cycles > 65535)
                 throw new IllegalArgumentException("Signal timing cannot be exported as Pronto");
