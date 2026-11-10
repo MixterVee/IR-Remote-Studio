@@ -1195,6 +1195,8 @@ public class MainActivity extends Activity {
                 b.put("prontoHex", item.prontoHex);
                 b.put("span", item.span);
                 b.put("space", item.space);
+                b.put("captures", new JSONArray(item.captures));
+                b.put("selectedCapture", item.selectedCapture);
                 buttons.put(b);
             }
             entry.put("items", buttons);
@@ -1226,9 +1228,24 @@ public class MainActivity extends Activity {
                     JSONObject b = items.getJSONObject(j);
                     int span = b.optInt("span", 6);
                     if (span < 1 || span > 12) continue;
-                    r.items.add(new IrplusCodec.Item(
-                            b.optString("label", ""), b.optString("prontoHex", ""),
-                            span, b.optBoolean("space", false)));
+                    String pronto = b.optString("prontoHex", "");
+                    JSONArray captures = b.optJSONArray("captures");
+                    if (captures == null) {
+                        // Seamlessly migrate pre-0.3.0 libraries.
+                        r.items.add(new IrplusCodec.Item(
+                                b.optString("label", ""), pronto,
+                                span, b.optBoolean("space", false)));
+                    } else {
+                        List<String> signals = new ArrayList<>();
+                        for (int k = 0; k < captures.length() && k < 100; k++) {
+                            String sample = captures.optString(k, "");
+                            if (!sample.isEmpty()) signals.add(sample);
+                        }
+                        r.items.add(new IrplusCodec.Item(
+                                b.optString("label", ""), pronto,
+                                span, b.optBoolean("space", false),
+                                signals, b.optInt("selectedCapture", signals.size() - 1)));
+                    }
                 }
                 remotes.add(r);
             }
