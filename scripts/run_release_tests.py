@@ -37,11 +37,11 @@ def main() -> int:
             "-s", str(TEST_DIR), "-p", path.name, "-v",
         ])
     for index, cmd in enumerate(groups, 1):
-        print(f"\n=== Test group {index}/{len(groups)}: {cmd[-3]} ===",
+        print(f"\n=== Test group {index}/{len(groups)}: {cmd[-2]} ===",
               flush=True)
         finished = subprocess.run(cmd, cwd=ROOT, check=False)
         if finished.returncode != 0:
-            print(f"ERROR: {cmd[-3]} failed ({finished.returncode}).",
+            print(f"ERROR: {cmd[-2]} failed ({finished.returncode}).",
                   flush=True)
             return finished.returncode
     print(f"All {len(groups)} test groups passed.", flush=True)
