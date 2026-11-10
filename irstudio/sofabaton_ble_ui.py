@@ -45,7 +45,7 @@ class SofaBatonBleDialog(tk.Toplevel):
 
         self.link_label = ttk.Label(
             outer, textvariable=self.link_var,
-            foreground="#bc2525", font=("Segoe UI Semibold", 12))
+            foreground="#9a6300", font=("Segoe UI Semibold", 12))
         self.link_label.pack(anchor="w")
         toolbar = ttk.Frame(outer)
         toolbar.pack(fill="x", pady=(11, 6))
@@ -342,6 +342,7 @@ class SofaBatonBleDialog(tk.Toplevel):
                 self._append(
                     f"Found U1 {candidate.name} ({candidate.address}); "
                     "connecting automatically without prompting...\n")
+                self.link_var.set("CONNECTING TO SOFABATON U1...")
                 self.status_var.set(
                     f"Found {candidate.name}. Connecting automatically...")
                 # Reuse exactly the verified, persistent BLE connection path.
