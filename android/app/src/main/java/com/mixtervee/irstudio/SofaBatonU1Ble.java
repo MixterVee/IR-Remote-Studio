@@ -174,7 +174,7 @@ public final class SofaBatonU1Ble {
         ScanRecord record = result.getScanRecord();
         String name = record == null ? null : record.getDeviceName();
         if (name == null || !U1_NAME.matcher(name.trim()).matches()) return;
-        List<ParcelUuid> advertised = record.getServiceUuids();
+        List<ParcelUuid> advertised = record == null ? null : record.getServiceUuids();
         if (advertised != null && !advertised.isEmpty()) {
             boolean correctService = false;
             for (ParcelUuid uuid : advertised) {
