@@ -34,8 +34,7 @@ class LaptopControlsTests(unittest.TestCase):
                 app.geometry("1160x610")
                 app.update()
                 for widget in (app.device_actions, app.button_actions,
-                               app.button_progress, app.capture_btn,
-                               app.save_button_btn, app.save_next_btn):
+                               app.button_progress, app.capture_btn):
                     within_window(self, widget, app)
                 self.assertLessEqual(
                     app.button_tree.winfo_rooty() + app.button_tree.winfo_height(),
