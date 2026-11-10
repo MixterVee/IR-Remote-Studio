@@ -2,6 +2,9 @@ package com.mixtervee.irstudio;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.Manifest;
+import android.bluetooth.BluetoothDevice;
+import android.content.pm.PackageManager;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
@@ -12,6 +15,7 @@ import android.hardware.usb.UsbDevice;
 import android.hardware.usb.UsbManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -49,6 +53,9 @@ public class MainActivity extends Activity {
     private static final int EXPORT_DEVICE = 1002;
     private static final int BACKUP_LIBRARY = 1003;
     private static final int RESTORE_LIBRARY = 1004;
+    private static final int EXPORT_U1_BACKUP = 1005;
+    private static final int IMPORT_U1_BACKUP = 1006;
+    private static final int BLE_PERMISSION_REQUEST = 2001;
     private static final int DARK = Color.rgb(9, 18, 34);
     private static final int SURFACE = Color.rgb(24, 40, 64);
     private static final int WHITE = Color.rgb(244, 247, 252);
@@ -65,12 +72,80 @@ public class MainActivity extends Activity {
     private Spinner deviceSpinner;
     private Button exportButton;
     private Button learnButton;
+    private Button u1ConnectionButton;
+    private TextView u1Status;
+    private SofaBatonU1Ble u1Ble;
+    private IrplusCodec.Remote u1TargetRemote;
+    private IrplusCodec.Item u1TargetButton;
+    private File pendingU1BackupExport;
+    private boolean u1LearningConsent;
     private int selectedDevice = 0;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         irManager = (ConsumerIrManager) getSystemService(CONSUMER_IR_SERVICE);
+        u1Ble = new SofaBatonU1Ble(this, new SofaBatonU1Ble.Listener() {
+            @Override public void status(String message, boolean connected) {
+                if (isFinishing() || isDestroyed()) return;
+                if (u1Status != null) {
+                    u1Status.setText(message);
+                    u1Status.setTextColor(connected ? TEAL : MUTED);
+                }
+                if (u1ConnectionButton != null) {
+                    u1ConnectionButton.setText(connected
+                            ? "SofaBaton U1 • Connected" : "SofaBaton U1 • Connect");
+                }
+                if (connected && learnButton != null && !u1Ble.isLearning()) {
+                    learnButton.setText("◉ Learn IR • U1 Bluetooth");
+                }
+            }
+
+            @Override public void chooseCandidate(
+                    List<BluetoothDevice> choices, List<String> names) {
+                if (isFinishing() || isDestroyed()) return;
+                new AlertDialog.Builder(MainActivity.this)
+                        .setTitle("Choose your SofaBaton U1")
+                        .setItems(names.toArray(new String[0]), (d, which) ->
+                                u1Ble.connect(choices.get(which), names.get(which)))
+                        .setNegativeButton("Cancel", null)
+                        .show();
+            }
+
+            @Override public void learnReady() {
+                if (isFinishing() || isDestroyed()) return;
+                if (learnButton != null)
+                    learnButton.setText("READY — Press source remote button");
+                setStatus("U1 READY. Press and release the original IR remote's button.");
+            }
+
+            @Override public void learned(U1Protocol.Signal signal, File previousBackup) {
+                if (isFinishing() || isDestroyed()) return;
+                restoreLearnButton();
+                try {
+                    if (u1TargetRemote == null || u1TargetButton == null) {
+                        throw new IllegalStateException("No destination button selected");
+                    }
+                    saveExistingCapture(
+                            u1TargetRemote, u1TargetButton, U1Protocol.pronto(signal));
+                    // Always mention where the previous IR waveform was backed up.
+                    toast("U1 previous slot-8 waveform backed up: "
+                            + previousBackup.getName());
+                } catch (Exception failure) {
+                    toast("U1 capture could not be saved: " + failure.getMessage());
+                } finally {
+                    u1TargetRemote = null;
+                    u1TargetButton = null;
+                }
+            }
+
+            @Override public void error(String reason) {
+                if (isFinishing() || isDestroyed()) return;
+                restoreLearnButton();
+                setStatus("SofaBaton U1: " + reason);
+                toast("U1: " + reason);
+            }
+        });
         readSavedRemotes();
         makeUi();
         refreshDevices();
@@ -119,7 +194,7 @@ public class MainActivity extends Activity {
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.addView(text("IR Remote Studio", 22, WHITE, true));
         titles.addView(text("LEARN  ·  ORGANIZE  ·  REPLAY", 11, MUTED, true));
-        titles.addView(text("Android " + BuildConfig.VERSION_NAME + "  •  Harmony USB learner", 11, MUTED, false));
+        titles.addView(text("Android " + BuildConfig.VERSION_NAME + "  •  SofaBaton U1 / Harmony USB", 11, MUTED, false));
         header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
 
@@ -161,6 +236,26 @@ public class MainActivity extends Activity {
         layoutParams.setMargins(dp(8), 0, 0, 0);
         editActions.addView(layoutBtn, layoutParams);
         root.addView(editActions);
+
+        // SofaBaton U1 connects automatically to one identified SB<serial>
+        // remote. Nearby phones/TVs are never listed in the main UI.
+        LinearLayout u1Row = new LinearLayout(this);
+        u1Row.setOrientation(LinearLayout.HORIZONTAL);
+        u1ConnectionButton = actionButton("SofaBaton U1 • Connect", TEAL);
+        u1ConnectionButton.setOnClickListener(v -> openU1Connection());
+        u1Row.addView(u1ConnectionButton,
+                new LinearLayout.LayoutParams(0, dp(50), 3));
+        Button backupButton = actionButton("U1 Backups / Restore", Color.rgb(35, 84, 129));
+        backupButton.setOnClickListener(v -> openU1Backups());
+        LinearLayout.LayoutParams backupParams =
+                new LinearLayout.LayoutParams(0, dp(50), 2);
+        backupParams.setMargins(dp(8), 0, 0, 0);
+        u1Row.addView(backupButton, backupParams);
+        root.addView(u1Row);
+        u1Status = text("NOT CONNECTED — Tap SofaBaton U1 • Connect",
+                12, MUTED, false);
+        u1Status.setPadding(dp(4), dp(7), dp(4), dp(9));
+        root.addView(u1Status);
 
         // USB Harmony diagnostic access remains separate from learning.
         Button usbButton = actionButton("Harmony USB • Connect / Troubleshoot", Color.rgb(31, 66, 106));
