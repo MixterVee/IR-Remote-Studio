@@ -43,15 +43,20 @@ class LaptopControlsTests(unittest.TestCase):
                 self.assertLessEqual(
                     app.button_progress.winfo_rooty() + app.button_progress.winfo_height(),
                     app.button_actions.winfo_rooty() + 3)
-                for label in ("+ Add", "Rename", "Delete", "Move up",
-                              "Move down", "Layout editor..."):
+                for label in ("+ Add", "Rename", "Delete"):
                     buttons = [
                         child for section in app.button_actions.winfo_children()
+                        if section.winfo_class() == "TFrame"
                         for child in section.winfo_children()
                         if child.cget("text") == label
                     ]
                     self.assertEqual(len(buttons), 1, label)
                     within_window(self, buttons[0], app)
+                # Appearance controls live in the separate layout editor.
+                within_window(self, app.layout_editor_btn, app)
+                self.assertEqual(app.layout_editor_btn.cget("text"),
+                                 "Layout editor...")
+                self.assertFalse(hasattr(app, "_secondary_action_buttons"))
             finally:
                 app.destroy()
 
@@ -72,12 +77,10 @@ class LaptopControlsTests(unittest.TestCase):
                     (app._device_action_buttons,), 350)
                 app._fit_action_bars(
                     app.button_actions, 350,
-                    (app._primary_action_buttons,
-                     app._secondary_action_buttons), 415)
+                    (app._primary_action_buttons,), 415)
                 app.update()
                 for group in (app._device_action_buttons,
-                              app._primary_action_buttons,
-                              app._secondary_action_buttons):
+                              app._primary_action_buttons):
                     self.assertEqual(group[-1].grid_info()["row"], 1)
                     for widget in group:
                         within_window(self, widget, app)
@@ -97,8 +100,7 @@ class LaptopControlsTests(unittest.TestCase):
                 # this deliberately still-narrow window re-triggers <Configure>
                 # and legitimately puts it back in two-column mode.
                 for group in (app._device_action_buttons,
-                              app._primary_action_buttons,
-                              app._secondary_action_buttons):
+                              app._primary_action_buttons):
                     self.assertEqual(group[-1].grid_info()["row"], 0)
             finally:
                 app.destroy()
@@ -118,6 +120,9 @@ class LaptopControlsTests(unittest.TestCase):
                 dlg.update()
                 within_window(self, dlg.footer, dlg)
                 within_window(self, dlg.width_bar, dlg)
+                within_window(self, dlg.order_bar, dlg)
+                within_window(self, dlg.move_up_btn, dlg)
+                within_window(self, dlg.move_down_btn, dlg)
                 within_window(self, dlg.tree, dlg)
                 save = [w for w in dlg.footer.winfo_children()
                         if w.winfo_class() == "TButton" and
