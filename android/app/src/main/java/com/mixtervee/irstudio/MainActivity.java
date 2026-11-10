@@ -5,6 +5,7 @@ import android.app.AlertDialog;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
+import android.content.DialogInterface;
 import android.graphics.drawable.GradientDrawable;
 import android.hardware.ConsumerIrManager;
 import android.hardware.usb.UsbDevice;
@@ -38,6 +39,7 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Collections;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -45,6 +47,8 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MainActivity extends Activity {
     private static final int IMPORT_DEVICE = 1001;
     private static final int EXPORT_DEVICE = 1002;
+    private static final int BACKUP_LIBRARY = 1003;
+    private static final int RESTORE_LIBRARY = 1004;
     private static final int DARK = Color.rgb(9, 18, 34);
     private static final int SURFACE = Color.rgb(24, 40, 64);
     private static final int WHITE = Color.rgb(244, 247, 252);
@@ -115,7 +119,7 @@ public class MainActivity extends Activity {
         titles.setOrientation(LinearLayout.VERTICAL);
         titles.addView(text("IR Remote Studio", 22, WHITE, true));
         titles.addView(text("LEARN  ·  ORGANIZE  ·  REPLAY", 11, MUTED, true));
-        titles.addView(text("v0.2.1-alpha  •  Harmony 300 learning", 11, MUTED, false));
+        titles.addView(text("Android " + BuildConfig.VERSION_NAME + "  •  Harmony USB learner", 11, MUTED, false));
         header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
 
@@ -145,15 +149,35 @@ public class MainActivity extends Activity {
         actions.addView(exportButton, exportParams);
         root.addView(actions);
 
-        // Read-only USB inspection is a prerequisite for future Harmony learning.
-        Button usbButton = actionButton("Harmony USB Connection & Diagnostics", Color.rgb(31, 66, 106));
+        LinearLayout editActions = new LinearLayout(this);
+        editActions.setOrientation(LinearLayout.HORIZONTAL);
+        Button addButton = actionButton("+ Add Button", PURPLE);
+        addButton.setOnClickListener(v -> createButton());
+        editActions.addView(addButton, new LinearLayout.LayoutParams(0, dp(48), 1));
+        Button layoutBtn = actionButton("Layout Editor...", Color.rgb(37, 87, 126));
+        layoutBtn.setOnClickListener(v -> showLayoutEditor());
+        LinearLayout.LayoutParams layoutParams =
+                new LinearLayout.LayoutParams(0, dp(48), 1);
+        layoutParams.setMargins(dp(8), 0, 0, 0);
+        editActions.addView(layoutBtn, layoutParams);
+        root.addView(editActions);
+
+        // USB Harmony diagnostic access remains separate from learning.
+        Button usbButton = actionButton("Harmony USB • Connect / Troubleshoot", Color.rgb(31, 66, 106));
         usbButton.setOnClickListener(v -> UsbHarmonyInspector.show(this));
         LinearLayout.LayoutParams usbParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
         usbParams.setMargins(0, 0, 0, dp(9));
         root.addView(usbButton, usbParams);
 
-        TextView section = text("MY REMOTES   •   LONG-PRESS A BUTTON TO EDIT", 11, MUTED, true);
+        Button about = actionButton("About / Version", Color.rgb(37, 60, 90));
+        about.setOnClickListener(v -> showAbout());
+        LinearLayout.LayoutParams aboutParams =
+                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42));
+        aboutParams.setMargins(0, 0, 0, dp(7));
+        root.addView(about, aboutParams);
+
+        TextView section = text("MY REMOTES   •   LONG-PRESS TO LEARN OR MANAGE", 11, MUTED, true);
         section.setPadding(dp(5), dp(4), dp(5), dp(9));
         root.addView(section);
         deviceSpinner = new Spinner(this);
@@ -191,7 +215,7 @@ public class MainActivity extends Activity {
         root.addView(scroll, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
 
-        TextView footer = text("Learned buttons are stored locally. The Harmony's programming remains unchanged.",
+        TextView footer = text("Valid IR captures save locally. The Harmony's programming is unchanged.",
                 11, MUTED, false);
         footer.setGravity(Gravity.CENTER);
         footer.setPadding(dp(6), dp(9), dp(6), dp(5));
@@ -240,7 +264,7 @@ public class MainActivity extends Activity {
         remoteLayout.removeAllViews();
         IrplusCodec.Remote remote = current();
         if (remote == null) {
-            TextView empty = text("Your IR library is empty.\n\nTap Learn IR Button to capture a command, or New Remote to create a layout.\n\nImported .irplus files work here too.",
+            TextView empty = text("Your library is empty.\n\nCreate a remote, add named buttons, then capture IR commands. You can also import .irplus files.",
                     16, MUTED, false);
             empty.setGravity(Gravity.CENTER);
             empty.setPadding(dp(18), dp(75), dp(18), dp(30));
@@ -282,7 +306,10 @@ public class MainActivity extends Activity {
                 b.setMaxLines(2);
                 b.setPadding(dp(2), dp(4), dp(2), dp(4));
                 b.setBackground(background(buttonColor(item.label), 9));
-                b.setOnClickListener(v -> send(item));
+                b.setOnClickListener(v -> {
+                    if (item.prontoHex.isEmpty()) startLearning(remote, item);
+                    else send(item);
+                });
                 b.setOnLongClickListener(v -> {
                     editLearnedButton(remote, item);
                     return true;
@@ -382,7 +409,7 @@ public class MainActivity extends Activity {
                         saveRemotes();
                         selectedDevice = remotes.size() - 1;
                         refreshDevices();
-                        setStatus("Created " + name + ". Tap Learn IR Button to add commands.");
+                        setStatus("Created " + name + ". Add a button or learn a command.");
                         dialog.dismiss();
                     } catch (Exception error) {
                         remotes.remove(newRemote);
@@ -392,8 +419,241 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
-    /** The phone hosts the learning workflow. Harmony never receives a configuration write. */
+    private void createButton() {
+        createButton(false);
+    }
+
+    private void createButton(boolean learnAfterCreation) {
+        IrplusCodec.Remote remote = current();
+        if (remote == null) {
+            new AlertDialog.Builder(this).setTitle("Create a remote first")
+                    .setMessage("Choose New Remote before adding buttons.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        EditText nameField = new EditText(this);
+        nameField.setSingleLine(true);
+        nameField.setHint("Power, Input, Volume Up...");
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Add button to " + remote.displayName())
+                .setMessage("Create a named button now; learn its IR code later.")
+                .setView(nameField).setNegativeButton("Cancel", null)
+                .setPositiveButton("Add button", null).create();
+        dialog.setOnShowListener(v -> dialog.getButton(
+                AlertDialog.BUTTON_POSITIVE).setOnClickListener(w -> {
+            String label = nameField.getText().toString().trim();
+            if (label.isEmpty() || label.length() > 40) {
+                nameField.setError("Enter 1-40 characters"); return;
+            }
+            if (remote.items.size() >= 500) {
+                toast("This remote already has 500 buttons."); return;
+            }
+            for (IrplusCodec.Item item : remote.items) {
+                if (!item.space && item.label.equalsIgnoreCase(label)) {
+                    nameField.setError("Button name already exists."); return;
+                }
+            }
+            IrplusCodec.Item item = new IrplusCodec.Item(label, "", 6, false);
+            remote.items.add(item);
+            try {
+                saveRemotes();
+                renderRemote();
+                setStatus("Added '" + label + "'. Tap it to learn a signal.");
+                dialog.dismiss();
+                if (learnAfterCreation) startLearning(remote, item);
+            } catch (Exception error) {
+                remote.items.remove(item);
+                toast("Could not save button: " + error.getMessage());
+            }
+        }));
+        dialog.show();
+    }
+
+    private void showAbout() {
+        String capabilities = "Android " + BuildConfig.VERSION_NAME
+                + "\n\nLearn: compatible Logitech Harmony 300/350 over USB. "
+                + "SofaBaton U1 Bluetooth learning is available on Windows; "
+                + "Android BLE learning has not been validated or ported yet."
+                + "\n\nLibrary: named remotes, raw IR captures, comparison, "
+                + "layout order and width, full JSON library backup and .irplus import/export."
+                + "\n\nLocal data: " + getFilesDir().getAbsolutePath()
+                + "\n\nProject: github.com/MixterVee/IR-Remote-Studio"
+                + "\nLicense: MIT";
+        new AlertDialog.Builder(this).setTitle("About IR Remote Studio")
+                .setMessage(capabilities)
+                .setNegativeButton("Close", null)
+                .setNeutralButton("Library backup...", (d, w) -> showLibraryBackupMenu())
+                .setPositiveButton("Project on GitHub", (d, w) -> {
+                    Intent open = new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://github.com/MixterVee/IR-Remote-Studio"));
+                    startActivity(open);
+                }).show();
+    }
+
+    private void showLayoutEditor() {
+        IrplusCodec.Remote remote = current();
+        if (remote == null) {
+            toast("Create or select a remote first."); return;
+        }
+        RemoteLayoutDraft draft = new RemoteLayoutDraft(remote);
+        if (draft.size() == 0) {
+            toast("Add a button before arranging the layout."); return;
+        }
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(17), dp(6), dp(17), dp(8));
+        body.addView(text("Button order and width are changed here, not on "
+                + "the main learning screen. Cancel discards all edits.",
+                12, MUTED, false));
+        Spinner picker = new Spinner(this);
+        body.addView(picker, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(53)));
+        Spinner widths = new Spinner(this);
+        String[] options = new String[12];
+        for (int i = 0; i < 12; i++) options[i] = (i + 1) + " columns";
+        ArrayAdapter<String> widthAdapter = new ArrayAdapter<>(
+                this, android.R.layout.simple_spinner_item, options);
+        widthAdapter.setDropDownViewResource(
+                android.R.layout.simple_spinner_dropdown_item);
+        widths.setAdapter(widthAdapter);
+        body.addView(widths, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(49)));
+        LinearLayout controls = new LinearLayout(this);
+        controls.setOrientation(LinearLayout.HORIZONTAL);
+        Button up = actionButton("Move Up");
+        Button down = actionButton("Move Down");
+        Button apply = actionButton("Apply width", TEAL);
+        controls.addView(up, new LinearLayout.LayoutParams(0, dp(50), 1));
+        controls.addView(down, new LinearLayout.LayoutParams(0, dp(50), 1));
+        controls.addView(apply, new LinearLayout.LayoutParams(0, dp(50), 1));
+        body.addView(controls);
+        TextView previewTitle = text("12-COLUMN PREVIEW", 12, MUTED, true);
+        previewTitle.setPadding(0, dp(18), 0, dp(7));
+        body.addView(previewTitle);
+        LinearLayout preview = new LinearLayout(this);
+        preview.setOrientation(LinearLayout.VERTICAL);
+        preview.setPadding(dp(8), dp(8), dp(8), dp(8));
+        preview.setBackground(background(SURFACE, 8));
+        body.addView(preview, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        final int[] index = {0};
+        final Runnable redraw = () -> {
+            List<String> names = new ArrayList<>();
+            for (IrplusCodec.Item item : draft.items()) {
+                names.add((item.space ? "(Space)" : item.label)
+                        + "  •  " + item.span + "/12");
+            }
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(
+                    this, android.R.layout.simple_spinner_item, names);
+            adapter.setDropDownViewResource(
+                    android.R.layout.simple_spinner_dropdown_item);
+            picker.setAdapter(adapter);
+            if (!names.isEmpty()) {
+                index[0] = Math.min(index[0], names.size() - 1);
+                picker.setSelection(index[0]);
+                widths.setSelection(draft.get(index[0]).span - 1);
+            }
+            renderLayoutPreview(preview, draft.items());
+        };
+        picker.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(
+                    AdapterView<?> parent, View view, int position, long id) {
+                index[0] = position;
+                widths.setSelection(draft.get(position).span - 1);
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        up.setOnClickListener(v -> {
+            index[0] = draft.move(index[0], -1);
+            redraw.run();
+        });
+        down.setOnClickListener(v -> {
+            index[0] = draft.move(index[0], 1);
+            redraw.run();
+        });
+        apply.setOnClickListener(v -> {
+            draft.setWidth(index[0], widths.getSelectedItemPosition() + 1);
+            redraw.run();
+        });
+        redraw.run();
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(body);
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Layout Editor • " + remote.displayName())
+                .setView(scroll).setNegativeButton("Cancel", null)
+                .setPositiveButton("Save layout", null).create();
+        dialog.setOnShowListener(v ->
+                dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(w -> {
+                    List<IrplusCodec.Item> original = new ArrayList<>(remote.items);
+                    draft.applyTo(remote);
+                    try {
+                        saveRemotes();
+                        renderRemote();
+                        setStatus("Saved button order and widths.");
+                        dialog.dismiss();
+                    } catch (Exception error) {
+                        remote.items.clear();
+                        remote.items.addAll(original);
+                        toast("Layout save failed: " + error.getMessage());
+                    }
+                }));
+        dialog.show();
+    }
+
+    /** Noninteractive twelve-column preview matches the exported button layout. */
+    private void renderLayoutPreview(LinearLayout container,
+                                     List<IrplusCodec.Item> items) {
+        container.removeAllViews();
+        LinearLayout row = newRow();
+        int used = 0;
+        for (IrplusCodec.Item item : items) {
+            if (used + item.span > 12 && used > 0) {
+                addSpace(row, 12 - used);
+                container.addView(row);
+                row = newRow();
+                used = 0;
+            }
+            if (item.space) {
+                addSpace(row, item.span);
+            } else {
+                String label = item.label;
+                if (item.prontoHex.isEmpty()) label += " (empty)";
+                TextView sample = text(label, item.span <= 3 ? 10 : 12, WHITE, true);
+                sample.setGravity(Gravity.CENTER);
+                sample.setMaxLines(2);
+                sample.setPadding(dp(2), dp(2), dp(2), dp(2));
+                sample.setBackground(background(
+                        item.prontoHex.isEmpty()
+                                ? Color.rgb(80, 90, 105)
+                                : buttonColor(item.label), 7));
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        0, dp(47), item.span);
+                params.setMargins(dp(2), dp(3), dp(2), dp(3));
+                row.addView(sample, params);
+            }
+            used += item.span;
+            if (used == 12) {
+                container.addView(row);
+                row = newRow();
+                used = 0;
+            }
+        }
+        if (used > 0) {
+            addSpace(row, 12 - used);
+            container.addView(row);
+        }
+    }
+
+    /** Android uses the proven Harmony USB backend; no U1 BLE writes here. */
     private void startLearning() {
+        startLearning(null, null);
+    }
+
+    private void startLearning(IrplusCodec.Remote targetRemote,
+                               IrplusCodec.Item targetButton) {
         UsbManager usb = (UsbManager) getSystemService(USB_SERVICE);
         UsbDevice harmony = null;
         if (usb != null) {
@@ -446,12 +706,85 @@ public class MainActivity extends Activity {
                             String pronto = candidate.get();
                             if (pronto == null) {
                                 showFailedLearning(report);
+                            } else if (targetRemote != null && targetButton != null) {
+                                saveExistingCapture(targetRemote, targetButton, pronto);
                             } else {
                                 showCapturePreview(pronto, report);
                             }
                         });
                     }, "HarmonyLearnAndPreview").start();
                 }).show();
+    }
+
+    private boolean replaceButtonAndSave(IrplusCodec.Remote remote,
+                                          IrplusCodec.Item oldItem,
+                                          IrplusCodec.Item replacement) {
+        int index = remote.items.indexOf(oldItem);
+        if (index < 0) {
+            toast("The button was removed. No capture was saved.");
+            return false;
+        }
+        remote.items.set(index, replacement);
+        try {
+            saveRemotes();
+            renderRemote();
+            return true;
+        } catch (Exception error) {
+            remote.items.set(index, oldItem);
+            toast("Could not save IR library: " + error.getMessage());
+            return false;
+        }
+    }
+
+    private void saveExistingCapture(IrplusCodec.Remote remote,
+                                     IrplusCodec.Item item, String pronto) {
+        // Validates and saves to the preselected button as soon as capture ends.
+        // A failure rolls back and never reports success.
+        try {
+            IrplusCodec.Item changed = item.addCapture(pronto);
+            if (!replaceButtonAndSave(remote, item, changed)) return;
+            setStatus("Auto-saved '" + changed.label + "' ("
+                    + changed.captures.size() + " samples). "
+                    + changed.sampleStatus() + ". Ready for IRplus export.");
+            showLearningChoices(remote);
+        } catch (IllegalArgumentException error) {
+            toast("Invalid IR capture: " + error.getMessage());
+        }
+    }
+
+    private void showLearningChoices(IrplusCodec.Remote remote) {
+        new AlertDialog.Builder(this)
+                .setTitle("IR command saved")
+                .setMessage("The IR command was saved to this remote. "
+                        + "What would you like to learn next?")
+                .setPositiveButton("New button",
+                        (d, w) -> createButton(true))
+                .setNeutralButton("Existing button",
+                        (d, w) -> chooseExistingForLearning(remote))
+                .setNegativeButton("Finish",
+                        (d, w) -> setStatus(
+                                "Learning finished. Saved commands are ready for IRplus."))
+                .show();
+    }
+
+    private void chooseExistingForLearning(IrplusCodec.Remote remote) {
+        List<IrplusCodec.Item> eligible = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        for (IrplusCodec.Item item : remote.items) {
+            if (!item.space) {
+                eligible.add(item);
+                labels.add(item.label + "  •  " + item.sampleStatus());
+            }
+        }
+        if (eligible.isEmpty()) {
+            createButton(true);
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Learn an existing button")
+                .setItems(labels.toArray(new String[0]), (d, which) ->
+                        startLearning(remote, eligible.get(which)))
+                .setNegativeButton("Cancel", null).show();
     }
 
     private void showFailedLearning(String report) {
@@ -537,15 +870,9 @@ public class MainActivity extends Activity {
         content.addView(copy, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
 
-        Button saveAndLearnAnother = actionButton(
-                "Save & Learn Another Button", PURPLE);
-        LinearLayout.LayoutParams nextParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(49));
-        nextParams.setMargins(0, dp(10), 0, 0);
-        content.addView(saveAndLearnAnother, nextParams);
-
-        TextView note = text("Save the current command before starting a new capture. "
-                + "Harmony programming unchanged.", 11, MUTED, false);
+        TextView note = text("Name this NEW button and save it to your "
+                + "library. Existing buttons auto-save immediately after capture. "
+                + "No Harmony programming is changed.", 11, MUTED, false);
         note.setPadding(0, dp(12), 0, dp(3));
         content.addView(note);
 
@@ -559,21 +886,6 @@ public class MainActivity extends Activity {
                         (d, w) -> copyText("Harmony learning report", report))
                 .setPositiveButton("Save button", null)
                 .create();
-        saveAndLearnAnother.setOnClickListener(v -> {
-            // Never discard the current capture: retry validation in the same
-            // local persistence path as the existing Save button.
-            if (saveLearnedButton(pronto,
-                    buttonName.getText().toString().trim(),
-                    targetSpinner.getSelectedItemPosition(),
-                    remoteName.getText().toString().trim(),
-                    buttonName, remoteName)) {
-                dialog.dismiss();
-                // Previous capture's STOP/DONE and CLOSE were already
-                // verified. Starting another capture requires explicit
-                // confirmation in the normal learning flow.
-                startLearning();
-            }
-        });
         dialog.setOnShowListener(v ->
                 dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(w -> {
                     if (saveLearnedButton(pronto,
@@ -582,6 +894,8 @@ public class MainActivity extends Activity {
                             remoteName.getText().toString().trim(),
                             buttonName, remoteName)) {
                         dialog.dismiss();
+                        IrplusCodec.Remote saved = current();
+                        if (saved != null) showLearningChoices(saved);
                     }
                 }));
         dialog.show();
@@ -631,8 +945,8 @@ public class MainActivity extends Activity {
             saveRemotes();
             selectedDevice = remotes.indexOf(target);
             refreshDevices();
-            setStatus("Saved " + label + " to " + target.displayName()
-                    + ". Long-press buttons to rename or delete. Export to back up.");
+            setStatus("Auto-saved '" + label + "' to " + target.displayName()
+                    + ". Ready for IRplus export.");
             toast("IR button saved to your phone");
             return true;
         } catch (Exception error) {
@@ -738,12 +1052,76 @@ public class MainActivity extends Activity {
     }
 
     private void editLearnedButton(IrplusCodec.Remote remote, IrplusCodec.Item item) {
+        if (item.space) {
+            showLayoutEditor();
+            return;
+        }
+        String details = item.captures.size() + " capture(s)  •  " + item.sampleStatus();
         new AlertDialog.Builder(this)
-                .setTitle(item.label)
-                .setItems(new String[]{"Rename button", "Delete button"}, (d, choice) -> {
-                    if (choice == 0) renameButton(remote, item);
-                    else deleteButton(remote, item);
+                .setTitle(item.label + " — " + details)
+                .setItems(new String[]{
+                        "Learn / add another sample",
+                        "Undo last capture",
+                        "Clear all captures (keep button)",
+                        "Choose best match",
+                        "Rename button",
+                        "Delete button"
+                }, (d, choice) -> {
+                    switch (choice) {
+                        case 0: startLearning(remote, item); break;
+                        case 1: changeCaptures(remote, item, 1); break;
+                        case 2: changeCaptures(remote, item, 2); break;
+                        case 3: changeCaptures(remote, item, 3); break;
+                        case 4: renameButton(remote, item); break;
+                        case 5: deleteButton(remote, item); break;
+                        default: break;
+                    }
                 }).show();
+    }
+
+    private void changeCaptures(IrplusCodec.Remote remote,
+                                IrplusCodec.Item item, int action) {
+        if (item.captures.isEmpty()) {
+            toast("This button has no saved samples.");
+            return;
+        }
+        if (action == 2) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Clear captured signals?")
+                    .setMessage("Clear all " + item.captures.size()
+                            + " sample(s) from '" + item.label
+                            + "'? The button and its layout will stay. "
+                            + "This changes only the Android library, not a remote.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Clear samples", (d, w) ->
+                            changeCapturesConfirmed(remote, item, action))
+                    .show();
+        } else if (action == 1) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Undo last capture?")
+                    .setMessage("Remove only the newest sample from '"
+                            + item.label + "'?")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Undo", (d, w) ->
+                            changeCapturesConfirmed(remote, item, action))
+                    .show();
+        } else changeCapturesConfirmed(remote, item, action);
+    }
+
+    private void changeCapturesConfirmed(IrplusCodec.Remote remote,
+                                         IrplusCodec.Item item, int action) {
+        IrplusCodec.Item replacement;
+        switch (action) {
+            case 1: replacement = item.removeLastCapture(); break;
+            case 2: replacement = item.clearCaptures(); break;
+            case 3: replacement = item.selectBestCapture(); break;
+            default: return;
+        }
+        if (replaceButtonAndSave(remote, item, replacement)) {
+            setStatus("'" + item.label + "': " + replacement.sampleStatus()
+                    + ", " + replacement.captures.size()
+                    + " saved sample(s). Button retained.");
+        }
     }
 
     private void renameButton(IrplusCodec.Remote remote, IrplusCodec.Item item) {
@@ -772,8 +1150,7 @@ public class MainActivity extends Activity {
                     }
                     int index = remote.items.indexOf(item);
                     if (index < 0) return;
-                    remote.items.set(index, new IrplusCodec.Item(
-                            name, item.prontoHex, item.span, false));
+                    remote.items.set(index, item.withLabel(name));
                     try {
                         saveRemotes();
                         renderRemote();
@@ -818,6 +1195,80 @@ public class MainActivity extends Activity {
 
     private void toast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+    }
+
+    private void showLibraryBackupMenu() {
+        new AlertDialog.Builder(this)
+                .setTitle("IR library backup")
+                .setMessage("Save every remote, button, layout width and captured "
+                        + "sample as a JSON backup before upgrading or uninstalling. "
+                        + "Unlike .irplus, this preserves full capture history.")
+                .setPositiveButton("Back up library", (d, w) -> {
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.setType("application/json");
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    intent.putExtra(Intent.EXTRA_TITLE,
+                            "IR-Remote-Studio-Android-library.json");
+                    startActivityForResult(intent, BACKUP_LIBRARY);
+                })
+                .setNeutralButton("Restore backup", (d, w) -> {
+                    Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                    intent.setType("*/*");
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    startActivityForResult(intent, RESTORE_LIBRARY);
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void restoreLibraryFromDocument(Uri uri) throws Exception {
+        final byte[] raw;
+        try (InputStream input = getContentResolver().openInputStream(uri)) {
+            if (input == null) throw new IllegalStateException("Cannot open backup file.");
+            raw = readLimited(input, 2_000_000);
+        }
+        final List<IrplusCodec.Remote> incoming = parseLibraryJson(
+                new String(raw, StandardCharsets.UTF_8));
+        new AlertDialog.Builder(this)
+                .setTitle("Replace local library?")
+                .setMessage("This backup contains " + incoming.size()
+                        + " remote(s). It will replace the current Android library. "
+                        + "A local recovery copy will be written first.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Restore", (d, w) -> {
+                    List<IrplusCodec.Remote> old = new ArrayList<>(remotes);
+                    int previousSelected = selectedDevice;
+                    try {
+                        File currentFile = new File(getFilesDir(), "remotes.json");
+                        if (currentFile.exists()) {
+                            File backup = new File(getFilesDir(),
+                                    "remotes-before-restore.json");
+                            try (InputStream input = new FileInputStream(currentFile);
+                                 OutputStream output = new FileOutputStream(backup)) {
+                                byte[] block = new byte[8192];
+                                int n;
+                                while ((n = input.read(block)) != -1) {
+                                    output.write(block, 0, n);
+                                }
+                                output.flush();
+                            }
+                        }
+                        remotes.clear();
+                        remotes.addAll(incoming);
+                        selectedDevice = 0;
+                        saveRemotes();
+                        refreshDevices();
+                        setStatus("Restored " + incoming.size()
+                                + " remote(s) and all capture samples.");
+                    } catch (Exception error) {
+                        remotes.clear();
+                        remotes.addAll(old);
+                        selectedDevice = previousSelected;
+                        refreshDevices();
+                        toast("Restore failed; previous library retained: "
+                                + error.getMessage());
+                    }
+                }).show();
     }
 
     private void openImport() {
@@ -873,6 +1324,24 @@ public class MainActivity extends Activity {
                     .setPositiveButton("OK", null)
                     .show();
             }
+        } else if (requestCode == BACKUP_LIBRARY) {
+            try (OutputStream output = getContentResolver().openOutputStream(uri)) {
+                if (output == null) throw new IllegalStateException("Cannot open backup destination.");
+                output.write(libraryJson().getBytes(StandardCharsets.UTF_8));
+                output.flush();
+                setStatus("Full Android library backup saved, including capture history.");
+            } catch (Exception error) {
+                setStatus("Library backup failed: " + error.getMessage());
+                toast("Backup failed: " + error.getMessage());
+            }
+        } else if (requestCode == RESTORE_LIBRARY) {
+            try {
+                restoreLibraryFromDocument(uri);
+            } catch (Exception error) {
+                new AlertDialog.Builder(this).setTitle("Invalid library backup")
+                        .setMessage(error.getMessage()).setPositiveButton("OK", null)
+                        .show();
+            }
         } else if (requestCode == EXPORT_DEVICE) {
             try (OutputStream output = getContentResolver().openOutputStream(uri)) {
                 if (output == null) throw new IllegalArgumentException("Cannot open output file.");
@@ -899,7 +1368,7 @@ public class MainActivity extends Activity {
         return out.toByteArray();
     }
 
-    private void saveRemotes() throws Exception {
+    private String libraryJson() throws Exception {
         JSONArray array = new JSONArray();
         for (IrplusCodec.Remote r : remotes) {
             JSONObject entry = new JSONObject();
@@ -912,15 +1381,21 @@ public class MainActivity extends Activity {
                 b.put("prontoHex", item.prontoHex);
                 b.put("span", item.span);
                 b.put("space", item.space);
+                b.put("captures", new JSONArray(item.captures));
+                b.put("selectedCapture", item.selectedCapture);
                 buttons.put(b);
             }
             entry.put("items", buttons);
             array.put(entry);
         }
+        return array.toString();
+    }
+
+    private void saveRemotes() throws Exception {
         File file = new File(getFilesDir(), "remotes.json");
         File temp = new File(getFilesDir(), "remotes.tmp");
         try (FileOutputStream out = new FileOutputStream(temp)) {
-            out.write(array.toString().getBytes(StandardCharsets.UTF_8));
+            out.write(libraryJson().getBytes(StandardCharsets.UTF_8));
             out.getFD().sync();
         }
         if (!temp.renameTo(file)) {
@@ -928,30 +1403,68 @@ public class MainActivity extends Activity {
         }
     }
 
+    private List<IrplusCodec.Remote> parseLibraryJson(String raw) throws Exception {
+        JSONArray rows = new JSONArray(raw);
+        if (rows.length() > 100) {
+            throw new IllegalArgumentException("Backup exceeds 100 remotes.");
+        }
+        List<IrplusCodec.Remote> loaded = new ArrayList<>();
+        for (int i = 0; i < rows.length(); i++) {
+            JSONObject d = rows.getJSONObject(i);
+            IrplusCodec.Remote remote = new IrplusCodec.Remote(
+                    d.optString("manufacturer", ""), d.optString("model", ""));
+            JSONArray items = d.getJSONArray("items");
+            if (items.length() > 500) {
+                throw new IllegalArgumentException("Backup exceeds 500 buttons per remote.");
+            }
+            for (int j = 0; j < items.length(); j++) {
+                JSONObject b = items.getJSONObject(j);
+                int span = b.optInt("span", 6);
+                if (span < 1 || span > 12) {
+                    throw new IllegalArgumentException("Invalid button width in backup.");
+                }
+                String pronto = b.optString("prontoHex", "");
+                JSONArray captures = b.optJSONArray("captures");
+                if (captures == null) {
+                    // Seamlessly migrate prior Android versions.
+                    remote.items.add(new IrplusCodec.Item(
+                            b.optString("label", ""), pronto, span,
+                            b.optBoolean("space", false)));
+                } else {
+                    if (captures.length() > 100) {
+                        throw new IllegalArgumentException("Too many captures on a button.");
+                    }
+                    List<String> signals = new ArrayList<>();
+                    for (int k = 0; k < captures.length(); k++) {
+                        String sample = captures.optString(k, "");
+                        if (!sample.isEmpty()) {
+                            IrplusCodec.decodePronto(sample);
+                            signals.add(sample);
+                        }
+                    }
+                    remote.items.add(new IrplusCodec.Item(
+                            b.optString("label", ""), pronto, span,
+                            b.optBoolean("space", false),
+                            signals, b.optInt("selectedCapture", signals.size() - 1)));
+                }
+            }
+            loaded.add(remote);
+        }
+        return loaded;
+    }
+
     private void readSavedRemotes() {
         File file = new File(getFilesDir(), "remotes.json");
         if (!file.exists()) return;
-        try (FileInputStream in = new FileInputStream(file)) {
-            String data = new String(readLimited(in, 2_000_000), StandardCharsets.UTF_8);
-            JSONArray rows = new JSONArray(data);
-            for (int i = 0; i < rows.length() && i < 100; i++) {
-                JSONObject d = rows.getJSONObject(i);
-                IrplusCodec.Remote r = new IrplusCodec.Remote(
-                        d.optString("manufacturer", ""), d.optString("model", ""));
-                JSONArray items = d.getJSONArray("items");
-                for (int j = 0; j < items.length() && j < 500; j++) {
-                    JSONObject b = items.getJSONObject(j);
-                    int span = b.optInt("span", 6);
-                    if (span < 1 || span > 12) continue;
-                    r.items.add(new IrplusCodec.Item(
-                            b.optString("label", ""), b.optString("prontoHex", ""),
-                            span, b.optBoolean("space", false)));
-                }
-                remotes.add(r);
-            }
-        } catch (Exception exception) {
-            // Keep existing files intact for recovery instead of overwriting on startup.
-            Toast.makeText(this, "Saved remotes could not be read.", Toast.LENGTH_LONG).show();
+        try (FileInputStream input = new FileInputStream(file)) {
+            String data = new String(readLimited(input, 2_000_000),
+                    StandardCharsets.UTF_8);
+            remotes.addAll(parseLibraryJson(data));
+        } catch (Exception error) {
+            // Keep the file intact for recovery rather than overwrite it.
+            Toast.makeText(this, "Saved remotes could not be read.",
+                    Toast.LENGTH_LONG).show();
         }
     }
+
 }
