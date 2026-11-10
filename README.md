@@ -439,3 +439,21 @@ layout or other samples. To replace old/mismatched samples first, use
 window Close) ends this learning sequence while keeping U1 connected.
 Only actions chosen by the user can trigger additional learning.
 The known-working v0.3.3 U1 Bluetooth learning engine is unchanged.
+
+### Windows v0.3.12-beta — layout editing belongs in Layout Editor
+
+Per user request, the main **Buttons** area is about adding, renaming,
+deleting, selecting and learning IR commands. **Move Up** and
+**Move Down** no longer clutter the main window. One **Layout editor...**
+entry provides appearance configuration.
+
+Inside the Layout Editor, **Move Up / Move Down** are directly next to
+the existing width controls. Reordering and width changes are **staged**
+until **Save layout**; the Phone/Grid preview uses the staged order.
+Cancel discards both types of change. Save commits both in one atomic
+library write, with rollback of the in-memory original layout if disk
+saving fails. The order and widths determine the resulting `.irplus`
+export, without touching captured IR codes, devices or U1 programming.
+
+The original v0.3.3 physical-U1-tested Bluetooth capture engine and
+the v0.3.11 post-capture choices (Existing/New/Finish) remain unchanged.
