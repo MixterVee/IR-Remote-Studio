@@ -35,7 +35,7 @@ jobs:
           Copy-Item WINDOWS-SETUP.txt dist/WINDOWS-SETUP.txt
           Copy-Item README.md dist/README.md
           Copy-Item LICENSE dist/LICENSE
-          Copy-Item RELEASE-NOTES-v1.0.0-rc1.md dist/RELEASE-NOTES-v1.0.0-rc1.md
+          Copy-Item RELEASE-NOTES-v1.0.0-rc2.md dist/RELEASE-NOTES-v1.0.0-rc2.md
           $hash = (Get-FileHash dist/IR-Remote-Studio.exe -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  IR-Remote-Studio.exe" | Set-Content -Path dist/SHA256SUMS.txt -Encoding ascii
       - name: Upload downloadable Windows application
@@ -47,7 +47,7 @@ jobs:
             dist/WINDOWS-SETUP.txt
             dist/README.md
             dist/LICENSE
-            dist/RELEASE-NOTES-v1.0.0-rc1.md
+            dist/RELEASE-NOTES-v1.0.0-rc2.md
             dist/SHA256SUMS.txt
           retention-days: 90
 
