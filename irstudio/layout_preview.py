@@ -100,6 +100,19 @@ class LayoutDialog(tk.Toplevel):
         self._restore_window_position(master)
         self.deiconify()
 
+    def _place_window(self, width, height, x, y):
+        """Apply absolute coordinates, including monitors left of the primary.
+
+        Tk's negative -X/-Y geometry syntax means distance from the RIGHT
+        or BOTTOM screen edge, not an absolute negative virtual-desktop
+        position. Convert desired negative virtual coords accordingly.
+        """
+        screen_width = self.winfo_screenwidth()
+        screen_height = self.winfo_screenheight()
+        xpart = f"+{x}" if x >= 0 else f"-{screen_width - width - x}"
+        ypart = f"+{y}" if y >= 0 else f"-{screen_height - height - y}"
+        self.geometry(f"{width}x{height}{xpart}{ypart}")
+
     def _restore_window_position(self, master):
         """Restore persisted geometry or center on the owner's monitor."""
         monitors = _monitor_rectangles(self)
@@ -122,7 +135,7 @@ class LayoutDialog(tk.Toplevel):
         if saved is not None:
             x, y, width, height = saved
             if _titlebar_on_screen(x, y, width, monitors):
-                self.geometry(f"{width}x{height}{x:+d}{y:+d}")
+                self._place_window(width, height, x, y)
                 return
         # No remembered position, or the old monitor has disappeared.
         # Center relative to the main window (including a secondary monitor).
@@ -145,7 +158,7 @@ class LayoutDialog(tk.Toplevel):
         height = min(height, max(540, bottom - top))
         x = max(left, min(cx - width // 2, right - width))
         y = max(top, min(cy - height // 2, bottom - height))
-        self.geometry(f"{width}x{height}{x:+d}{y:+d}")
+        self._place_window(width, height, x, y)
 
     def _remember_window_position(self):
         """Persist only valid window placement, never remote/library content."""
