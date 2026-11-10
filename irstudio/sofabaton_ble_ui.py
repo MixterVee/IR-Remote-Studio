@@ -1,4 +1,4 @@
-"""U1 Bluetooth connection, optional OS pairing, diagnostics and stored IR."""
+"""SofaBaton U1 connection and optional stored-code troubleshooting UI."""
 from __future__ import annotations
 
 import threading
@@ -12,9 +12,9 @@ from irstudio import sofabaton_u1_read as u1
 class SofaBatonBleDialog(tk.Toplevel):
     def __init__(self, parent, *, auto_scan=True):
         super().__init__(parent)
-        self.title("SofaBaton U1 — Bluetooth")
-        self.minsize(710, 430)
-        self.geometry("850x590")
+        self.title("Connect SofaBaton U1")
+        self.minsize(710, 420)
+        self.geometry("850x510")
         self._busy = False
         self._devices: list[ble.BleEntry] = []
         self._capture: u1.IrRead | None = None
@@ -67,61 +67,42 @@ class SofaBatonBleDialog(tk.Toplevel):
         self.device_list.pack(fill="x", pady=(4, 12))
         self.device_list.bind("<<ListboxSelect>>", self._select_device)
 
-        learning = ttk.LabelFrame(outer, text="IR learning", padding=(12, 10))
-        learning.pack(fill="x", pady=(0, 12))
-        learning_row = ttk.Frame(learning)
-        learning_row.pack(fill="x")
-        # Compatibility widget: no learning controls appear in the
-        # Bluetooth connection window. All learning starts on main Studio.
-        self.learn_button = ttk.Button(
-            learning_row, text="Learn IR", state="disabled")
         ttk.Label(
-            learning_row,
-            text="Learn commands from the main IR Remote Studio window. "
-                 "Connect once here, then return to the main screen.",
-            foreground="#536277", wraplength=760).pack(
-                side="left")
-        ttk.Label(
-            learning, text="You can still read commands already stored in the "
-                           "U1 using Advanced.",
-            foreground="#536277", wraplength=770).pack(
-                anchor="w", pady=(7, 0))
+            outer,
+            text="After connecting, return to the main window to learn IR "
+                 "commands. The U1 stays connected while you work.",
+            foreground="#315c88", wraplength=790,
+            justify="left").pack(anchor="w", pady=(0, 11))
 
         self.advanced_toggle_button = ttk.Button(
-            outer, text="Advanced  ▸", command=self.toggle_advanced)
+            outer, text="Troubleshooting  ▸", command=self.toggle_advanced)
         self.advanced_toggle_button.pack(anchor="w")
         # Never show slots or low-level diagnostics in the normal workflow.
         self.advanced_panel = ttk.LabelFrame(
-            outer, text="Advanced — stored IR and diagnostics", padding=10)
+            outer, text="Troubleshooting — stored IR and Bluetooth log", padding=10)
 
         read_row = ttk.Frame(self.advanced_panel)
         read_row.pack(fill="x", pady=(0, 7))
-        ttk.Label(read_row, text="Existing U1 IR slot:").pack(side="left")
+        ttk.Label(read_row, text="Stored command slot:").pack(side="left")
         self.slot_combo = ttk.Combobox(
             read_row, textvariable=self.slot_var,
             values=[str(i) for i in u1.ALLOWED_SLOTS],
             state="readonly", width=4)
         self.slot_combo.pack(side="left", padx=(8, 12))
         self.read_button = ttk.Button(
-            read_row, text="Read stored IR (test)",
+            read_row, text="Read stored code",
             command=self.read_ir, state="disabled")
         self.read_button.pack(side="left", ipadx=7, ipady=4)
         self.save_capture_button = ttk.Button(
-            read_row, text="Save to selected button",
+            read_row, text="Save to library button",
             command=self.save_capture, state="disabled")
         self.save_capture_button.pack(
             side="left", padx=(10, 0), ipadx=7, ipady=4)
 
-        # Invisible compatibility widget for the original dialog worker.
-        # All learning actions now live on the main Studio screen.
-        self.experimental_learn_button = ttk.Button(
-            self.advanced_panel, text="Learn on main screen",
-            state="disabled")
-
         tools_row = ttk.Frame(self.advanced_panel)
         tools_row.pack(fill="x", pady=(0, 5))
         self.inspect_button = ttk.Button(
-            tools_row, text="Inspect services",
+            tools_row, text="Inspect Bluetooth",
             command=self.inspect, state="disabled")
         self.inspect_button.pack(side="left", ipadx=6)
         self.pair_check = ttk.Checkbutton(
@@ -135,7 +116,7 @@ class SofaBatonBleDialog(tk.Toplevel):
             tools_row, text="Copy report", command=self.copy).pack(
                 side="right", padx=(0, 8))
         ttk.Label(
-            self.advanced_panel, text="Bluetooth diagnostic report:",
+            self.advanced_panel, text="Bluetooth activity log (optional):",
             foreground="#536277").pack(anchor="w", pady=(5, 0))
         report_frame = ttk.Frame(self.advanced_panel)
         report_frame.pack(fill="both", expand=True, pady=(4, 0))
@@ -147,22 +128,8 @@ class SofaBatonBleDialog(tk.Toplevel):
         scrollbar.pack(side="right", fill="y")
         self.report.configure(yscrollcommand=scrollbar.set)
         self._append(
-            "SofaBaton U1 Bluetooth — diagnostics\n"
-            "1. Fit batteries, close the SofaBaton phone app, put the U1 "
-            "in app pairing mode (- and E).\n"
-            "2. Bluetooth scan starts automatically when opened. The app\n"
-            "   auto-connects one positively identified SB<serial> U1.\n"
-            "3. Connection verifies U1 service and identity before main\n"
-            "   window displays green CONNECTED. No extra click needed.\n"
-            "4. Advanced: optionally read a stored IR code (slot 1–8), "
-            "then Save to selected button in the main library.\n"
-            "5. Learn IR from the main window. Bluetooth connection and "
-            "pairing stay in this window only.\n"
-            "6. The app must read and back up the existing code locally "
-            "before sending the observed start/finish commands. It cannot "
-            "restore the U1's original programming.\n"
-            "6. Windows pairing is optional; enable only if ordinary "
-            "Bluetooth connection fails.\n\n"
+            "SofaBaton U1 connection log. Learning happens in "
+            "the main Studio window.\n\n"
         )
         self.transient(parent)
         # A live session survives closing this popup and can be reused here.
@@ -196,7 +163,7 @@ class SofaBatonBleDialog(tk.Toplevel):
         self.device_list.configure(height=2 if self.advanced_open else 5)
         self.report.configure(height=2 if self.advanced_open else 6)
         if self.advanced_open:
-            self.advanced_toggle_button.configure(text="Advanced  ▾")
+            self.advanced_toggle_button.configure(text="Troubleshooting  ▾")
             self.advanced_panel.pack(fill="both", expand=True, pady=(9, 0))
             # Grow within the display, leaving taskbar clearance.
             self.update_idletasks()
@@ -206,8 +173,8 @@ class SofaBatonBleDialog(tk.Toplevel):
                 self.geometry(f"{self.winfo_width()}x{target}")
         else:
             self.advanced_panel.pack_forget()
-            self.advanced_toggle_button.configure(text="Advanced  ▸")
-            self.geometry(f"{self.winfo_width()}x590")
+            self.advanced_toggle_button.configure(text="Troubleshooting  ▸")
+            self.geometry(f"{self.winfo_width()}x510")
 
     def _poll_connection(self):
         if not self.winfo_exists():
@@ -247,7 +214,6 @@ class SofaBatonBleDialog(tk.Toplevel):
             state="normal" if selected and not snap.connected else "disabled")
         self.read_button.configure(
             state="normal" if active_selection else "disabled")
-        self.experimental_learn_button.configure(state="disabled")
         self.save_capture_button.configure(
             state="normal" if self._capture is not None and not self._busy
             else "disabled")
@@ -284,7 +250,7 @@ class SofaBatonBleDialog(tk.Toplevel):
                         self.status_var.set(
                             "Could not connect to the U1. Keep it in Pairing "
                             "mode, check the batteries, and select Scan again. "
-                            "For Windows pairing, expand Advanced. "
+                            "Open Troubleshooting if Windows pairing is needed. "
                             f"Details: {error[:160]}")
                     elif name == "Scanning":
                         self.status_var.set(
@@ -492,11 +458,6 @@ class SofaBatonBleDialog(tk.Toplevel):
         self._run("SofaBaton learning", lambda:
                   self.master.u1_session.learn_ir_experimental(
                       self.master.folder), complete, on_error=failed)
-
-    def learn_ir_experimental(self):
-        """Legacy method retained, main UI owns the learning operation."""
-        self.master.status_var.set(
-            "Select a device and button, then click Capture on the main screen.")
 
     def read_ir(self):
         """Opt-in query of IR already stored in the selected U1 slot."""
