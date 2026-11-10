@@ -37,7 +37,7 @@ class ReleasePresentationTests(unittest.TestCase):
         return result
 
     def test_version_and_about_shows_real_features_and_data_location(self):
-        self.assertEqual(__version__, "1.0.0-rc1")
+        self.assertEqual(__version__, "1.0.0-rc2")
         self.assertIn(__version__, self.app.title())
         dialog = self.app.show_about()
         try:
@@ -47,7 +47,7 @@ class ReleasePresentationTests(unittest.TestCase):
                       if isinstance(w, (tk.Label, __import__(
                           "tkinter.ttk", fromlist=["Label"]).Label))]
             display = "\n".join(labels)
-            self.assertIn("1.0.0-rc1", display)
+            self.assertIn("1.0.0-rc2", display)
             self.assertIn("SofaBaton U1", display)
             self.assertIn("Harmony 300/350", display)
             self.assertIn("License: MIT", display)
