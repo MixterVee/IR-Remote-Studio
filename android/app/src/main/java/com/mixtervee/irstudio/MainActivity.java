@@ -564,6 +564,207 @@ public class MainActivity extends Activity {
         dialog.show();
     }
 
+    private File u1BackupFolder() {
+        return new File(getFilesDir(), "U1-Learn-Backups");
+    }
+
+    private void restoreLearnButton() {
+        if (learnButton == null) return;
+        learnButton.setEnabled(true);
+        learnButton.setText(u1Ble != null && u1Ble.isConnected()
+                ? "◉ Learn IR • U1 Bluetooth" : "◉ Learn IR Button");
+    }
+
+    private boolean hasU1Permissions() {
+        String[] permissions = Build.VERSION.SDK_INT >= 31
+                ? new String[]{Manifest.permission.BLUETOOTH_SCAN,
+                               Manifest.permission.BLUETOOTH_CONNECT}
+                : new String[]{Manifest.permission.ACCESS_FINE_LOCATION};
+        List<String> missing = new ArrayList<>();
+        for (String permission : permissions) {
+            if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED)
+                missing.add(permission);
+        }
+        if (!missing.isEmpty()) {
+            requestPermissions(missing.toArray(new String[0]), BLE_PERMISSION_REQUEST);
+            return false;
+        }
+        return true;
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode,
+                                                     String[] permissions,
+                                                     int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode != BLE_PERMISSION_REQUEST) return;
+        boolean granted = results.length > 0;
+        for (int result : results) {
+            if (result != PackageManager.PERMISSION_GRANTED) granted = false;
+        }
+        if (granted) openU1Connection();
+        else setStatus("Bluetooth scan/connect permission is needed for SofaBaton U1.");
+    }
+
+    private void openU1Connection() {
+        if (!hasU1Permissions()) return;
+        if (u1Ble.isLearning()) {
+            toast("Finish the current U1 learning operation first.");
+            return;
+        }
+        if (u1Ble.isConnected()) {
+            new AlertDialog.Builder(this).setTitle("SofaBaton U1 connected")
+                    .setMessage(u1Ble.deviceName()
+                            + "\n\nYou can learn existing or new buttons directly on the main screen. "
+                            + "Saved U1 waveforms are managed in U1 Backups / Restore.")
+                    .setPositiveButton("Keep connected", null)
+                    .setNegativeButton("Disconnect", (d, w) -> {
+                        u1Ble.disconnect();
+                        u1Status.setText("NOT CONNECTED — Scan again");
+                        u1ConnectionButton.setText("SofaBaton U1 • Connect");
+                        restoreLearnButton();
+                    }).show();
+        } else {
+            u1Ble.scan();
+        }
+    }
+
+    private void learnWithU1(IrplusCodec.Remote remote, IrplusCodec.Item button) {
+        if (button.space || !remote.items.contains(button)) {
+            toast("Choose an existing named button to learn.");
+            return;
+        }
+        if (!u1LearningConsent) {
+            new AlertDialog.Builder(this)
+                    .setTitle("SofaBaton U1 learning")
+                    .setMessage("Before EVERY capture, IR Remote Studio will read "
+                            + "and back up the U1's existing slot-8 IR waveform. "
+                            + "Learning can overwrite slot 8. The backup can be "
+                            + "restored into the Android library or exported, "
+                            + "but it CANNOT reprogram or fully restore the U1.\n\n"
+                            + "Proceed using the verified Windows v0.3.3 learning commands?")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Start learning", (d, w) -> {
+                        u1LearningConsent = true;
+                        beginU1Capture(remote, button);
+                    }).show();
+        } else {
+            beginU1Capture(remote, button);
+        }
+    }
+
+    private void beginU1Capture(IrplusCodec.Remote remote, IrplusCodec.Item button) {
+        if (u1Ble == null || !u1Ble.isConnected()) {
+            toast("Connect SofaBaton U1 Bluetooth first.");
+            return;
+        }
+        if (u1Ble.isLearning()) {
+            toast("SofaBaton U1 is already learning.");
+            return;
+        }
+        u1TargetRemote = remote;
+        u1TargetButton = button;
+        learnButton.setEnabled(false);
+        learnButton.setText("BACKING UP U1 IR...");
+        setStatus("Reading, writing and verifying the existing slot-8 backup "
+                + "before the U1 is armed.");
+        u1Ble.learn(u1BackupFolder());
+    }
+
+    private void openU1Backups() {
+        File[] backups = U1BackupStore.list(u1BackupFolder());
+        List<String> options = new ArrayList<>();
+        options.add("Import a Windows/Android U1 waveform JSON...");
+        for (File backup : backups) options.add(backup.getName());
+        new AlertDialog.Builder(this)
+                .setTitle("U1 waveform backups — NOT full remote restores")
+                .setMessage("Restore here means importing a saved IR signal into "
+                        + "an Android library button. It does NOT write to "
+                        + "the U1 or restore its internal button profiles.")
+                .setItems(options.toArray(new String[0]), (d, selected) -> {
+                    if (selected == 0) {
+                        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+                        intent.setType("*/*");
+                        intent.addCategory(Intent.CATEGORY_OPENABLE);
+                        startActivityForResult(intent, IMPORT_U1_BACKUP);
+                    } else {
+                        showU1BackupActions(backups[selected - 1]);
+                    }
+                })
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void showU1BackupActions(File backup) {
+        new AlertDialog.Builder(this)
+                .setTitle(backup.getName())
+                .setItems(new String[]{
+                        "Restore IR waveform into Android library button",
+                        "Export this backup JSON"
+                }, (d, which) -> {
+                    if (which == 0) restoreU1WaveformToLibrary(backup);
+                    else {
+                        pendingU1BackupExport = backup;
+                        Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                        intent.setType("application/json");
+                        intent.addCategory(Intent.CATEGORY_OPENABLE);
+                        intent.putExtra(Intent.EXTRA_TITLE, backup.getName());
+                        startActivityForResult(intent, EXPORT_U1_BACKUP);
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
+    private void restoreU1WaveformToLibrary(File backup) {
+        IrplusCodec.Remote remote = current();
+        if (remote == null) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Create a remote")
+                    .setMessage("Create/select an Android remote before restoring "
+                            + "a saved U1 IR waveform to one of its buttons.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        List<IrplusCodec.Item> buttons = new ArrayList<>();
+        List<String> labels = new ArrayList<>();
+        for (IrplusCodec.Item item : remote.items) {
+            if (!item.space) {
+                buttons.add(item);
+                labels.add(item.label);
+            }
+        }
+        if (buttons.isEmpty()) {
+            toast("Add a named button before restoring a waveform.");
+            return;
+        }
+        final String pronto;
+        try {
+            pronto = U1Protocol.pronto(U1BackupStore.read(backup));
+        } catch (Exception issue) {
+            toast("Backup cannot be converted to IRplus: " + issue.getMessage());
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Restore stored IR to Android button")
+                .setMessage("Choose a button. This adds a saved IR sample "
+                        + "to the app library only. No Bluetooth programming "
+                        + "or U1 restore command is sent.")
+                .setItems(labels.toArray(new String[0]), (d, index) -> {
+                    IrplusCodec.Item item = buttons.get(index);
+                    try {
+                        IrplusCodec.Item updated = item.addCapture(pronto);
+                        if (replaceButtonAndSave(remote, item, updated)) {
+                            setStatus("Restored U1 backup into Android button '"
+                                    + updated.label + "'. U1 hardware unchanged.");
+                        }
+                    } catch (Exception e) {
+                        toast("Restore failed: " + e.getMessage());
+                    }
+                })
+                .setNegativeButton("Cancel", null)
+                .show();
+    }
+
     private void showAbout() {
         String capabilities = "Android " + BuildConfig.VERSION_NAME
                 + "\n\nLearn: compatible Logitech Harmony 300/350 over USB. "
@@ -742,13 +943,34 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Android uses the proven Harmony USB backend; no U1 BLE writes here. */
+    /** Use U1 Bluetooth when connected, otherwise preserve Harmony USB learning. */
     private void startLearning() {
         startLearning(null, null);
     }
 
     private void startLearning(IrplusCodec.Remote targetRemote,
                                IrplusCodec.Item targetButton) {
+        if (u1Ble != null && u1Ble.isConnected()) {
+            if (targetRemote == null || targetButton == null) {
+                IrplusCodec.Remote currentRemote = current();
+                if (currentRemote == null) {
+                    new AlertDialog.Builder(this)
+                            .setTitle("Create a remote")
+                            .setMessage("Create a remote and a named button before U1 learning.")
+                            .setPositiveButton("OK", null).show();
+                    return;
+                }
+                boolean hasButtons = false;
+                for (IrplusCodec.Item item : currentRemote.items) {
+                    if (!item.space) hasButtons = true;
+                }
+                if (hasButtons) chooseExistingForLearning(currentRemote);
+                else createButton(true);
+                return;
+            }
+            learnWithU1(targetRemote, targetButton);
+            return;
+        }
         UsbManager usb = (UsbManager) getSystemService(USB_SERVICE);
         UsbDevice harmony = null;
         if (usb != null) {
