@@ -178,8 +178,8 @@ class U1SaveUITests(unittest.TestCase):
         try:
             self.assertEqual(dialog.advanced_panel.winfo_manager(), "")
             self.assertFalse(dialog.advanced_open)
-            self.assertEqual(str(dialog.learn_button.cget("state")), "disabled")
-            self.assertEqual(str(dialog.learn_button.cget("text")), "Learn IR")
+            self.assertFalse(hasattr(dialog, "learn_button"))
+            self.assertFalse(hasattr(dialog, "experimental_learn_button"))
             self.assertEqual(str(dialog.connect_button.cget("text")), "Connect U1")
             self.assertEqual(str(dialog.disconnect_button.cget("text")), "Disconnect")
             # Neither slot selection nor optional Windows pairing belongs
@@ -329,7 +329,7 @@ class U1SaveUITests(unittest.TestCase):
             self.app.u1_session._state(
                 "CONNECTED", "SB202006231D9E", "U1", "Identity verified.")
             dlg._poll_connection()
-            self.assertEqual(dlg.experimental_learn_button.winfo_manager(), "")
+            self.assertFalse(hasattr(dlg, "experimental_learn_button"))
             with patch.object(dlg, "_run") as worker, \
                  patch("irstudio.sofabaton_ble_ui.messagebox.askokcancel") as ask:
                 dlg.start_main_capture(lambda value: None, lambda err: None)
@@ -545,7 +545,7 @@ class U1SaveUITests(unittest.TestCase):
         dialog = SofaBatonBleDialog(self.app, auto_scan=False)
         dialog.withdraw()
         try:
-            self.assertEqual(dialog.read_button.cget("text"), "Read stored IR (test)")
+            self.assertEqual(dialog.read_button.cget("text"), "Read stored code")
             self.assertEqual(str(dialog.save_capture_button.cget("state")), "disabled")
             dialog._devices = [BleEntry(
                 name="SB-synthetic", address="FAKE-U1", rssi=-40,
