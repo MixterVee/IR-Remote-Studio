@@ -22,24 +22,33 @@ jobs:
           python-version: '3.12'
           architecture: 'x64'
       - name: Run IR protocol tests
-        run: python -m unittest discover -s tests -v
+        run: python scripts/run_release_tests.py
       - name: Install packaging tools
         run: python -m pip install pyinstaller==6.16.0 pillow hidapi==0.15.0 pyusb libusb-package bleak==3.0.2
       - name: Generate branded Windows icon
         run: python scripts/build_icon.py
       - name: Package portable Windows app
         run: pyinstaller --noconfirm --clean --onefile --windowed --hidden-import hid --hidden-import usb.core --hidden-import usb.util --hidden-import usb.backend.libusb1 --collect-all libusb_package --collect-all bleak --name IR-Remote-Studio --icon "assets/ir_remote_studio.ico" --add-data "assets/ir_remote_studio.png;assets" --add-data "irstudio/Xflyee_IR_Worker.ps1;." --add-data "irstudio/harmony_models.json;." run.py
-      - name: Include Windows setup information
+      - name: Package release documentation and checksum
         shell: pwsh
         run: |
           Copy-Item WINDOWS-SETUP.txt dist/WINDOWS-SETUP.txt
+          Copy-Item README.md dist/README.md
+          Copy-Item LICENSE dist/LICENSE
+          Copy-Item RELEASE-NOTES-v1.0.0-rc2.md dist/RELEASE-NOTES-v1.0.0-rc2.md
+          $hash = (Get-FileHash dist/IR-Remote-Studio.exe -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  IR-Remote-Studio.exe" | Set-Content -Path dist/SHA256SUMS.txt -Encoding ascii
       - name: Upload downloadable Windows application
         uses: actions/upload-artifact@v4
         with:
-          name: IR-Remote-Studio-v0.3.4-beta-Windows-x64
+          name: IR-Remote-Studio-v1.0.0-rc2-Windows-x64
           path: |
             dist/IR-Remote-Studio.exe
             dist/WINDOWS-SETUP.txt
+            dist/README.md
+            dist/LICENSE
+            dist/RELEASE-NOTES-v1.0.0-rc2.md
+            dist/SHA256SUMS.txt
           retention-days: 90
 
   linux-ui-smoke:
@@ -50,4 +59,4 @@ jobs:
       - name: Install Tk and virtual display
         run: sudo apt-get update && sudo apt-get install -y python3-tk xvfb
       - name: Exercise startup and UI regression test
-        run: xvfb-run -a /usr/bin/python3 -m unittest discover -s tests -v
+        run: xvfb-run -a /usr/bin/python3 scripts/run_release_tests.py

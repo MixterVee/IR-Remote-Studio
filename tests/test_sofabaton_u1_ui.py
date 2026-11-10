@@ -5,6 +5,9 @@ import unittest
 from unittest.mock import patch
 
 from irstudio import core
+# Save the unmocked functions before setUp patches the shared core module.
+from irstudio.core import load_library as real_load_library
+from irstudio.core import save_library as real_save_library
 from irstudio.sofabaton_u1_read import IrRead
 from irstudio.sofabaton_ble import BleEntry
 
@@ -175,11 +178,8 @@ class U1SaveUITests(unittest.TestCase):
         try:
             self.assertEqual(dialog.advanced_panel.winfo_manager(), "")
             self.assertFalse(dialog.advanced_open)
-            # Learning has moved to the main UI. Connection dialog is for
-            # scanning/pairing and optional stored-code diagnostics only.
             self.assertFalse(hasattr(dialog, "learn_button"))
             self.assertFalse(hasattr(dialog, "experimental_learn_button"))
-            self.assertFalse(hasattr(dialog, "learn_ir_experimental"))
             self.assertEqual(str(dialog.connect_button.cget("text")), "Connect U1")
             self.assertEqual(str(dialog.disconnect_button.cget("text")), "Disconnect")
             # Neither slot selection nor optional Windows pairing belongs
@@ -254,6 +254,75 @@ class U1SaveUITests(unittest.TestCase):
             self.app.connection_state_var.get(),
             "CONNECTED — SofaBaton U1 (SB202006231D9E)")
 
+    def test_scan_shows_only_searching_then_connected_not_other_devices(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        svc = ("0000fff0-0000-1000-8000-00805f9b34fb",)
+        target = BleEntry("SB202006231D9E", "U1-MAC", -49, svc, True)
+        unrelated = BleEntry("Neighbor's Smart TV", "TV-MAC", -36, (), False)
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            self.assertEqual(dlg.manual_frame.winfo_manager(), "")
+            self.assertEqual(dlg.connect_button.winfo_manager(), "")
+            self.assertIn("SEARCHING", dlg.link_var.get())
+            def connected(address, name, pair):
+                self.app.u1_session._state(
+                    "CONNECTED", name, address, "Verified U1")
+                return self.app.u1_session.snapshot()
+            with patch("irstudio.sofabaton_ble_ui.ble.scan_ble",
+                       return_value=[unrelated, target]), \
+                 patch.object(self.app.u1_session, "connect",
+                              side_effect=connected), \
+                 patch.object(dlg, "_run",
+                              side_effect=lambda name, task, complete:
+                                  complete(task())):
+                dlg.scan()
+            self.assertFalse(dlg.winfo_exists())
+            self.assertEqual(self.app.u1_session.snapshot().name, target.name)
+        finally:
+            if dlg.winfo_exists():
+                dlg.destroy()
+
+    def test_ambiguous_u1_scan_shows_only_u1_candidates_in_manual_fallback(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        svc = ("0000fff0-0000-1000-8000-00805f9b34fb",)
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            devices = [BleEntry("Nearby phone", "PHONE", -30, (), False),
+                       BleEntry("SB11111111", "U1-A", -61, svc, True),
+                       BleEntry("SB22222222", "U1-B", -62, svc, True)]
+            with patch("irstudio.sofabaton_ble_ui.ble.scan_ble",
+                       return_value=devices), \
+                 patch.object(dlg, "_run",
+                              side_effect=lambda name, task, complete:
+                                  complete(task())):
+                dlg.scan()
+            self.assertEqual(dlg.manual_frame.winfo_manager(), "pack")
+            self.assertEqual(dlg.connect_button.winfo_manager(), "pack")
+            self.assertEqual(list(dlg.device_list.get(0, "end")),
+                             ["SB11111111", "SB22222222"])
+            self.assertNotIn("Nearby phone", str(dlg.device_list.get(0, "end")))
+            self.assertIn("MULTIPLE U1", dlg.link_var.get())
+        finally:
+            dlg.destroy()
+
+    def test_empty_scan_hides_others_and_explains_retry(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            with patch("irstudio.sofabaton_ble_ui.ble.scan_ble",
+                       return_value=[]), \
+                 patch.object(dlg, "_run",
+                              side_effect=lambda name, task, complete:
+                                  complete(task())):
+                dlg.scan()
+            self.assertIn("NO U1 FOUND", dlg.link_var.get())
+            self.assertEqual(dlg.manual_frame.winfo_manager(), "")
+        finally:
+            dlg.destroy()
+
     def test_auto_scan_on_open_skips_redundant_scan_if_connected(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
         dlg = SofaBatonBleDialog(self.app, auto_scan=False)
@@ -316,66 +385,236 @@ class U1SaveUITests(unittest.TestCase):
             "CONNECTED — SofaBaton U1 (SB202006231D9E)")
         self.assertFalse(dlg.winfo_exists())
 
-    def test_main_capture_uses_u1_without_bluetooth_dialog(self):
-        from unittest.mock import MagicMock
-        device, button = self.prepare_button()
-        self.app.u1_session._state(
-            "CONNECTED", "SB202006231D9E", "U1-MOCK", "Identity verified.")
-        self.app._refresh_u1_status()
-        self.assertIn("SofaBaton U1", self.app.capture_btn.cget("text"))
-        self.assertEqual(self.app.receiver_var.get(), "Auto detect supported learner")
-        with patch.object(self.app, "_capture_bluetooth") as capture_ble, \
-             patch.object(self.app, "_background") as capture_usb:
-            self.app.capture()
-            capture_ble.assert_called_once_with()
-            capture_usb.assert_not_called()
-        # Users can still explicitly choose USB if both learners are present.
-        self.app.receiver_var.set("Harmony 300/350 — standalone HID")
-        self.app._receiver_changed()
-        self.assertIn("(USB)", self.app.capture_btn.cget("text"))
-        with patch.object(self.app, "_capture_bluetooth") as capture_ble, \
-             patch.object(self.app, "_background") as capture_usb:
-            self.app.capture()
-            capture_usb.assert_called_once_with("Capture", unittest.mock.ANY)
-            capture_ble.assert_not_called()
+    def test_main_screen_reuses_proven_dialog_worker_without_confirmation(self):
+        from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
+        dlg = SofaBatonBleDialog(self.app, auto_scan=False)
+        dlg.withdraw()
+        try:
+            svc = ("0000fff0-0000-1000-8000-00805f9b34fb",)
+            dlg._devices = [BleEntry(
+                "SB202006231D9E", "U1", -50, svc, True)]
+            dlg.device_list.insert("end", "SB202006231D9E")
+            dlg.device_list.selection_set(0)
+            self.app.u1_session._state(
+                "CONNECTED", "SB202006231D9E", "U1", "Identity verified.")
+            dlg._poll_connection()
+            self.assertFalse(hasattr(dlg, "experimental_learn_button"))
+            with patch.object(dlg, "_run") as worker, \
+                 patch("irstudio.sofabaton_ble_ui.messagebox.askokcancel") as ask:
+                dlg.start_main_capture(lambda value: None, lambda err: None)
+                worker.assert_called_once()
+                self.assertEqual(worker.call_args.args[0], "SofaBaton learning")
+                ask.assert_not_called()
+        finally:
+            dlg.destroy()
 
-    def test_successful_u1_capture_autosaves_to_selected_button(self):
-        device, button = self.prepare_button()
+    def test_main_screen_capture_dispatches_to_connected_u1_in_auto_mode(self):
+        self.prepare_button()
         self.app.u1_session._state(
-            "CONNECTED", "SB202006231D9E", "U1-MOCK", "Identity verified.")
+            "CONNECTED", "SB202006231D9E", "U1", "Identity verified.")
         self.app._refresh_u1_status()
+        with patch.object(self.app, "_capture_ble_main") as bluetooth, \
+             patch.object(self.app, "_background") as usb:
+            self.app.capture()
+            bluetooth.assert_called_once_with()
+            usb.assert_not_called()
+
+    def test_ble_main_capture_saves_to_original_selected_button(self):
+        device, button = self.prepare_button()
+        # The same valid, non-NEC raw IR waveform v0.3.3 can capture.
+        ir = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
         self.app.running = True
-        signal = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
-        with patch("irstudio.ui.messagebox.askokcancel") as old_warning:
-            self.app._finish_bluetooth_capture(
-                device["id"], button["id"],
-                (signal, "U1-Learn-Backups/backup-before-learn.json"), None)
-            old_warning.assert_not_called()
+        with patch("irstudio.ui.core.load_library",
+                   return_value=self.app.library), \
+             patch.object(self.app, "after") as later:
+            self.app._finish_ble_main(
+                device["id"], button["id"], (ir, "U1-Learn-Backups/old.json"))
+            later.assert_called_once()
         self.assertFalse(self.app.running)
         self.assertEqual(len(button["captures"]), 1)
         self.assertEqual(button["captures"][0]["carrier_hz"], 38095)
-        self.assertIn("autosaved Power", self.app.status_var.get())
-        self.assertTrue(self.app.save_current_button())
-        self.assertEqual(len(button["captures"]), 1)
+        self.assertIn("AUTO-SAVED", self.app.status_var.get())
+        self.assertEqual(self.app.button_tree.item(button["id"], "values")[3],
+                         "Raw IR (saved)")
         self.save_mock.assert_called()
 
-    def test_bluetooth_library_save_failure_rolls_back_last_capture(self):
+    def test_auto_save_is_read_back_from_disk_before_success_prompt(self):
+        import tempfile
+        from pathlib import Path
         device, button = self.prepare_button()
-        self.app.running = True
-        signal = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
+        ir = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
+        with tempfile.TemporaryDirectory() as tmp:
+            self.app.library_path = Path(tmp) / "library.json"
+            self.app.running = True
+            with patch("irstudio.ui.core.save_library",
+                       side_effect=real_save_library), \
+                 patch("irstudio.ui.core.load_library",
+                       side_effect=real_load_library), \
+                 patch.object(self.app, "after") as prompt:
+                self.app._finish_ble_main(
+                    device["id"], button["id"], (ir, "backup.json"))
+                prompt.assert_called_once()
+            saved = real_load_library(self.app.library_path)
+            codes = saved["devices"][0]["buttons"][0]["captures"]
+            self.assertEqual(len(codes), 1)
+            self.assertEqual(codes[0]["carrier_hz"], 38095)
+            self.assertEqual(codes[0]["timings_us"], ir.timings_us)
+            self.assertIn("AUTO-SAVED", self.app.status_var.get())
+
+    def test_failed_save_rolls_back_without_success_prompt(self):
+        device, button = self.prepare_button()
+        ir = IrRead(8, 38095, [3996, 3999] + [469, 2000] * 51, 37)
         self.save_mock.side_effect = OSError("Disk full")
-        with patch("irstudio.ui.messagebox.showerror") as popup:
-            self.app._finish_bluetooth_capture(
-                device["id"], button["id"], (signal, "prior.json"), None)
-            popup.assert_called_once()
+        self.app.running = True
+        with patch.object(self.app, "after") as prompt, \
+             patch("irstudio.ui.messagebox.showerror") as error:
+            self.app._finish_ble_main(
+                device["id"], button["id"], (ir, "backup.json"))
+            prompt.assert_not_called()
+            error.assert_called_once()
         self.assertEqual(button["captures"], [])
+        self.assertIn("saving it failed", self.app.status_var.get())
+
+    def test_autosave_followup_offers_new_existing_finish(self):
+        from tkinter import ttk
+        device, button = self.prepare_button()
+        older = core.new_button("Previous button")
+        device["buttons"].append(older)
+        self.app._reload_buttons(button["id"])
+        dialog = self.app._after_successful_ble_capture(
+            device["id"], button["id"], 2)
+        self.assertTrue(dialog.winfo_exists())
+        self.assertEqual(dialog.title(), "IR command auto-saved")
+        widgets = []
+        def walk(parent):
+            for child in parent.winfo_children():
+                widgets.append(child)
+                walk(child)
+        walk(dialog)
+        labels = [x.cget("text") for x in widgets
+                  if isinstance(x, ttk.Button)]
+        self.assertEqual(labels, [
+            "Learn selected existing", "New button", "Finish"])
+        combo = next(x for x in widgets if isinstance(x, ttk.Combobox))
+        self.assertEqual(tuple(combo["values"]),
+                         ("1. Power", "2. Previous button"))
+        self.assertEqual(combo.current(), 0)
+        combo.current(1)
+        with patch.object(self.app, "after") as schedule, \
+             patch.object(self.app, "capture") as do_capture:
+            next_existing = next(
+                x for x in widgets if isinstance(x, ttk.Button)
+                and x.cget("text") == "Learn selected existing")
+            next_existing.invoke()
+            self.assertFalse(dialog.winfo_exists())
+            self.assertEqual(self.app.active_button, older["id"])
+            self.assertEqual(len(device["buttons"]), 2)
+            schedule.assert_called_once_with(0, self.app.capture)
+            do_capture.assert_not_called()
+        self.assertIn("Previous button", self.app.status_var.get())
+
+    def test_new_button_choice_still_uses_existing_name_prompt(self):
+        from tkinter import ttk
+        device, button = self.prepare_button()
+        dialog = self.app._after_successful_ble_capture(
+            device["id"], button["id"], 2)
+        with patch.object(self.app, "after") as scheduled:
+            def find_action(parent):
+                for child in parent.winfo_children():
+                    if (isinstance(child, ttk.Button)
+                            and child.cget("text") == "New button"):
+                        return child
+                    found = find_action(child)
+                    if found:
+                        return found
+            find_action(dialog).invoke()
+            scheduled.assert_called_once_with(0, self.app.learn_another)
+        self.assertFalse(dialog.winfo_exists())
+        self.assertEqual(len(device["buttons"]), 1)
+
+    def test_finish_choice_does_not_start_capture(self):
+        from tkinter import ttk
+        device, button = self.prepare_button()
+        dialog = self.app._after_successful_ble_capture(
+            device["id"], button["id"], 2)
+        with patch.object(self.app, "after") as scheduled:
+            def find_action(parent):
+                for child in parent.winfo_children():
+                    if (isinstance(child, ttk.Button)
+                            and child.cget("text") == "Finish"):
+                        return child
+                    found = find_action(child)
+                    if found:
+                        return found
+            find_action(dialog).invoke()
+            scheduled.assert_not_called()
+        self.assertFalse(dialog.winfo_exists())
+        self.assertIn("Learning finished", self.app.status_var.get())
+
+    def test_clear_mismatched_captures_keeps_button_and_layout(self):
+        device, button = self.prepare_button()
+        button["span"] = 4
+        button["captures"] = [
+            core.make_capture(38095, [3996, 3999] + [469, 2000] * 51),
+            core.make_capture(38095, [4000, 4000] + [560, 1600] * 51),
+        ]
+        button["selected"] = 1
+        self.app._reload_buttons(button["id"])
+        self.assertEqual(core.capture_status(button), "Mismatch")
+        with patch("irstudio.ui.messagebox.askyesno",
+                   return_value=True) as confirm, \
+             patch.object(self.app, "_capture_ble_main") as rearm:
+            self.app.clear_button_captures()
+            confirm.assert_called_once()
+            rearm.assert_not_called()
+        self.assertEqual(device["buttons"], [button])
+        self.assertEqual(button["label"], "Power")
+        self.assertEqual(button["span"], 4)
+        self.assertEqual(button["captures"], [])
+        self.assertEqual(button["selected"], 0)
+        self.assertEqual(self.app.active_button, button["id"])
+        self.assertEqual(core.capture_status(button), "Not learned")
+        self.assertIn("Button retained", self.app.status_var.get())
+        self.save_mock.assert_called()
+
+    def test_clear_captures_cancel_and_disk_failure_preserve_samples(self):
+        _, button = self.prepare_button()
+        button["captures"] = [
+            core.make_capture(38095, [3996, 3999] + [469, 2000] * 51)]
+        original = list(button["captures"])
+        with patch("irstudio.ui.messagebox.askyesno", return_value=False):
+            self.app.clear_button_captures()
+        self.assertEqual(button["captures"], original)
+        self.save_mock.assert_not_called()
+        self.save_mock.side_effect = OSError("Disk full")
+        with patch("irstudio.ui.messagebox.askyesno", return_value=True), \
+             patch("irstudio.ui.messagebox.showerror") as error:
+            self.app.clear_button_captures()
+            error.assert_called_once()
+        self.assertEqual(button["captures"], original)
+
+    def test_remove_last_can_fix_mismatch_without_deleting_button(self):
+        device, button = self.prepare_button()
+        original = core.make_capture(
+            38095, [3996, 3999] + [469, 2000] * 51)
+        bad = core.make_capture(
+            38095, [4000, 4000] + [560, 1600] * 51)
+        button["captures"] = [original, original.copy(), bad]
+        self.app._reload_buttons(button["id"])
+        self.assertEqual(core.capture_status(button), "Mismatch")
+        with patch("irstudio.ui.messagebox.askyesno", return_value=True):
+            self.app.remove_capture()
+        self.assertEqual(device["buttons"], [button])
+        self.assertEqual(button["captures"], [original, original.copy()])
+        self.assertEqual(core.capture_status(button), "Verified")
+        self.assertEqual(self.app.active_button, button["id"])
 
     def test_u1_reader_action_prompts_before_queries(self):
         from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
         dialog = SofaBatonBleDialog(self.app, auto_scan=False)
         dialog.withdraw()
         try:
-            self.assertEqual(dialog.read_button.cget("text"), "Read stored IR (test)")
+            self.assertEqual(dialog.read_button.cget("text"), "Read stored code")
             self.assertEqual(str(dialog.save_capture_button.cget("state")), "disabled")
             dialog._devices = [BleEntry(
                 name="SB-synthetic", address="FAKE-U1", rssi=-40,
