@@ -30,11 +30,49 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
-      - name: Build and run unit tests
+      # Secrets are created once on the owner's Windows PC using
+      # android/scripts/setup-signing.ps1. NO signing keys in the repository.
+      # Do not publish ephemeral GitHub-run debug certificates: they force
+      # users to uninstall and wipe their local remotes/backup files.
+      - name: Require reusable APK signing certificate
+        env:
+          SIGNING_KEY_B64: ${{ secrets.IR_STUDIO_ANDROID_KEYSTORE_BASE64 }}
+          SIGNING_PASSWORD: ${{ secrets.IR_STUDIO_ANDROID_KEYSTORE_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -z "$SIGNING_KEY_B64" || -z "$SIGNING_PASSWORD" ]]; then
+            echo "::error::Permanent Android signing secrets are not configured. Run android/scripts/setup-signing.ps1 on the repository owner's PC. No APK will be published with a disposable key."
+            exit 1
+          fi
+          printf '%s' "$SIGNING_KEY_B64" | base64 --decode > "$RUNNER_TEMP/ir-studio-signing.p12"
+          chmod 600 "$RUNNER_TEMP/ir-studio-signing.p12"
+          keytool -list -keystore "$RUNNER_TEMP/ir-studio-signing.p12" \
+            -storetype PKCS12 -storepass "$SIGNING_PASSWORD" \
+            -alias irstudio > /dev/null
+          echo "Reusable Android test signing certificate validated."
+
+      - name: Build and run unit tests with reusable signing key
+        env:
+          IR_STUDIO_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/ir-studio-signing.p12
+          IR_STUDIO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.IR_STUDIO_ANDROID_KEYSTORE_PASSWORD }}
         run: gradle -p android --no-daemon :app:testDebugUnitTest :app:assembleDebug
-      - name: Upload Android test APK
+
+      - name: Confirm packaged APK certificate
+        shell: bash
+        run: |
+          "${ANDROID_HOME}/build-tools/35.0.0/apksigner" verify --verbose \
+            --print-certs android/app/build/outputs/apk/debug/app-debug.apk | \
+            grep -E 'Verifies|Signer #1 certificate SHA-256 digest'
+
+      - name: Upload persistently signed Android test APK
         uses: actions/upload-artifact@v4
         with:
-          name: IR-Remote-Studio-v0.4.1-alpha-Android-debug
+          name: IR-Remote-Studio-v0.4.2-alpha-Android-persistently-signed
           path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
           retention-days: 60
+
+      - name: Remove private signing key
+        if: always()
+        shell: bash
+        run: rm -f "$RUNNER_TEMP/ir-studio-signing.p12"
