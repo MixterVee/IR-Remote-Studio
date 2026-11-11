@@ -72,7 +72,11 @@ public class MainActivity extends Activity {
     private Spinner deviceSpinner;
     private Button learnButton;
     private Button u1ConnectionButton;
+    private Button u1SourceButton;
+    private Button harmonySourceButton;
     private TextView u1Status;
+    private int selectedLearner = LearnerSource.SOFABATON_U1;
+    private String lastU1Status = "NOT CONNECTED — Tap Connect U1";
     private SofaBatonU1Ble u1Ble;
     private IrplusCodec.Remote u1TargetRemote;
     private IrplusCodec.Item u1TargetButton;
@@ -83,23 +87,16 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        selectedLearner = LearnerSource.normalize(
+                getPreferences(MODE_PRIVATE).getInt("selected_learner",
+                        LearnerSource.SOFABATON_U1));
         irManager = (ConsumerIrManager) getSystemService(CONSUMER_IR_SERVICE);
         u1Ble = new SofaBatonU1Ble(this, new SofaBatonU1Ble.Listener() {
             @Override public void status(String message, boolean connected) {
                 if (isFinishing() || isDestroyed()) return;
-                if (u1Status != null) {
-                    u1Status.setText(message);
-                    u1Status.setTextColor(connected ? TEAL : MUTED);
-                }
-                if (u1ConnectionButton != null) {
-                    u1ConnectionButton.setText(connected
-                            ? "Connected" : "Connect U1");
-                }
-                if (learnButton != null && !u1Ble.isLearning()) {
-                    learnButton.setText(connected
-                            ? "◉  Learn IR • U1 Bluetooth"
-                            : "◉  Learn IR Button");
-                }
+                lastU1Status = message;
+                // U1 state changes must not hijack a selected Harmony learner.
+                updateLearnerPanel();
             }
 
             @Override public void chooseCandidate(
@@ -154,6 +151,11 @@ public class MainActivity extends Activity {
                 ? "Android IR emitter detected. Import a .irplus remote and select a button."
                 : "Android's public IR emitter API is unavailable. Import/export still works; transmission requires a supported phone.";
         setStatus(availability);
+    }
+
+    @Override protected void onResume() {
+        super.onResume();
+        updateLearnerPanel();
     }
 
     @Override protected void onDestroy() {
