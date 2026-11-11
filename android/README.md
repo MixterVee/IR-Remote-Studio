@@ -4,7 +4,10 @@
 
 ## v0.4.4-alpha: Equal access to both supported learners
 
-The home screen now gives **SofaBaton U1** and **Harmony USB** the same prominent, side-by-side receiver choices. Select the IR learner you want, then use its connection action and Learn button:
+The home screen now gives **SofaBaton U1** and **Harmony USB** the same prominent, side-by-side receiver choices. Select the IR learner you want, then use its connection action and Learn button. A short guide automatically appears immediately below the chosen receiver's status:
+
+- **SofaBaton pairing:** Hold **– and E** together on the U1 to enter Bluetooth pairing. Close the official SofaBaton app, then tap **Connect U1** in IR Remote Studio.
+- **Harmony connection:** Connect the Harmony 300/350 to your Android phone using a **USB-C OTG adapter** and **data-capable USB cable**. Tap **USB Setup** and grant Android USB permission.
 
 - **SofaBaton U1:** The action says **Connect U1** (or **Connected**). Bluetooth status remains visible, and learning uses the existing verified U1 backend, including slot-8 waveform backup before learning.
 - **Harmony USB:** The action says **USB Setup**, which discovers your Harmony 300/350 and grants Android USB permission. The status shows whether Harmony USB is detected or has permission. Learning uses the existing Harmony USB backend, **even when the SofaBaton remains connected**.
