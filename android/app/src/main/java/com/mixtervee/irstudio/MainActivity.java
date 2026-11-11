@@ -70,7 +70,6 @@ public class MainActivity extends Activity {
     private LinearLayout remoteLayout;
     private TextView status;
     private Spinner deviceSpinner;
-    private Button exportButton;
     private Button learnButton;
     private Button u1ConnectionButton;
     private TextView u1Status;
@@ -94,10 +93,12 @@ public class MainActivity extends Activity {
                 }
                 if (u1ConnectionButton != null) {
                     u1ConnectionButton.setText(connected
-                            ? "SofaBaton U1 • Connected" : "SofaBaton U1 • Connect");
+                            ? "Connected" : "Connect U1");
                 }
-                if (connected && learnButton != null && !u1Ble.isLearning()) {
-                    learnButton.setText("◉ Learn IR • U1 Bluetooth");
+                if (learnButton != null && !u1Ble.isLearning()) {
+                    learnButton.setText(connected
+                            ? "◉  Learn IR • U1 Bluetooth"
+                            : "◉  Learn IR Button");
                 }
             }
 
@@ -180,12 +181,19 @@ public class MainActivity extends Activity {
         return view;
     }
 
+    /** Compact, full-page-scrolling home; learning protocols are unchanged. */
     private void makeUi() {
+        ScrollView page = new ScrollView(this);
+        page.setFillViewport(true);
+        page.setBackgroundColor(DARK);
+        page.setVerticalScrollBarEnabled(true);
+        setContentView(page);
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(DARK);
-        root.setPadding(dp(13), dp(10), dp(13), dp(8));
-        setContentView(root);
+        root.setPadding(dp(14), dp(11), dp(14), dp(28));
+        page.addView(root, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
 
         LinearLayout header = new LinearLayout(this);
         header.setOrientation(LinearLayout.HORIZONTAL);
@@ -193,133 +201,160 @@ public class MainActivity extends Activity {
         ImageView logo = new ImageView(this);
         logo.setImageResource(R.drawable.ir_remote_studio);
         logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
-        header.addView(logo, new LinearLayout.LayoutParams(dp(62), dp(62)));
+        logo.setContentDescription("IR Remote Studio");
+        header.addView(logo, new LinearLayout.LayoutParams(dp(52), dp(52)));
         LinearLayout titles = new LinearLayout(this);
-        titles.setPadding(dp(10), 0, 0, 0);
         titles.setOrientation(LinearLayout.VERTICAL);
-        titles.addView(text("IR Remote Studio", 22, WHITE, true));
-        titles.addView(text("LEARN  ·  ORGANIZE  ·  REPLAY", 11, MUTED, true));
-        titles.addView(text("Android " + BuildConfig.VERSION_NAME + "  •  SofaBaton U1 / Harmony USB", 11, MUTED, false));
-        header.addView(titles, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        titles.setPadding(dp(11), 0, 0, 0);
+        titles.addView(text("IR Remote Studio", 21, WHITE, true));
+        titles.addView(text("Android " + BuildConfig.VERSION_NAME +
+                "  ·  Learn  ·  Organize", 11, MUTED, false));
+        header.addView(titles, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1));
         root.addView(header);
 
-        LinearLayout quickActions = new LinearLayout(this);
-        quickActions.setOrientation(LinearLayout.HORIZONTAL);
-        quickActions.setPadding(0, dp(10), 0, dp(3));
+        // Connection remains prominent; the old side-by-side backup button
+        // moved to Tools, preventing clipped labels on smaller phones.
+        LinearLayout connection = new LinearLayout(this);
+        connection.setOrientation(LinearLayout.VERTICAL);
+        connection.setPadding(dp(13), dp(10), dp(13), dp(10));
+        connection.setBackground(background(SURFACE, 12));
+        LinearLayout.LayoutParams connectionParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        connectionParams.setMargins(0, dp(11), 0, dp(9));
+        root.addView(connection, connectionParams);
+        LinearLayout connectionRow = new LinearLayout(this);
+        connectionRow.setOrientation(LinearLayout.HORIZONTAL);
+        connectionRow.setGravity(Gravity.CENTER_VERTICAL);
+        connectionRow.addView(text("SOFABATON U1", 13, WHITE, true),
+                new LinearLayout.LayoutParams(0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        u1ConnectionButton = actionButton("Connect U1", TEAL);
+        u1ConnectionButton.setTextSize(13);
+        u1ConnectionButton.setOnClickListener(v -> openU1Connection());
+        connectionRow.addView(u1ConnectionButton,
+                new LinearLayout.LayoutParams(dp(122), dp(42)));
+        connection.addView(connectionRow);
+        u1Status = text("NOT CONNECTED — Tap Connect U1", 12, MUTED, false);
+        u1Status.setPadding(dp(1), dp(5), dp(1), 0);
+        u1Status.setMaxLines(2);
+        connection.addView(u1Status);
+
         learnButton = actionButton("◉  Learn IR Button", TEAL);
         learnButton.setOnClickListener(v -> startLearning());
-        quickActions.addView(learnButton, new LinearLayout.LayoutParams(0, dp(54), 2));
-        Button createRemote = actionButton("+  New Remote", PURPLE);
-        createRemote.setOnClickListener(v -> createRemote());
-        LinearLayout.LayoutParams newParams = new LinearLayout.LayoutParams(0, dp(54), 1);
-        newParams.setMargins(dp(8), 0, 0, 0);
-        quickActions.addView(createRemote, newParams);
-        root.addView(quickActions);
+        LinearLayout.LayoutParams learnParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+        learnParams.setMargins(0, 0, 0, dp(12));
+        root.addView(learnButton, learnParams);
 
-        LinearLayout actions = new LinearLayout(this);
-        actions.setOrientation(LinearLayout.HORIZONTAL);
-        actions.setPadding(0, dp(9), 0, dp(9));
-        Button importBtn = actionButton("↓ Import .irplus");
-        importBtn.setOnClickListener(v -> openImport());
-        actions.addView(importBtn, new LinearLayout.LayoutParams(0, dp(50), 1));
-        exportButton = actionButton("↑ Export Remote");
-        exportButton.setOnClickListener(v -> openExport());
-        LinearLayout.LayoutParams exportParams = new LinearLayout.LayoutParams(0, dp(50), 1);
-        exportParams.setMargins(dp(8), 0, 0, 0);
-        actions.addView(exportButton, exportParams);
-        root.addView(actions);
+        LinearLayout remotesHeader = new LinearLayout(this);
+        remotesHeader.setGravity(Gravity.CENTER_VERTICAL);
+        remotesHeader.setOrientation(LinearLayout.HORIZONTAL);
+        remotesHeader.addView(text("MY REMOTES", 13, WHITE, true),
+                new LinearLayout.LayoutParams(0,
+                        ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        Button newRemoteButton = actionButton("+ New Remote", PURPLE);
+        newRemoteButton.setTextSize(12);
+        newRemoteButton.setOnClickListener(v -> createRemote());
+        remotesHeader.addView(newRemoteButton,
+                new LinearLayout.LayoutParams(dp(136), dp(42)));
+        root.addView(remotesHeader);
 
-        LinearLayout editActions = new LinearLayout(this);
-        editActions.setOrientation(LinearLayout.HORIZONTAL);
-        Button addButton = actionButton("+ Add Button", PURPLE);
-        addButton.setOnClickListener(v -> createButton());
-        editActions.addView(addButton, new LinearLayout.LayoutParams(0, dp(48), 1));
-        Button layoutBtn = actionButton("Layout Editor...", Color.rgb(37, 87, 126));
-        layoutBtn.setOnClickListener(v -> showLayoutEditor());
-        LinearLayout.LayoutParams layoutParams =
-                new LinearLayout.LayoutParams(0, dp(48), 1);
-        layoutParams.setMargins(dp(8), 0, 0, 0);
-        editActions.addView(layoutBtn, layoutParams);
-        root.addView(editActions);
-
-        // SofaBaton U1 connects automatically to one identified SB<serial>
-        // remote. Nearby phones/TVs are never listed in the main UI.
-        LinearLayout u1Row = new LinearLayout(this);
-        u1Row.setOrientation(LinearLayout.HORIZONTAL);
-        u1ConnectionButton = actionButton("SofaBaton U1 • Connect", TEAL);
-        u1ConnectionButton.setOnClickListener(v -> openU1Connection());
-        u1Row.addView(u1ConnectionButton,
-                new LinearLayout.LayoutParams(0, dp(50), 3));
-        Button backupButton = actionButton("U1 Backups / Restore", Color.rgb(35, 84, 129));
-        backupButton.setOnClickListener(v -> openU1Backups());
-        LinearLayout.LayoutParams backupParams =
-                new LinearLayout.LayoutParams(0, dp(50), 2);
-        backupParams.setMargins(dp(8), 0, 0, 0);
-        u1Row.addView(backupButton, backupParams);
-        root.addView(u1Row);
-        u1Status = text("NOT CONNECTED — Tap SofaBaton U1 • Connect",
-                12, MUTED, false);
-        u1Status.setPadding(dp(4), dp(7), dp(4), dp(9));
-        root.addView(u1Status);
-
-        // USB Harmony diagnostic access remains separate from learning.
-        Button usbButton = actionButton("Harmony USB • Connect / Troubleshoot", Color.rgb(31, 66, 106));
-        usbButton.setOnClickListener(v -> UsbHarmonyInspector.show(this));
-        LinearLayout.LayoutParams usbParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
-        usbParams.setMargins(0, 0, 0, dp(9));
-        root.addView(usbButton, usbParams);
-
-        Button about = actionButton("About / Version", Color.rgb(37, 60, 90));
-        about.setOnClickListener(v -> showAbout());
-        LinearLayout.LayoutParams aboutParams =
-                new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(42));
-        aboutParams.setMargins(0, 0, 0, dp(7));
-        root.addView(about, aboutParams);
-
-        TextView section = text("MY REMOTES   •   LONG-PRESS TO LEARN OR MANAGE", 11, MUTED, true);
-        section.setPadding(dp(5), dp(4), dp(5), dp(9));
-        root.addView(section);
         deviceSpinner = new Spinner(this);
-        deviceSpinner.setBackground(background(SURFACE, 8));
-        deviceSpinner.setPadding(dp(10), dp(6), dp(10), dp(6));
-        deviceSpinner.setMinimumHeight(dp(50));
-        root.addView(deviceSpinner, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(50)));
+        deviceSpinner.setBackground(background(SURFACE, 9));
+        deviceSpinner.setPadding(dp(11), dp(6), dp(11), dp(6));
+        LinearLayout.LayoutParams pickerParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(50));
+        pickerParams.setMargins(0, dp(6), 0, dp(8));
+        root.addView(deviceSpinner, pickerParams);
         deviceSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int pos, long id) {
+            @Override public void onItemSelected(
+                    AdapterView<?> parent, View view, int pos, long id) {
                 selectedDevice = pos;
                 renderRemote();
             }
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {}
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
         });
 
-        status = text("", 12, MUTED, false);
-        status.setPadding(dp(10), dp(10), dp(10), dp(10));
-        LinearLayout.LayoutParams statParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        statParams.setMargins(0, dp(10), 0, dp(8));
-        status.setBackground(background(SURFACE, 9));
-        root.addView(status, statParams);
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        root.addView(actions, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+        Button add = actionButton("+ Add Button", PURPLE);
+        add.setOnClickListener(v -> createButton());
+        actions.addView(add, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        Button tools = actionButton("Tools & Settings", Color.rgb(34, 75, 113));
+        tools.setOnClickListener(v -> showToolsMenu());
+        LinearLayout.LayoutParams toolsParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
+        toolsParams.setMargins(dp(8), 0, 0, 0);
+        actions.addView(tools, toolsParams);
 
-        ScrollView scroll = new ScrollView(this);
-        scroll.setFillViewport(true);
-        scroll.setVerticalScrollBarEnabled(true);
+        // Latest capture/connection status has a compact two-line preview.
+        // Tap it for the FULL details; no fixed footer obscures remote buttons.
+        status = text("", 12, MUTED, false);
+        status.setMaxLines(2);
+        status.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        status.setBackground(background(SURFACE, 9));
+        status.setPadding(dp(10), dp(8), dp(10), dp(8));
+        status.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Latest status")
+                .setMessage(status.getText().toString())
+                .setPositiveButton("Close", null).show());
+        status.setContentDescription("Latest status. Tap to view full message.");
+        LinearLayout.LayoutParams statusParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+        statusParams.setMargins(0, dp(9), 0, dp(8));
+        root.addView(status, statusParams);
+
+        // All contents scroll together: remote list can never be squeezed
+        // into a tiny internal scroll view on short-screen Android devices.
         remoteLayout = new LinearLayout(this);
         remoteLayout.setOrientation(LinearLayout.VERTICAL);
-        remoteLayout.setPadding(dp(3), dp(9), dp(3), dp(15));
-        scroll.addView(remoteLayout, new ScrollView.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        root.addView(scroll, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1));
+        remoteLayout.setPadding(dp(2), dp(2), dp(2), dp(18));
+        root.addView(remoteLayout, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+    }
 
-        TextView footer = text("Valid IR captures save locally. The Harmony's programming is unchanged.",
-                11, MUTED, false);
-        footer.setGravity(Gravity.CENTER);
-        footer.setPadding(dp(6), dp(9), dp(6), dp(5));
-        root.addView(footer);
+    private void showToolsMenu() {
+        // Important: never combine setMessage() with setItems(); Android
+        // hides list choices when both are specified in the same dialog.
+        final String[] options = {
+                "Import .irplus remote",
+                "Export selected remote (.irplus)",
+                "Layout Editor",
+                "Manage selected remote",
+                "U1 waveform backups / restore",
+                "Full library backup / restore",
+                "Harmony USB diagnostics",
+                "About / Version"
+        };
+        new AlertDialog.Builder(this)
+                .setTitle("Tools & Settings")
+                .setItems(options, (d, index) -> {
+                    switch (index) {
+                        case 0: openImport(); break;
+                        case 1:
+                            if (current() == null) toast("Create a remote first.");
+                            else openExport();
+                            break;
+                        case 2: showLayoutEditor(); break;
+                        case 3:
+                            if (current() == null) toast("Select a remote first.");
+                            else manageRemote(current());
+                            break;
+                        case 4: openU1Backups(); break;
+                        case 5: showLibraryBackupMenu(); break;
+                        case 6: UsbHarmonyInspector.show(this); break;
+                        case 7: showAbout(); break;
+                        default: break;
+                    }
+                })
+                .setNegativeButton("Close", null).show();
     }
 
     private Button actionButton(String value) {
@@ -350,7 +385,6 @@ public class MainActivity extends Activity {
         deviceSpinner.setAdapter(adapter);
         selectedDevice = Math.min(Math.max(0, selectedDevice), names.size()-1);
         deviceSpinner.setSelection(selectedDevice);
-        exportButton.setEnabled(!remotes.isEmpty());
         renderRemote();
     }
 
@@ -364,24 +398,17 @@ public class MainActivity extends Activity {
         remoteLayout.removeAllViews();
         IrplusCodec.Remote remote = current();
         if (remote == null) {
-            TextView empty = text("Your library is empty.\n\nCreate a remote, add named buttons, then capture IR commands. You can also import .irplus files.",
+            TextView empty = text("No remotes yet.\nTap + New Remote to begin, or use Tools to import a file.",
                     16, MUTED, false);
             empty.setGravity(Gravity.CENTER);
-            empty.setPadding(dp(18), dp(75), dp(18), dp(30));
+            empty.setPadding(dp(18), dp(35), dp(18), dp(20));
             remoteLayout.addView(empty);
             return;
         }
-        TextView heading = text(remote.displayName(), 19, WHITE, true);
-        heading.setGravity(Gravity.CENTER);
-        heading.setPadding(dp(5), dp(8), dp(5), dp(13));
-        heading.setOnLongClickListener(v -> {
-            manageRemote(remote);
-            return true;
-        });
-        remoteLayout.addView(heading);
-        TextView hint = text("Long-press remote name to rename or delete", 11, MUTED, false);
+        TextView hint = text("Tap a button to send or learn  ·  Hold for options",
+                11, MUTED, false);
         hint.setGravity(Gravity.CENTER);
-        hint.setPadding(0, 0, 0, dp(8));
+        hint.setPadding(dp(3), dp(7), dp(3), dp(10));
         remoteLayout.addView(hint);
 
         LinearLayout row = newRow();
@@ -577,7 +604,7 @@ public class MainActivity extends Activity {
         if (learnButton == null) return;
         learnButton.setEnabled(true);
         learnButton.setText(u1Ble != null && u1Ble.isConnected()
-                ? "◉ Learn IR • U1 Bluetooth" : "◉ Learn IR Button");
+                ? "◉  Learn IR • U1 Bluetooth" : "◉  Learn IR Button");
     }
 
     private boolean hasU1Permissions() {
@@ -625,7 +652,7 @@ public class MainActivity extends Activity {
                     .setNegativeButton("Disconnect", (d, w) -> {
                         u1Ble.disconnect();
                         u1Status.setText("NOT CONNECTED — Scan again");
-                        u1ConnectionButton.setText("SofaBaton U1 • Connect");
+                        u1ConnectionButton.setText("Connect U1");
                         restoreLearnButton();
                     }).show();
         } else {
@@ -785,7 +812,7 @@ public class MainActivity extends Activity {
                 + "\n\nLearn: compatible Logitech Harmony 300/350 over USB. "
                 + "SofaBaton U1 Bluetooth scan, identity verification and "
                 + "backup-before-learning are included as an Android test feature. "
-                + "U1 physical capture has not yet been confirmed on Android. "
+                + "U1 Bluetooth capture and IRplus export were successfully tested on a physical remote. "
                 + "A waveform backup can restore to the Android library, "
                 + "not the U1's internal programming."
                 + "\n\nLibrary: named remotes, raw IR captures, comparison, "
