@@ -30,6 +30,11 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.13'
+      # Always compile and run unit tests, even before the owner has
+      # configured the permanent certificate. No disposable-key APK uploaded.
+      - name: Run Android unit tests before signing setup
+        run: gradle -p android --no-daemon :app:testDebugUnitTest
+
       # Secrets are created once on the owner's Windows PC using
       # android/scripts/setup-signing.ps1. NO signing keys in the repository.
       # Do not publish ephemeral GitHub-run debug certificates: they force
@@ -51,11 +56,11 @@ jobs:
             -alias irstudio > /dev/null
           echo "Reusable Android test signing certificate validated."
 
-      - name: Build and run unit tests with reusable signing key
+      - name: Build APK with reusable signing key
         env:
           IR_STUDIO_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/ir-studio-signing.p12
           IR_STUDIO_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.IR_STUDIO_ANDROID_KEYSTORE_PASSWORD }}
-        run: gradle -p android --no-daemon :app:testDebugUnitTest :app:assembleDebug
+        run: gradle -p android --no-daemon :app:assembleDebug
 
       - name: Confirm packaged APK certificate
         shell: bash
