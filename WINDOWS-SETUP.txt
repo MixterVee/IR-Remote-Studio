@@ -1,311 +1,103 @@
-IR Remote Studio 0.2.8-beta — Windows 11 x64
-================================================
+IR REMOTE STUDIO — WINDOWS 1.0.0 RELEASE CANDIDATE
+====================================================
+Portable Windows x64. No Python installation is needed.
 
-FIRST STANDALONE LEARNER TEST
------------------------------
-This beta adds direct USB learning WITHOUT requiring Concordance for
-supported Harmony 300/350 and an experimental Ocrustar/ElkSmart dongle
-adapter. Previous Windows features and the Concordance backend remain.
+FIRST RUN
+---------
+1. Extract the entire download ZIP into a folder, then run
+   IR-Remote-Studio.exe.
+2. By default the app stores commands and buttons in:
+      Documents\IR Remote Studio\library.json
+   Your library from beta versions is retained. Before major changes,
+   choose File > Back up library JSON.
+3. File > Export Device (.irplus) creates an IRplus-compatible remote
+   that can be imported into the IRplus Android app.
 
-1. Download the v0.2.8-beta Windows x64 ZIP from GitHub Actions.
-2. Extract the files and launch IR-Remote-Studio.exe.
-3. Connect ONE supported USB IR learning device.
-4. From "IR learning hardware", choose one of:
-   • Auto detect supported learner
-   • Harmony 300/350 — standalone HID
-   • Ocrustar / ElkSmart — USB bulk (experimental)
-   • Concordance — legacy DLL
-5. In the prominent IR LEARNER CONNECTION panel, click "Refresh USB"
-   to detect supported device IDs WITHOUT sending any commands.
-   RED NOT CONNECTED means detection/verification has not succeeded.
-   AMBER USB DETECTED means the USB identity is recognized, but the
-   actual protocol handshake has NOT been verified yet.
-6. Click "Connect / Retry". GREEN READY — CONNECTION VERIFIED means
-   the selected learner's protocol handshake has succeeded.
-   This verification USB session then closes normally; it does not
-   maintain a permanently open connection. If the handshake fails,
-   RED CONNECTION FAILED — RETRY appears with reconnection guidance.
-   A connection-failure popup also reminds you to check batteries\n   in any battery-powered Harmony/source remote, then explains\n   unplug/reconnect, trying another\n   USB port, then Refresh USB and Connect / Retry. The original USB\n   error is also shown, with longer diagnostics stored in Logs.
-7. Select/create a device and button; choose "Capture selected button."
-8. WAIT for the separate GREEN READY — PRESS A BUTTON NOW indication;
-   this confirms that the receiver is actually armed. Point a source
-   remote at the learner, press and release one button. When the
-   capture finishes, the USB session closes. Valid captures are
-   automatically saved
-   to the local app library after successful protocol cleanup.
-9. Click "Save" to confirm and finish learning this button; OR
-   click "Save & Learn another" to create and capture another button.
-   Both options safely persist the current button; no duplicate captures.
-10. Export .irplus to test the button on the Android phone or in IRPlus.
+SOFABATON U1 LEARNING — WORKING BASELINE
+---------------------------------------
+This release preserves the exact learning backend and dialog worker
+from v0.3.3, which successfully learned 4 commands on a physical U1.
+The exported .irplus commands were verified in IRplus.
 
-SUPPORTED STANDALONE BACKENDS
------------------------------
-Harmony 300/350 (USB VID:PID 046D:C124)
-   Shared direct-HID learning protocol with 64-byte MH reports. Tested
-   successfully on Android Harmony 300; Windows HID transport and the
-   Harmony 350 device still require physical verification.
+1. Close the official SofaBaton phone app.
+2. Put the U1 in Bluetooth pairing mode (- and E together).
+3. Click SofaBaton U1... The app scans, identifies, and automatically
+   connects a matching U1. After connection the popup closes.
+4. Select or create a device and a button on the main screen.
+5. Click Capture selected button (SofaBaton U1).
+6. When the U1 shows Learning, point the original IR remote at it
+   and press the command. A successful signal is saved immediately.
+7. After a successful, disk-verified save, choose Existing button,
+   New button, or Finish. Existing keeps the previous button's
+   name and layout and adds another sample. Finish leaves U1 connected.
 
-Ocrustar/ElkSmart D226/D552 (USB VID:PID 045C:02AA)
-   Experimental bulk USB learner. This research protocol supplies
-   timing data WITHOUT the carrier frequency, so the app assumes 38 kHz.
-   Replaying on the real device is mandatory before treating it as
-   a reliable command. Your newly ordered Ocrustar unit may differ;
-   verify its actual USB VID/PID and interface before sending learning
-   commands. Do not replace USB drivers before inspecting the device.
+No typed LEARN 8 confirmation, experimental profile creation command,
+or return trip to the Bluetooth connection window is needed.
 
-Other USB IR dongles
-   Not automatically compatible. Hardware detection/learning requires
-   an adapter matching the exact USB protocol and capabilities.
-   Never send Harmony or Ocrustar commands to an unknown dongle.
-   Some IR adapters transmit only and cannot learn IR codes.
+IMPORTANT: Learning uses the U1's internal slot 8. The program
+backs up its previous IR waveform before use under
+Documents\IR Remote Studio\U1-Learn-Backups\
+That backup does NOT restore the U1's complete programming or profile.
 
-WINDOWS USB DRIVER CAUTION
---------------------------
-HID Harmony devices should use their normal Windows HID driver.
-The Ocrustar bulk protocol may require WinUSB/libusb access; some
-Windows drivers block the PyUSB backend. DO NOT automatically replace
-a device driver or use Zadig until its precise USB identity has been
-verified and you understand the effects on the original software.
-A failed driver access returns a diagnostic rather than changing USB
-configuration.
+USB IR LEARNING
+---------------
+1. Attach one supported USB IR learner.
+2. In Receiver choose Auto, a direct Harmony 300/350 HID learner, a
+   legacy Concordance option, or an experimental Ocrustar adapter.
+3. Click Detect USB to scan supported USB IDs.
+4. Click Connect USB to run a protocol handshake. The verification
+   USB session closes when finished; the green indicator means
+   the last check succeeded, not an always-open session.
+5. Select a device/button and click Capture selected button (USB).
+6. Wait for the readiness message; send the original IR command.
+   Valid commands save automatically. Export and test in IRplus.
 
-LEGACY CONCORDANCE OPTION
--------------------------
-Select "Concordance — legacy DLL" for the previous separate x86
-PowerShell/Concordance learning worker, useful for other documented
-Harmony models. That backend requires an existing local installation:
-  C:\Program Files (x86)\Concordance\libconcord-6.dll
-IR Remote Studio does not distribute or install libconcord.
+Ocrustar/ElkSmart bulk USB is still experimental and may require
+separate Windows driver access. Do not swap drivers or flash remote
+firmware without confirming the precise device identity.
 
-LIBRARY & TEST LOGS
--------------------
-Library (normal update preserves existing data):
-  %USERPROFILE%\Documents\IR Remote Studio\library.json
-Logs:
-  %USERPROFILE%\Documents\IR Remote Studio\Logs
+CAPTURE STATUS AND CORRECTIONS
+------------------------------
+"Verified" means repeated samples agree. It does not mean the
+controlled appliance was tested. "Raw IR (saved)" means a valid IR
+signal was recorded but no recognized NEC command was decoded.
+Those raw samples can still be exported to IRplus.
 
-Before using this beta, File > Back up library JSON is recommended.
-Layout editor, capture comparison, import/export, restore and backup
-remain available.
+For a mismatched sample, Undo last removes the newest sample only.
+Clear all samples for this button... keeps the button name and layout.
+Both change local library entries only, not the U1 programming.
 
-SAFETY
-------
-The direct backends only use the known transient IR-receiver commands
-for recognized devices. They do NOT modify Harmony firmware or existing
-button programming, and do NOT transmit IR automatically.
-Do not run Concordance and the direct receiver simultaneously.
-If detection/handshake fails, send the exact error and associated
-direct-*.log or ocrustar-*.log file for diagnosis.
+LAYOUT EDITOR AND SAVED POSITION
+--------------------------------
+The main window manages devices, buttons and learning. Layout editor...
+handles appearance: Move Up, Move Down, button width and preview.
+Save layout applies the changes and Cancel discards them.
+
+The Layout Editor remembers its position and size across launches in
+Documents\IR Remote Studio\layout-editor-window.json.
+If an old monitor is disconnected, it opens somewhere visible.
+
+OTHER FEATURES
+--------------
+* File > Back up library JSON and Restore library backup
+* Import/export IR capture JSON and complete .irplus remotes
+* Inspect samples and choose the best matching capture
+* Help > About IR Remote Studio (version, supported backends,
+  project/license information and data folder)
+* Bluetooth Troubleshooting (optional stored-slot read,
+  inspect services, OS pairing and log export)
+
+SAFETY AND DIAGNOSTICS
+----------------------
+The application does not transmit learned IR directly from Windows;
+export to IRplus for testing/transmission using compatible hardware.
+The executable is unsigned; Windows SmartScreen may warn about an
+unknown publisher. Only download from the project's official GitHub
+repository.
+
+In case of failures, back up Documents\IR Remote Studio\library.json
+before modifying or restoring library data. Never assume a raw U1
+slot-8 backup restores every button/profile setting.
 
 Project: https://github.com/MixterVee/IR-Remote-Studio
-
-SOFABATON U1 BLUETOOTH RESEARCH (EXPERIMENTAL)
-----------------------------------------------
-The separate "SofaBaton U1 Bluetooth..." button in the Windows IR learner
-connection panel opens a safe diagnostic window. It does NOT yet allow
-IR learning, reading/saving the U1's commands, or programming the U1.
-
-1. Turn on Bluetooth on the Windows PC and install working AA batteries
-   in the SofaBaton U1.
-2. Close the official SofaBaton app if it is connected to the remote.
-3. On the U1, hold the "-" and "E" buttons to display "Pairing".
-4. Open "SofaBaton U1 Bluetooth..." and click "Scan Bluetooth".
-5. Examine the names (including unnamed BLE devices). Only if you can
-   identify your U1, select it and choose "Inspect selected (read-only)".
-6. Approve the explicit confirmation. The app temporarily connects to
-   enumerate GATT service/characteristic UUID metadata and disconnects.
-   It never reads characteristic values, subscribes to notifications,
-   writes commands, changes profiles, or initiates Bluetooth pairing.
-7. Click "Copy report" or "Save report...". Review it before sharing:
-   it may contain local Bluetooth addresses for nearby devices.
-
-This is BLE protocol research only. The U1's proprietary BLE commands and
-IR-learning workflow have NOT been identified. Classic Bluetooth controls
-and the SofaBaton X-series hub protocols are not interchangeable with
-U1 app configuration. The existing Harmony/Ocrustar/Concordance backends
-are unaffected. Windows BLE scanning may require suitable PC Bluetooth
-hardware and Windows permissions.
-
-SOFABATON U1 — READ AN EXISTING SAVED IR CODE (NEW IN 0.2.6)
-------------------------------------------------------------
-This is NOT new IR learning. It reads back an existing command that
-the U1 already stores, as a safe stepping stone toward native learning.
-Only the documented device-info (0x01) and read-command (0x0C) inquiries
-are transmitted. No U1 profile updates, learning start/finish operations,
-or configuration writes are sent.
-
-1. Back up the IR Remote Studio Windows library first.
-2. Close the official SofaBaton app (so Windows can use the BLE session).
-3. Connect to a U1 with working batteries and open
-   "SofaBaton U1 Bluetooth..." from the main window.
-4. Scan Bluetooth and identify your SB-prefixed U1 advertising FFF0.
-5. Choose a U1 slot containing a known stored IR code, initially 7
-   (previously observed in official-app trace) or 8 (newly taught test).
-6. Click "Read stored IR (test)" and approve the warning.
-7. Wait for complete 0x0D fragments. The app checks the device identity,
-   BLE service UUIDs, packet checksum, segment ordering, aggregate
-   checksum, carrier frequency and timing validity. A failed/incomplete
-   session is rejected without saving anything.
-8. In the main IR Remote Studio window, select your destination device
-   and button. Choose "Save to selected button" in the Bluetooth window.
-9. Export that device as .irplus and verify playback on your Android phone.
-
-The read request may not work on all U1 firmwares or Windows BLE adapters.
-The U1 is NOT yet a native learner in IR Remote Studio. Do not experiment
-with arbitrary firmware or configuration writes. Full direct learning is
-a subsequent milestone requiring careful confirmation of start/end codes.
-
-LAPTOP DISPLAY / TASKBAR RESIZING (0.2.7)
------------------------------------------
-Device and button actions are now bottom-anchored ahead of their lists,
-so maximized laptop windows keep Add/Rename/Delete/Move/Layout editor
-visible above the Windows taskbar. The lists shrink when vertical space
-is limited instead of pushing action rows offscreen. The layout editor
-also reserves its footer Save/Cancel, button-width controls and preview
-status before allocating height to the expandable list/preview.
-
-PERSISTENT SOFABATON BLUETOOTH CONNECTION (0.2.8)
--------------------------------------------------
-1. Open SofaBaton U1 Bluetooth... in main Windows IR Remote Studio.
-2. Close the official SofaBaton phone app; put batteries in U1.
-3. Scan Bluetooth and select your identified SB-prefixed U1.
-4. Click Connect U1 and approve the connection request. Normally
-   Windows pairing is NOT needed; leave "Request Windows pairing"
-   unchecked. Only check it after an unpaired connection fails and
-   you explicitly want Windows to request OS-level pairing.
-5. App validates FFF0/FFF1/FFF2 service and U1's live 0x02 device
-   identity reply before displaying green CONNECTED — READY.
-6. Bluetooth window closes; verified connection persists in Windows
-   main app. Reopen Bluetooth window to Read stored IR (test) on the
-   same session; no new scan is required while connected.
-7. Choose Disconnect U1 in the main window when done. Closing the
-   main application also closes the BLE session. Unexpected BLE
-   disconnect changes green READY to red CONNECTION LOST.
-8. The red USB NOT CONNECTED indicator is separate from the
-   SofaBaton U1 Bluetooth status and can legitimately remain red
-   while a BLE remote is fully connected.
-
-This release still DOES NOT initiate new U1 infrared learning.
-Bluetooth writes are limited to the official-app identity inquiry
-(0x01) and previously learned code read inquiry (0x0C), with
-explicit permission. No firmware or remote-profile changes.
-
-SOFABATON U1 — SIMPLE CONNECTION SCREEN (0.2.9)
------------------------------------------------
-The normal Bluetooth window shows Scan Bluetooth, Connect U1,
-Disconnect, connected status, and a clearly disabled Learn IR control.
-Direct U1 learning is NOT available yet; this version does not initiate
-a learning session or modify U1 profiles. U1 stored-command read-back
-remains available only in Advanced.
-
-Advanced (collapsed by default):
-- Existing U1 IR slot 1–8 / Read stored IR (test)
-- Save to selected button (saves into local Windows library only)
-- Optional Windows OS pairing, only if normal connection fails
-- Inspect services, Copy report, Save report
-
-Normal workflow: scan, select your U1, click Connect U1. Windows shows
-green CONNECTED — READY only after the verified Bluetooth handshake.
-To read an EXISTING previously learned command, reopen the Bluetooth
-window, expand Advanced, choose the slot and Read stored IR, then save.
-USB capture in the main window is separately identified as USB.
-
-SINGLE CONNECTION STATUS (WINDOWS 0.3.0-BETA)
---------------------------------------------
-The Windows main window now shows only ONE status:
-  NOT CONNECTED                          [red]
-  CONNECTED — SB... / SofaBaton U1      [green]
-  CONNECTED — Harmony or Ocrustar       [green]
-
-Only a verified receiver is shown. A connected U1 takes priority over
-a disconnected USB receiver, avoiding simultaneous red and green
-messages. Unverified connection attempts are shown as CONNECTING in
-amber. Disconnect U1 is shown on the same line only for an active BLE
-link, avoiding additional vertical space.
-
-USB: 'Connected' indicates a successful receiver handshake and ready
-to start capture (the temporary USB probe handle closes between
-operations); unplugging requires Refresh USB to update the display.
-No changes to IR capture, Bluetooth safety checks or stored profiles.
-
-AUTOMATIC SOFABATON U1 DISCOVERY & CONNECTION (0.3.1-BETA)
-----------------------------------------------------------
-1. Put working batteries in your SofaBaton U1 and enable Bluetooth on
-   Windows. Close the official SofaBaton app on your phone.
-2. Click SofaBaton U1 Bluetooth... in IR Remote Studio. The popup
-   immediately displays how to enter pairing mode: hold - and E on
-   the U1 until Pairing appears.
-3. BLE scan starts automatically. With exactly one advertising U1
-   whose name begins SB and includes a serial identifier, Windows
-   connects automatically and verifies U1 identity.
-4. A successful connection closes the popup and returns to the main
-   window, showing a SINGLE green CONNECTED — SofaBaton U1 (SB...).
-5. Windows OS-level pairing is normally unnecessary. If the U1
-   specifically rejects access for lack of authentication, an
-   automatic Windows pairing retry may show a Windows prompt.
-6. Multiple matching U1s require manual selection (never connect
-   ambiguously); no candidate or a failed connection leaves Scan
-   again / Connect U1 available with troubleshooting guidance.
-7. Reopen the popup while connected to use Advanced stored-code read.
-   No auto-rescan interrupts a healthy connection.
-
-Only Bluetooth identity inquiries and optional user-approved stored-IR
-reads are supported. This does not initiate new IR learning, change
-stored U1 profiles or write firmware.
-
-INLINE BLUETOOTH DISCONNECT (WINDOWS 0.3.2-BETA)
-------------------------------------------------
-Disconnect U1 now appears next to the green connected U1 device name,
-not at the far-right side of the main window. The button uses a red
-background and white text for contrast and only appears when a live
-U1 Bluetooth connection exists. No Bluetooth protocol changes.
-
-WINDOWS 0.3.3-BETA: RESPONSIVE BUTTONS + EXPERIMENTAL LEARNING
--------------------------------------------------------------
-At narrower window widths the Add / Edit / Delete (Devices) and
-Add / Rename / Delete / Move / Layout editor (Buttons) actions wrap
-into two-column rows instead of clipping off the right edge.
-
-SOFABATON U1 LIVE LEARNING IS A HIGH-RISK FIRST TEST.
-It is disabled in the normal Learn IR area. Under Advanced choose
-"Experimental: learn IR in slot 8 (risk of overwrite)".
-
-This uses the captured official-app learning command for slot 8 only.
-The app first requires a valid read and timestamped local JSON backup
-of slot 8, then sends observed 0x04 start, receives 0x06/0x0d
-capture, and sends observed 0x05 finish. It does not attempt to
-program profiles or firmware. Before running, read the warning and
-type LEARN 8 to confirm.
-
-CAUTION: This MAY ERASE/REPLACE the U1's existing slot 8 code. We do
-not yet know which physical device/key the slot controls. Although
-the app saves the previously stored IR waveform to the local
-U1-Learn-Backups folder, it CANNOT restore that code to the U1.
-Do not test on a U1 with irreplaceable programming or important keys.
-
-No signal will be saved to the Windows IR Remote Studio library until
-you choose Advanced → Save to selected button. Save the successful
-capture and verify it in IRPlus on your Android device.
-
-WINDOWS 0.3.4-BETA — SOFABATON LEARNING ON MAIN SCREEN
-------------------------------------------------------
-Connect the U1 once using SofaBaton U1 Bluetooth... (automatic scan
-and connection). Return to main IR Remote Studio, select a device and
-button, and click Capture selected button (SofaBaton U1).
-Wait until READY appears; aim the original remote at the U1 and press
-the chosen source button once. New infrared code is validated AND
-AUTOSAVED to the selected button without reopening the Bluetooth UI.
-Click Save to confirm, Save & Learn another to add/learn another named
-button, or Export Device (.irplus) to test the command on Android.
-
-The old LEARN 8 typed prompt is removed. The app transparently uses
-the known working internal U1 slot-8 command sequence and makes a
-verified local backup FIRST, on every capture, in
-Documents\IR Remote Studio\U1-Learn-Backups\
-If backup creation fails, learning does not start. This preserves the
-previous raw IR code only; it cannot restore the old U1 internal
-button configuration or entire remote profile. This sequence may
-overwrite the U1's slot 8. No firmware/profile configuration writes.
-
-Receiver set to Auto chooses connected U1; explicitly select a USB
-backend in Receiver to capture with Harmony/Ocrustar instead.
+License: MIT. See LICENSE included in the ZIP.

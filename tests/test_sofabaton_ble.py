@@ -132,7 +132,7 @@ class BleDiagnosticsTests(unittest.TestCase):
             app = Studio()
             app.withdraw()
             try:
-                self.assertIn("SofaBaton U1 Bluetooth",
+                self.assertIn("SofaBaton U1",
                               app.sofabaton_ble_btn.cget("text"))
                 with patch("irstudio.ui.SofaBatonBleDialog") as dialog:
                     app.sofabaton_ble_btn.invoke()
