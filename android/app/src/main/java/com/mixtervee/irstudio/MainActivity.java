@@ -679,18 +679,29 @@ public class MainActivity extends Activity {
         File[] backups = U1BackupStore.list(u1BackupFolder());
         List<String> options = new ArrayList<>();
         options.add("Import a Windows/Android U1 waveform JSON...");
-        for (File backup : backups) options.add(backup.getName());
+        if (backups.length == 0) {
+            options.add("No local U1 backups yet — learn a command first");
+        } else {
+            for (File backup : backups) options.add(backup.getName());
+        }
+        // Android AlertDialog gives setMessage() priority over setItems():
+        // using both hides the choices entirely. Keep this a LIST dialog.
         new AlertDialog.Builder(this)
-                .setTitle("U1 waveform backups — NOT full remote restores")
-                .setMessage("Restore here means importing a saved IR signal into "
-                        + "an Android library button. It does NOT write to "
-                        + "the U1 or restore its internal button profiles.")
+                .setTitle("U1 backups (restore to APP, not remote)")
                 .setItems(options.toArray(new String[0]), (d, selected) -> {
                     if (selected == 0) {
                         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
                         intent.setType("*/*");
                         intent.addCategory(Intent.CATEGORY_OPENABLE);
                         startActivityForResult(intent, IMPORT_U1_BACKUP);
+                    } else if (backups.length == 0) {
+                        new AlertDialog.Builder(this)
+                                .setTitle("No U1 backups found")
+                                .setMessage("A slot-8 waveform backup is saved before "
+                                        + "each successful U1 learning attempt. "
+                                        + "You can also import a previous Windows "
+                                        + "or Android U1 waveform JSON backup.")
+                                .setPositiveButton("OK", null).show();
                     } else {
                         showU1BackupActions(backups[selected - 1]);
                     }
@@ -749,11 +760,10 @@ public class MainActivity extends Activity {
             toast("Backup cannot be converted to IRplus: " + issue.getMessage());
             return;
         }
+        // Keep the destination list visible: setMessage() would hide it.
+        // This operation changes only Android's app library; no U1 writes.
         new AlertDialog.Builder(this)
-                .setTitle("Restore stored IR to Android button")
-                .setMessage("Choose a button. This adds a saved IR sample "
-                        + "to the app library only. No Bluetooth programming "
-                        + "or U1 restore command is sent.")
+                .setTitle("Restore into Android library (NOT U1)")
                 .setItems(labels.toArray(new String[0]), (d, index) -> {
                     IrplusCodec.Item item = buttons.get(index);
                     try {
