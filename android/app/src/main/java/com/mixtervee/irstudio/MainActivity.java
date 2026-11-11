@@ -75,6 +75,7 @@ public class MainActivity extends Activity {
     private Button u1SourceButton;
     private Button harmonySourceButton;
     private TextView u1Status;
+    private TextView receiverHelp;
     private int selectedLearner = LearnerSource.SOFABATON_U1;
     private String lastU1Status = "NOT CONNECTED — Tap Connect U1";
     private SofaBatonU1Ble u1Ble;
@@ -264,6 +265,12 @@ public class MainActivity extends Activity {
         connectParams.setMargins(dp(7), 0, 0, 0);
         connectionRow.addView(u1ConnectionButton, connectParams);
         connection.addView(connectionRow);
+
+        // Always display only the selected learner's short setup guidance.
+        // Does not change capture or connection behavior.
+        receiverHelp = text("", 11, MUTED, false);
+        receiverHelp.setPadding(dp(2), dp(9), dp(2), dp(1));
+        connection.addView(receiverHelp);
 
         learnButton = actionButton("◉  Learn IR Button", TEAL);
         learnButton.setOnClickListener(v -> startLearning());
@@ -694,6 +701,12 @@ public class MainActivity extends Activity {
                     : (harmonyUsbStatus().startsWith("USB ACCESS GRANTED")
                             ? TEAL : MUTED);
             u1Status.setTextColor(color);
+        }
+        if (receiverHelp != null) {
+            boolean ready = u1Selected
+                    ? connected : harmonyUsbStatus().startsWith("USB ACCESS GRANTED");
+            receiverHelp.setText(LearnerSource.connectionHint(
+                    selectedLearner, ready));
         }
         if (learnButton != null && learnButton.isEnabled()
                 && (u1Ble == null || !u1Ble.isLearning())) {
