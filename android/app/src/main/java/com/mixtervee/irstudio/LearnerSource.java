@@ -28,6 +28,23 @@ public final class LearnerSource {
                 : "◉  Learn IR • SofaBaton U1";
     }
 
+    /**
+     * Two short, actionable instructions for the selected hardware. Keep
+     * the other learner's setup details off the main screen.
+     */
+    public static String connectionHint(int selected, boolean ready) {
+        if (normalize(selected) == HARMONY_USB) {
+            return ready
+                    ? "Harmony USB ready. Select a button and tap Learn."
+                    : "Connect the Harmony 300/350 using a USB-C OTG adapter "
+                      + "and a data-capable USB cable. Tap USB Setup and grant access.";
+        }
+        return ready
+                ? "U1 connected. Select a button and tap Learn."
+                : "On the U1, hold – and E together to enter Bluetooth pairing. "
+                  + "Close the SofaBaton app, then tap Connect U1.";
+    }
+
     public static String connectionLabel(int selected, boolean u1Connected) {
         if (normalize(selected) == HARMONY_USB) return "USB Setup";
         return u1Connected ? "Connected" : "Connect U1";
