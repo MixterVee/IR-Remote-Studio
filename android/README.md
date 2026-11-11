@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.4.3-alpha
+# IR Remote Studio for Android — v0.4.4-alpha
 
 **Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
