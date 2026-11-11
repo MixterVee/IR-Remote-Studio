@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.4.2-alpha
+# IR Remote Studio for Android — v0.4.3-alpha
 
 **Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
@@ -59,6 +59,20 @@ Earlier Android prototypes and troubleshooting notes are retained in [developmen
 MIT License: see [LICENSE](../LICENSE). Source repository: [MixterVee/IR-Remote-Studio](https://github.com/MixterVee/IR-Remote-Studio).
 
 
+
+## v0.4.3-alpha: Cleaner Android home screen
+
+This update changes only the **Android home-screen presentation**, not the now-confirmed SofaBaton U1 Bluetooth scanning, preflight slot-8 backup, packet learning, capture saving, or IRplus exporter.
+
+- Compact identity/version header and a single **SofaBaton U1** connection card with unambiguous **Connect U1 / Connected** status.
+- The primary **Learn IR Button** stays prominent and adapts to connected U1 Bluetooth.
+- The selected remote, **+ New Remote**, and **+ Add Button** stay on the main screen.
+- One **Tools & Settings** menu replaces the long rows of secondary buttons. It contains **Import .irplus**, **Export selected remote**, **Layout Editor**, **Manage selected remote**, **U1 waveform backups / restore**, **Full library backup / restore**, **Harmony USB diagnostics**, and **About / Version**.
+- Removes the duplicated remote heading and the outdated fixed Harmony-only footer. The entire page can scroll, so remote buttons and the status section are not compressed/clipped on smaller screens.
+- Latest status shows a compact two-line preview; **tap it to read the complete capture or diagnostic message**.
+- The `.irplus` and local library storage formats are unchanged.
+
+The APK remains signed using the **same permanent certificate** introduced in v0.4.2-alpha. It advances `versionCode` to 26; it is intended to install **over v0.4.2 without uninstalling**. Test that before choosing any uninstall: uninstalling still wipes app-private U1 backup files. To preserve backups externally, use Tools & Settings → U1 waveform backups / restore → Export, and for complete remote libraries use Tools & Settings → Full library backup / restore.
 
 ## v0.4.2-alpha: Permanent APK signing (one-time owner setup required)
 
