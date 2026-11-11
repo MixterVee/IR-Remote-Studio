@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.4.1-alpha
+# IR Remote Studio for Android — v0.4.2-alpha
 
 **Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
@@ -58,6 +58,32 @@ Earlier Android prototypes and troubleshooting notes are retained in [developmen
 
 MIT License: see [LICENSE](../LICENSE). Source repository: [MixterVee/IR-Remote-Studio](https://github.com/MixterVee/IR-Remote-Studio).
 
+
+
+## v0.4.2-alpha: Permanent APK signing (one-time owner setup required)
+
+Previous GitHub Actions runs used a fresh ephemeral Android debug signing certificate for every build. Android requires the **same certificate for every upgrade**, so old APKs couldn't update in place and users had to uninstall; that uninstall also deletes the app's privately stored U1 backups and captured signals.
+
+This release switches the build to a **single persistent test signing key**, stored in private GitHub Actions secrets. The public repository contains **no signing keys or passwords**. To avoid another accidental data-wiping version, CI now **refuses to publish an APK if the permanent signing secrets have not been configured**.
+
+**One-time signing key setup on the repository owner's Windows 11 PC:**
+
+1. Install [GitHub CLI](https://cli.github.com/) if necessary, e.g. `winget install --id GitHub.cli -e`. Open a new PowerShell window and run `gh auth login` using the GitHub account with repository Actions secrets access. Android Studio / Java must also be installed for `keytool`.
+2. Download/run `android/scripts/setup-signing.ps1` from this repository. It creates a **private** PKCS#12 key at `Documents\\IR Remote Studio\\Signing\\ir-studio-android-test.p12` and uploads its Base64 content and your password directly as encrypted GitHub Secrets. The keystore and password are never committed to the repository.
+3. **Back up the keystore file and its password offline** and do not share them in a public chat, GitHub issue, PR, or screenshot. If you lose this key, Android will not allow compatible updates signed by a replacement key.
+4. Re-run the **Android prototype APK** workflow on the signing-enabled branch, or merge the signing change and build from `main`. Download the artifact named `IR-Remote-Studio-v0.4.2-alpha-Android-persistently-signed`.
+5. **Before the one-time transition, back up your current app data outside the app:** In v0.4.1 go to **About / Version → Library backup... → Back up library**, save its JSON to Downloads or a cloud folder, and export any individual remotes as `.irplus`. Also export any available U1 waveform backups through **U1 Backups / Restore**. **Only then**, if Android rejects installing the new certificate over the existing APK, uninstall the old app and install v0.4.2. Restore the JSON library through **About / Version → Library backup... → Restore backup**.
+6. Every **subsequent** build using that same key and an increasing `versionCode` should install over the prior app without clearing data. Never reset or regenerate the signing key just to make another APK.
+
+**Run the script from PowerShell in the project root:**
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\android\\scripts\\setup-signing.ps1
+```
+
+The script requires **GitHub CLI**, authenticates via `gh auth login`, prompts privately for a permanent password, and uses `keytool` from Android Studio or your Java installation. If it finds an existing key, it validates and **reuses** that same key.
+
+**Not included:** This fixes Android **APK upgrade signing**, not the ability to write a restored waveform back into the SofaBaton U1's internal hardware programming (still tracked separately).
 
 ## v0.4.1-alpha: Backup picker repair
 
