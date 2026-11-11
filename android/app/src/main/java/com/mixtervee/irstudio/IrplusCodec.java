@@ -26,11 +26,89 @@ public final class IrplusCodec {
         public final String prontoHex;
         public final int span;
         public final boolean space;
+        // Android keeps complete recorded samples in local JSON, while .irplus
+        // exports only the selected signal. Old files migrate automatically.
+        public final List<String> captures;
+        public final int selectedCapture;
+
         public Item(String label, String prontoHex, int span, boolean space) {
-            this.label = label;
-            this.prontoHex = prontoHex;
+            this(label, prontoHex, span, space,
+                    prontoHex == null || prontoHex.isEmpty()
+                            ? new ArrayList<>() : singleton(prontoHex), 0);
+        }
+
+        public Item(String label, String prontoHex, int span, boolean space,
+                    List<String> captures, int selectedCapture) {
+            if (span < 1 || span > 12) {
+                throw new IllegalArgumentException("Width must be 1-12 columns.");
+            }
+            this.label = label == null ? "" : label;
             this.span = span;
             this.space = space;
+            this.captures = new ArrayList<>(captures);
+            this.selectedCapture = this.captures.isEmpty() ? 0
+                    : Math.max(0, Math.min(selectedCapture, this.captures.size() - 1));
+            this.prontoHex = this.captures.isEmpty()
+                    ? (prontoHex == null ? "" : prontoHex)
+                    : this.captures.get(this.selectedCapture);
+        }
+
+        private static List<String> singleton(String value) {
+            List<String> list = new ArrayList<>();
+            list.add(value);
+            return list;
+        }
+
+        public Item withLabel(String value) {
+            return new Item(value, prontoHex, span, space, captures, selectedCapture);
+        }
+
+        public Item withSpan(int width) {
+            return new Item(label, prontoHex, width, space, captures, selectedCapture);
+        }
+
+        public Item addCapture(String pronto) {
+            decodePronto(pronto);
+            List<String> updated = new ArrayList<>(captures);
+            updated.add(pronto);
+            return new Item(label, pronto, span, space, updated, updated.size() - 1);
+        }
+
+        public Item removeLastCapture() {
+            if (captures.isEmpty()) return this;
+            List<String> updated = new ArrayList<>(captures);
+            updated.remove(updated.size() - 1);
+            return new Item(label, "", span, space, updated, updated.size() - 1);
+        }
+
+        public Item clearCaptures() {
+            return new Item(label, "", span, space);
+        }
+
+        public Item selectBestCapture() {
+            if (captures.isEmpty()) return this;
+            int bestIndex = 0, bestCount = 0;
+            for (int i = 0; i < captures.size(); i++) {
+                int count = 0;
+                for (String candidate : captures) {
+                    if (candidate.equalsIgnoreCase(captures.get(i))) count++;
+                }
+                if (count > bestCount) {
+                    bestIndex = i;
+                    bestCount = count;
+                }
+            }
+            return new Item(label, prontoHex, span, space, captures, bestIndex);
+        }
+
+        public String sampleStatus() {
+            if (captures.isEmpty()) return "Not learned";
+            if (captures.size() == 1) return "Raw IR (saved)";
+            String first = captures.get(0);
+            for (String capture : captures) {
+                if (!first.equalsIgnoreCase(capture)) return "Mismatch";
+            }
+            return "Verified";
         }
     }
 
@@ -216,7 +294,7 @@ public final class IrplusCodec {
         for (Item item : remote.items) {
             if (item.space) {
                 out.append("    <space multiple=\"").append(item.span).append("\" />\n");
-            } else {
+            } else if (!item.prontoHex.isEmpty()) {
                 out.append("    <button label=\"").append(xml(item.label)).append("\" span=\"")
                         .append(item.span).append("\">")
                         .append(xml(item.prontoHex)).append("</button>\n");
