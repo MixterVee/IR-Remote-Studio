@@ -32,6 +32,27 @@ public class LearnerSourceTest {
                 .contains("Harmony USB"));
     }
 
+    @Test public void u1HelpExplainsPairingWithoutMentioningHarmony() {
+        String help = LearnerSource.connectionHint(LearnerSource.SOFABATON_U1, false);
+        assertTrue(help.contains("– and E"));
+        assertTrue(help.contains("Bluetooth pairing"));
+        assertTrue(help.contains("Connect U1"));
+        assertFalse(help.contains("OTG"));
+        assertTrue(LearnerSource.connectionHint(LearnerSource.SOFABATON_U1, true)
+                .contains("Select a button"));
+    }
+
+    @Test public void harmonyHelpExplainsOtgAndDataCable() {
+        String help = LearnerSource.connectionHint(LearnerSource.HARMONY_USB, false);
+        assertTrue(help.contains("USB-C OTG adapter"));
+        assertTrue(help.contains("data-capable USB cable"));
+        assertTrue(help.contains("USB Setup"));
+        assertTrue(help.contains("grant access"));
+        assertFalse(help.contains("Bluetooth pairing"));
+        assertTrue(LearnerSource.connectionHint(LearnerSource.HARMONY_USB, true)
+                .contains("Harmony USB ready"));
+    }
+
     @Test public void invalidStoredReceiverDefaultsToKnownU1() {
         assertEquals(LearnerSource.SOFABATON_U1, LearnerSource.normalize(-1));
         assertEquals(LearnerSource.SOFABATON_U1, LearnerSource.normalize(9));
