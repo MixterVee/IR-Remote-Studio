@@ -419,6 +419,65 @@ class U1SaveUITests(unittest.TestCase):
             bluetooth.assert_called_once_with()
             usb.assert_not_called()
 
+    def test_connecting_u1_switches_capture_away_from_stale_harmony_choice(self):
+        from irstudio.ui import U1_RECEIVER
+        from irstudio.receivers import HARMONY
+        self.prepare_button()
+        self.app.receiver_var.set(HARMONY)
+        self.app._receiver_changed()
+        self.assertIn("USB", str(self.app.capture_btn.cget("text")))
+        self.app.u1_session._state(
+            "CONNECTED", "SB202006231D9E", "U1", "Identity verified.")
+        self.app._refresh_u1_status()
+        self.assertEqual(self.app.receiver_var.get(), U1_RECEIVER)
+        self.assertIn("SofaBaton U1", str(self.app.capture_btn.cget("text")))
+        self.assertEqual(str(self.app.probe_btn.cget("text")), "Connect U1")
+        with patch.object(self.app, "_capture_ble_main") as bluetooth, \
+             patch.object(self.app, "_background") as usb:
+            self.app.capture()
+            bluetooth.assert_called_once_with()
+            usb.assert_not_called()
+
+    def test_connected_u1_can_still_explicitly_select_harmony_usb(self):
+        from irstudio.ui import U1_RECEIVER
+        from irstudio.receivers import HARMONY
+        self.prepare_button()
+        self.app.u1_session._state(
+            "CONNECTED", "SB202006231D9E", "U1", "Identity verified.")
+        self.app._refresh_u1_status()
+        self.assertEqual(self.app.receiver_var.get(), U1_RECEIVER)
+        self.app.receiver_var.set(HARMONY)
+        self.app._receiver_changed()
+        self.assertIn("USB", str(self.app.capture_btn.cget("text")))
+        with patch.object(self.app, "_capture_ble_main") as bluetooth, \
+             patch.object(self.app, "_background") as usb:
+            self.app.capture()
+            bluetooth.assert_not_called()
+            usb.assert_called_once()
+
+    def test_disconnected_u1_never_falls_back_to_harmony(self):
+        from irstudio.ui import U1_RECEIVER
+        self.prepare_button()
+        self.app.receiver_var.set(U1_RECEIVER)
+        self.app._receiver_changed()
+        with patch.object(self.app, "_capture_ble_main") as bluetooth, \
+             patch.object(self.app, "_background") as usb, \
+             patch("irstudio.ui.messagebox.showwarning") as warning:
+            self.app.capture()
+            bluetooth.assert_not_called()
+            usb.assert_not_called()
+            self.assertIn("Connect U1", warning.call_args.args[1])
+
+    def test_connect_u1_button_never_runs_usb_probe(self):
+        from irstudio.ui import U1_RECEIVER
+        self.app.receiver_var.set(U1_RECEIVER)
+        self.app._receiver_changed()
+        with patch.object(self.app, "open_sofabaton_ble") as connect, \
+             patch.object(self.app, "_background") as usb:
+            self.app.probe()
+            connect.assert_called_once()
+            usb.assert_not_called()
+
     def test_ble_main_capture_saves_to_original_selected_button(self):
         device, button = self.prepare_button()
         # The same valid, non-NEC raw IR waveform v0.3.3 can capture.
