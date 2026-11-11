@@ -1094,7 +1094,20 @@ public class MainActivity extends Activity {
 
     private void startLearning(IrplusCodec.Remote targetRemote,
                                IrplusCodec.Item targetButton) {
-        if (u1Ble != null && u1Ble.isConnected()) {
+        LearnerSource.Route route = LearnerSource.captureRoute(
+                selectedLearner, u1Ble != null && u1Ble.isConnected());
+        if (route == LearnerSource.Route.CONNECT_U1_FIRST) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Connect SofaBaton U1")
+                    .setMessage("SofaBaton U1 Bluetooth is selected but not "
+                            + "connected. Connect the U1 or choose Harmony USB "
+                            + "above before learning.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("Connect U1",
+                            (d, w) -> openU1Connection()).show();
+            return;
+        }
+        if (route == LearnerSource.Route.U1_BLUETOOTH) {
             if (targetRemote == null || targetButton == null) {
                 IrplusCodec.Remote currentRemote = current();
                 if (currentRemote == null) {
@@ -1130,7 +1143,7 @@ public class MainActivity extends Activity {
             new AlertDialog.Builder(this)
                     .setTitle("Connect your Harmony 300")
                     .setMessage("Connect the Harmony to your phone with USB and grant "
-                            + "permission in Harmony USB Connection & Diagnostics. "
+                            + "permission using USB Setup above. "
                             + "Your existing Harmony buttons won't be changed.")
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Connect / grant permission",
@@ -1163,7 +1176,7 @@ public class MainActivity extends Activity {
                         runOnUiThread(() -> {
                             if (isFinishing() || isDestroyed()) return;
                             learnButton.setEnabled(true);
-                            learnButton.setText("◉  Learn IR Button");
+                            updateLearnerPanel();
                             String pronto = candidate.get();
                             if (pronto == null) {
                                 showFailedLearning(report);
