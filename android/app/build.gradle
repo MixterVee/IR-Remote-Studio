@@ -1,3 +1,7 @@
+plugins {
+    id 'com.android.application'
+}
+
 // Reuse ONE private APK signing key across GitHub Actions runs.
 // Without these environment variables, local Android Studio builds still
 // use their own developer debug key. Public CI must fail rather than
@@ -7,10 +11,6 @@ def stableKeystorePassword = System.getenv('IR_STUDIO_ANDROID_KEYSTORE_PASSWORD'
 def stableSigningConfigured =
         stableKeystorePath != null && !stableKeystorePath.isBlank()
         && stableKeystorePassword != null && !stableKeystorePassword.isBlank()
-
-plugins {
-    id 'com.android.application'
-}
 
 android {
     namespace 'com.mixtervee.irstudio'
