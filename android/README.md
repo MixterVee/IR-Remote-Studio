@@ -1,4 +1,4 @@
-# IR Remote Studio for Android — v0.4.0-alpha
+# IR Remote Studio for Android — v0.4.1-alpha
 
 **Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
@@ -16,7 +16,7 @@ This update ports the Windows v1 library and layout workflow to Android:
 
 ### Install and protect your library
 
-Download the latest successful **IR Remote Studio v0.4.0-alpha Android debug** artifact from [GitHub Actions](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/android.yml), extract the ZIP and install `app-debug.apk`.
+Download the latest successful **IR Remote Studio v0.4.1-alpha Android debug** artifact from [GitHub Actions](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/android.yml), extract the ZIP and install `app-debug.apk`.
 
 **Before replacing any existing test APK**, open its Import/Export controls and export each remote as `.irplus`. If you're already using v0.3.0-alpha or newer, open **About / Version → Library backup...** to save a complete JSON backup. GitHub-generated debug APKs may use different signing keys, so Android may reject installation over an earlier debug build. **Uninstalling the older app can erase its private saved library**. Keep your backups elsewhere before uninstalling.
 
@@ -29,7 +29,7 @@ Download the latest successful **IR Remote Studio v0.4.0-alpha Android debug** a
 - **IR transmission:** Uses Android's public `ConsumerIrManager` when available. Some phones with IR hardware do not expose that API. Import/export remains usable without transmission capability.
 - **File interchange:** Both platforms import/export `.irplus` PRONTO_HEX for learned commands and layouts. Android's full library JSON backup is **Android-specific**, not a direct import of the Windows `library.json` capture-history format.
 
-### SofaBaton U1 Bluetooth workflow (new in v0.4.0-alpha)
+### SofaBaton U1 Bluetooth workflow (added in v0.4.0-alpha)
 
 1. Back up existing Android remotes from **About / Version → Library backup** before installing another debug APK.
 2. Put the U1 into pairing mode by holding **– and E** until its screen indicates pairing, and fully close the official SofaBaton app.
@@ -57,3 +57,8 @@ Open the `android/` directory in Android Studio using Java 17, Gradle 8.13, Andr
 Earlier Android prototypes and troubleshooting notes are retained in [development history](DEVELOPMENT-HISTORY.md).
 
 MIT License: see [LICENSE](../LICENSE). Source repository: [MixterVee/IR-Remote-Studio](https://github.com/MixterVee/IR-Remote-Studio).
+
+
+## v0.4.1-alpha: Backup picker repair
+
+On Android, AlertDialog does not display its `setItems` list if `setMessage` is also used. In the previous alpha, **U1 Backups / Restore** showed only its explanation and **Close**, hiding all saved files. This build restores the selectable list and fixes the same issue in the **Restore into Android library** destination picker. If no backup files exist, the list explicitly says so. Nothing in the tested Bluetooth connection, learning, preflight backup, or IR export engines changed.
