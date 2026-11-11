@@ -1,446 +1,90 @@
-# IR Remote Studio for Android — v0.2.1-alpha
-
-An **experimental, unsigned-for-production / debug-signed** Android companion
-for IR Remote Studio Windows. This is the first test application, **not** a
-Play Store release.
-
-## Initial features
+# IR Remote Studio for Android — v0.4.2-alpha
 
-- Import Windows-generated `.irplus` PRONTO_HEX remote files from the Android
-  system file picker. Keep all imported remotes in app-private storage.
-- Display each remote with its original 12-column layout and intentional spaces.
-- Transmit a selected button's Pronto IR command using Android's public
-  `ConsumerIrManager` API where available.
-- Export the selected remote as `.irplus` from Android's file picker.
-- Use the project's transparent remote-and-paintbrush logo.
-
-**Important:** Some phones contain a built-in IR blaster but do **not** expose
-it through Android's public ConsumerIrManager API. Such phones can still
-import and export remotes, but cannot transmit with this first implementation.
-The app explicitly reports whether Android exposes an IR emitter.
+**Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
-## Building
-
-Open `android/` as a Gradle project in Android Studio, with Java 17 and
-Android SDK 35 installed. AGP 8.13.2 with Gradle 8.13 is used. Or download
-the debug APK from the GitHub Actions **Android prototype APK** workflow.
+## Windows v1 workflow carried forward from v0.3.0-alpha
 
-The APK is debug-signed for testing only. An eventual public release requires
-normal application signing and field testing. The USB lab enumerates Harmony devices, requests USB permission, inspects HID
-interfaces and offers an experimental first-stage MH handshake. **IR capture is
-not implemented**; Windows is still the learning station.
+This update ports the Windows v1 library and layout workflow to Android:
 
-## Data, safety and privacy
-
-The application requests only the normal Android `TRANSMIT_IR` permission.
-Import/export uses Android's document picker. It needs no Internet, account,
-telemetry or contacts access. A 2-second signal limit is enforced before IR
-transmission. IR signals should only be used to control equipment you own
-or are authorized to operate.
-
-The Android app and Windows app both use the same `.irplus` interchange
-format; Android does not yet read Windows library.json files directly.
-\n## Import fix in v0.1.1-alpha
-
-Android's XML parser does not support every JAXP configuration option used\nby Java desktop. The initial alpha enabled XML settings that could abort\nbefore reading valid Windows .irplus files. The importer now uses bounded XML\ninput and rejects DTD/entity declarations, while tolerating missing optional\nJAXP features. Failures now show the full reason in a visible dialog.
-
-Update by installing the new debug APK over the original; existing local\nremote data remains stored under the same application ID.\n
-## Harmony USB lab — v0.1.2-alpha
-
-This is a **read-only discovery prototype**, not IR capture.
-
-1. Install the Android test APK on a USB-host-capable phone.
-2. Insert batteries in the Harmony 300/350 and connect its USB data cable to
-   the phone using a USB-C OTG adapter.
-3. Open **Detect Harmony USB (experimental)**.
-4. Copy the report and share it with the developer. It reports USB device
-   vendor/product IDs, interface and endpoint descriptors and permission state.
-5. If the Harmony is recognized and permission is missing, tap **Request USB
-   access**, approve Android's prompt, then scan again.
-
-For Harmony 300/350, expect VID `046D` and PID `C124`, though we must
-confirm this with your hardware. A successful enumeration, permission grant,
-or descriptor read does **not** constitute IR learning. The v0.1.2 USB discovery feature sent **no Harmony commands**;
-later builds add separately confirmed protocol diagnostics, without changing
-stored settings or firmware.
+- **Create devices and buttons first**, even when a button has no IR code yet. Tap an unlearned button or long-press an existing one to learn an IR command.
+- **Capture into existing buttons.** On successful USB Harmony capture for a preselected button, the command is automatically saved to the local library; the old sample is retained.
+- After a saved capture, choose **New button**, **Existing button**, or **Finish**. A newly captured unassigned command must first be named and saved before those choices appear.
+- **Multiple samples per button.** Long-press a button for **Undo last capture**, **Clear all captures** (keeps name and layout), or **Choose best match**. Raw IR signals can still export as Pronto Hex; status labels distinguish saved/verified/mismatched commands. Agreement compares complete Pronto samples, so slight timing differences may appear as mismatches.
+- **Layout Editor** for staged button ordering, width from 1–12 columns and a 12-column preview. **Save layout** commits the changes; **Cancel** discards them. This controls exported `.irplus` order and width.
+- A proper **About / Version** screen with accurate Android hardware support and project information.
+- **Full JSON library backup and restore**, including uncaptured buttons, button width, sample history and selected samples, via the Android system document picker. Restore asks for confirmation and saves a local recovery copy when possible. Legacy Android `remotes.json` files migrate automatically.
 
-The USB diagnostics have no network access. Only the user can choose to copy
-the report to the Android clipboard.
+### Install and protect your library
 
-### Current priorities
-
-Harmony USB IR learning on Android and a Concordance-independent Windows
-learning backend are **equal** priorities. Cosmetic editing and new remotes
-are deferred until the hardware experiments are validated.
-
-## USB permission layout fix (v0.1.3-alpha)
+Download the latest successful **IR Remote Studio v0.4.1-alpha Android debug** artifact from [GitHub Actions](https://github.com/MixterVee/IR-Remote-Studio/actions/workflows/android.yml), extract the ZIP and install `app-debug.apk`.
 
-The detection report now scrolls inside a height-limited panel; **Grant Harmony
-USB access** is always above that panel when Android detects an eligible
-device without permission. **Copy full USB report** stays below it. This
-prevents the request button from being hidden below Android's navigation bar
-on phones with large font/display settings. After approving USB access, run
-Detect Harmony USB again and check that permission is Granted and opening
-the device for descriptor inspection succeeds. This remains read-only:
-no HID report transmission or IR capture is attempted in this version.
+**Before replacing any existing test APK**, open its Import/Export controls and export each remote as `.irplus`. If you're already using v0.3.0-alpha or newer, open **About / Version → Library backup...** to save a complete JSON backup. GitHub-generated debug APKs may use different signing keys, so Android may reject installation over an earlier debug build. **Uninstalling the older app can erase its private saved library**. Keep your backups elsewhere before uninstalling.
 
-## Read-only HID claim and descriptor test (v0.1.4-alpha)
+### Hardware and feature differences from Windows
 
-After attaching the Harmony and granting USB permission, **Detect Harmony USB**
-shows **Test HID interface (read-only)** for VID:PID 046D:C124.
+- **Android:** Compatibility-tested pathway remains the app's existing **Logitech Harmony 300/350 USB learning** and diagnostics, with Android USB host permission.
+- **Android:** This version adds U1 **BLE scanning, identity verification, persistent connection, stored-command read, backup and the original Windows v0.3.3 learning commands**. The protocol is ported and unit-tested, but **actual Android U1 hardware learning has not yet been confirmed**. Android requests Bluetooth Scan/Connect permissions (or location permission on Android 8–11 for BLE discovery). Unrelated nearby devices are not shown.
+- **Windows:** The original working **SofaBaton U1 Bluetooth** learner is unchanged. Android's new BLE transport requires real-phone confirmation before claiming equivalence.
+- **U1 backup and restore:** Before every U1 learning attempt, Android reads slot 8, writes its previous **raw IR waveform** to private `U1-Learn-Backups/` JSON, reads and validates it, and only then sends the observed learning-start command. Use **U1 Backups / Restore** to export a copy, import a prior Windows backup, or restore a waveform **into an Android library button**. **This is NOT a restore of the U1's internal programming, profiles or button mappings.** No safe hardware-restore/write protocol is established; this version does NOT attempt an on-device restore.
+- **IR transmission:** Uses Android's public `ConsumerIrManager` when available. Some phones with IR hardware do not expose that API. Import/export remains usable without transmission capability.
+- **File interchange:** Both platforms import/export `.irplus` PRONTO_HEX for learned commands and layouts. Android's full library JSON backup is **Android-specific**, not a direct import of the Windows `library.json` capture-history format.
 
-The test attempts to claim the HID interface with `force=false` (never detaches
-kernel drivers). If successful, it requests the standard HID **report
-descriptor** using a USB `GET_DESCRIPTOR` control IN request, and releases
-the interface immediately. It never sends Harmony application commands or
-configuration writes. If claiming fails, the report will tell us that the
-system HID driver may own the interface; it does not attempt to override it.
+### SofaBaton U1 Bluetooth workflow (added in v0.4.0-alpha)
 
-Copy the results and provide them to the developer. HID interface access
-alone does not mean IR learning has been implemented.
+1. Back up existing Android remotes from **About / Version → Library backup** before installing another debug APK.
+2. Put the U1 into pairing mode by holding **– and E** until its screen indicates pairing, and fully close the official SofaBaton app.
+3. Tap **SofaBaton U1 • Connect**, grant the Android Bluetooth permissions when prompted, and watch **SEARCHING → CONNECTING → CONNECTED**. Only one identified SB-prefixed U1 can auto-connect. If several match, choose yours from the small U1-only dialog.
+4. Create or select a remote and button. Tap **Learn IR Button** or an unlearned button, or long-press an existing button and select Learn.
+5. The first time, acknowledge that learning may replace physical U1 slot 8. Every attempt **reads, saves and verifies the previous IR waveform before starting**. If no valid stored code can be backed up, the app will refuse to start learning.
+6. When the U1 says Learning/Ready, press the source remote command. The app validates the resulting IR and adds it to the button's saved capture history. Choose **Existing / New / Finish**.
+7. Tap **U1 Backups / Restore** to import/export saved slot-8 waveform files or add a previously saved waveform into a selected Android library button. This never sends a hardware-restore command to the U1.
 
-## Harmony version query (v0.1.5-alpha)
+**Restore boundary:** A waveform backup is not a complete U1 image. Restoring U1 internal configuration must remain unavailable until a real, verified U1 restore protocol and full profile backup are established. Saving, clearing, importing or restoring samples to the Android library does not reprogram the U1.
 
-Following successful HID interface/descriptor testing, v0.1.5 adds an
-optional **Read Harmony identity (0x10)** button.
+### Learning workflow
 
-It confirms before sending one 64-byte **GET_VERSION** USB output report,
-reads a 64-byte response via the HID input endpoint, then releases the HID
-interface. This is a **read-only protocol request** (although it necessarily
-transmits a USB OUT packet). The command does not alter the firmware, flash
-memory, configuration, or stored remote programs.
+1. Plug a compatible Harmony 300/350 into your phone through USB OTG, grant USB access under **Harmony USB • Connect / Troubleshoot**, and create/select a remote.
+2. Tap **+ Add Button** to create and name the button before learning.
+3. Tap that unlearned button to capture, or long-press any previously learned button and choose **Learn / add another sample**.
+4. When the Harmony indicates readiness, press and release the button on the source remote. On a valid capture targeted to an existing button, Android saves it immediately.
+5. Choose **Existing button**, **New button**, or **Finish**. Undo or clear a bad capture without deleting the button.
+6. Open **Layout Editor...** to reorder buttons or adjust widths. Save the layout, then export your remote as `.irplus`.
 
-The request and its expected version response are documented by Concordance
-upstream in `libconcord/protocol.h` and `libconcord/remote.cpp`. The Android
-code uses the published hardware protocol, not copied Concordance source code.
+### Source and tests
 
-The button is shown only when VID:PID is **046D:C124**, Android permission is
-granted, and the HID endpoints match the expected 64-byte form.
+Open the `android/` directory in Android Studio using Java 17, Gradle 8.13, Android SDK 35. The [Android Actions workflow](../.github/workflows/android.yml) runs unit tests and builds the debug APK.
 
-If it succeeds, copy the **Harmony identity result** and share it with the
-developer. If it fails, the report gives the exact stage. The test remains
-separate from IR learning; it does not capture commands.
+Earlier Android prototypes and troubleshooting notes are retained in [development history](DEVELOPMENT-HISTORY.md).
 
-## MH protocol correction — v0.1.6-alpha
+MIT License: see [LICENSE](../LICENSE). Source repository: [MixterVee/IR-Remote-Studio](https://github.com/MixterVee/IR-Remote-Studio).
 
-**Important correction:** `046D:C124` (Harmony 300) is classified by
-Concordance as **CRemoteMH**, not the legacy **CRemote** family. The earlier
-v0.1.5 `GET_VERSION (0x10)` query was therefore the wrong protocol and timed
-out. Do not interpret that timeout as a USB hardware failure.
 
-The old "Read Harmony identity (0x10)" action has been **removed**. The
-replacement is **Test Harmony MH handshake**, a first-stage experiment that
-performs only the documented MH session initialization and reads its initial
-acknowledgement. It is **not** yet the full `/sys/sysinfo` identity retrieval,
-nor is it IR learning.
 
-With the remote attached and USB access granted, choose **Detect Harmony USB**,
-then **Test Harmony MH handshake**, confirm, and copy the result. The diagnostic
-queues its initial IN read before the final initialization request and performs
-bounded USB interrupt transfers (no forced interface takeover). On timeouts or
-disconnects it closes and releases the USB device.
+## v0.4.2-alpha: Permanent APK signing (one-time owner setup required)
 
-The handshake changes only the transient USB session state. No flash memory,
-firmware, configuration, IR-learning commands, or reset packets are issued.
+Previous GitHub Actions runs used a fresh ephemeral Android debug signing certificate for every build. Android requires the **same certificate for every upgrade**, so old APKs couldn't update in place and users had to uninstall; that uninstall also deletes the app's privately stored U1 backups and captured signals.
 
-Reference: Concordance `libconcord/libconcord.cpp` (`is_mh_pid` and
-`init_concord`) and `libconcord/remote_mh.cpp` (`CRemoteMH::GetIdentity`).
-The new code is independently written using published protocol facts.
+This release switches the build to a **single persistent test signing key**, stored in private GitHub Actions secrets. The public repository contains **no signing keys or passwords**. To avoid another accidental data-wiping version, CI now **refuses to publish an APK if the permanent signing secrets have not been configured**.
 
-## MH full-response diagnostics — v0.1.7-alpha
+**One-time signing key setup on the repository owner's Windows 11 PC:**
 
-The existing **Test Harmony MH handshake** test now logs all bytes of the
-64-byte USB reply (16 bytes per line), the HID endpoint addresses, an observed
-header-prefix comparison, and the last non-zero byte offset. Header comparison
-is only a repeatability diagnostic, **not** proof of a valid protocol reply.
-The five MH sync reports and final MH session-init request remain unchanged;
-no configuration, firmware, reset, or IR-learning commands have been added.
-Copy the result from the app, ideally from two separate runs, for comparison.
+1. Install [GitHub CLI](https://cli.github.com/) if necessary, e.g. `winget install --id GitHub.cli -e`. Open a new PowerShell window and run `gh auth login` using the GitHub account with repository Actions secrets access. Android Studio / Java must also be installed for `keytool`.
+2. Download/run `android/scripts/setup-signing.ps1` from this repository. It creates a **private** PKCS#12 key at `Documents\\IR Remote Studio\\Signing\\ir-studio-android-test.p12` and uploads its Base64 content and your password directly as encrypted GitHub Secrets. The keystore and password are never committed to the repository.
+3. **Back up the keystore file and its password offline** and do not share them in a public chat, GitHub issue, PR, or screenshot. If you lose this key, Android will not allow compatible updates signed by a replacement key.
+4. Re-run the **Android prototype APK** workflow on the signing-enabled branch, or merge the signing change and build from `main`. Download the artifact named `IR-Remote-Studio-v0.4.2-alpha-Android-persistently-signed`.
+5. **Before the one-time transition, back up your current app data outside the app:** In v0.4.1 go to **About / Version → Library backup... → Back up library**, save its JSON to Downloads or a cloud folder, and export any individual remotes as `.irplus`. Also export any available U1 waveform backups through **U1 Backups / Restore**. **Only then**, if Android rejects installing the new certificate over the existing APK, uninstall the old app and install v0.4.2. Restore the JSON library through **About / Version → Library backup... → Restore backup**.
+6. Every **subsequent** build using that same key and an increasing `versionCode` should install over the prior app without clearing data. Never reset or regenerate the signing key just to make another APK.
 
+**Run the script from PowerShell in the project root:**
 
-## Harmony MH session continuation — v0.1.8-alpha
+```powershell
+powershell -ExecutionPolicy Bypass -File .\\android\\scripts\\setup-signing.ps1
+```
 
-A repeatable 64-byte reply with the first bytes FF FF 81 00 81 was observed
-after the v0.1.7-alpha test. This is not proven to be a protocol success code.
+The script requires **GitHub CLI**, authenticates via `gh auth login`, prompts privately for a permanent password, and uses `keytool` from Android Studio or your Java installation. If it finds an existing key, it validates and **reuses** that same key.
 
-The **Test MH session continuation** action repeats the earlier MH session
-handshake and, **only if** a complete outgoing packet and a 64-byte reply with
-the observed first five bytes are seen, sends Concordance's documented next
-session packet: FF 00 02 (zero-padded to 64 bytes). The next 64-byte reply
-is logged in full. The remote interface is always released afterward.
+**Not included:** This fixes Android **APK upgrade signing**, not the ability to write a restored waveform back into the SofaBaton U1's internal hardware programming (still tracked separately).
 
-No /sys/sysinfo identity file, configuration file, flash memory, reset,
-firmware operation, or IR-learning interface is accessed. The result is
-a USB protocol experiment, not a claim of IR capture support.
+## v0.4.1-alpha: Backup picker repair
 
-
-## Read-only Harmony /sys/sysinfo — v0.1.9-alpha
-
-After the observed FF 00 82 00 7D session reply, this experimental
-option attempts a bounded metadata read of the published /sys/sysinfo
-path. It follows Concordance's sequence of read request, transfer ACK,
-limited data reads, and a transient sequence reset. Only firmware/hardware
-metadata is displayed: fw_ver, hw_ver, arch, fw_type, and skin.
-
-The app never logs the device's GUID, serial number, or unknown keys.
-No IR-learning, configuration, flash, firmware, or user configuration
-commands are issued. This is an experimental USB protocol test; a passed
-handshake does not guarantee the metadata read will work. USB permission
-must be granted and the device should have working batteries.
-
-
-## MH sysinfo transfer correction — v0.1.10-alpha
-
-Hardware testing of 0.1.9 demonstrated a 289-byte file descriptor response to
-`/sys/sysinfo`, but the file-transfer ACK completed with an unexpected USB
-byte count. Review against Concordance `CRemoteMH::ReadFile` identified a
-bad local file-transfer sequence (previously read=03, ACK=04, close=05).
-
-Version 0.1.10 incorrectly used read=00, ACK=01 and close=02 for
-/sys/sysinfo. This was corrected in v0.1.12-alpha: Concordance's GetIdentity
-calls ReadFile with start_seq=0x03 (read=03, ACK=04, close=05). It logs actual OUT and IN transfer byte
-counts, accepts bounded short control and data replies (HID max packet size
-remains 64), and validates each data packet length before reading its payload.
-
-The target file remains strictly `/sys/sysinfo`, bounded to 1,000 bytes.
-Only allowlisted non-identifying metadata is displayed; no IR learning,
-stored configuration, firmware or flash operation is attempted.
-
-
-## Stage-one USB timeout diagnostics — v0.1.11-alpha
-
-The v0.1.10-alpha hardware report timed out during the first MH
-initialization exchange, before reaching the earlier corrected sysinfo read.
-
-This version preserves the five MH sync reports and exact initialization bytes,
-but extends the initial reply wait from 4 to 6 seconds (Concordance MH_TIMEOUT
-is 5 seconds). It reports separately whether the 64-byte OUT request completed,
-whether the IN request completed, actual transferred byte counts, and whether
-the USB wait itself timed out.
-
-There is **no automatic retry** and no extra Harmony command. On an
-incomplete first reply, the identity-file read is skipped and the USB
-interface is released. For a repeat test, unplug and reconnect the Harmony
-USB cable, leave batteries installed, then run the identity diagnostic once.
-
-
-## Correct /sys/sysinfo file-transfer sequence — v0.1.12-alpha
-
-**Correction to v0.1.10:** The MH file transfer does not universally start
-at sequence zero. In `CRemoteMH::GetIdentity`, Concordance passes
-`start_seq=0x03` to `ReadFile("/sys/sysinfo", ...)`. That function
-increments the sequence for the read request, ACK, and transfer close:
-**03 → 04 → 05**. v0.1.10-alpha erroneously changed those values to
-00 → 01 → 02; this version restores the correct identity-read sequence
-and updates the unit tests.
-
-The stage-one USB timeout reported on v0.1.11 happened **before** this
-file-transfer step. v0.1.12 retains v0.1.11's six-second, no-retry MH
-handshake diagnostic. For a power-cycle, disconnect USB, remove batteries
-briefly, reinstall batteries, reconnect USB and run the identity test once.
-No firmware resets, configuration writes, or IR-learning commands are issued.
-
-
-## Fix MH ACK and sequence-close packet length — v0.1.13-alpha
-
-A hardware trace on v0.1.12 showed a successful 289-byte `/sys/sysinfo`
-metadata announcement, followed by `sysinfo transfer ACK: OUT=true/8 bytes`.
-The ACK prefix was correctly constructed (FF 04 04 02 ...), but the USB
-report ByteBuffer was flipped after only 8 bytes. The MH protocol uses a
-64-byte HID OUT report, with zero padding for short command prefixes.
-
-This release zero-pads **all** MH sysinfo control commands to 64 bytes,
-including the 8-byte ACK and 6-byte transfer-sequence close packet.
-The 03/04/05 sequence numbers, bounded identity-only read, data-length checks,
-serial/GUID redaction, and existing handshake remain unchanged.
-
-Unit tests now specifically verify full-length zero-padding for the ACK and
-session close, and that the already-full 64-byte read request stays identical.
-The Android debug APK remains experimental: no IR capture, configuration,
-flash, firmware or persistent device writes are attempted.
-
-
-## Harmony MH IR receiving test — v0.1.14-alpha
-
-With the Harmony 300 connected by USB to the Android phone and batteries
-installed, the earlier v0.1.13 diagnostic successfully read the complete
-289-byte `/sys/sysinfo` file, including firmware `1.4.0`, architecture
-`0x10`, and a clean 64-byte close packet.
-
-This build adds a **separate, explicitly confirmed** `Test IR receiving
-(experimental)` action under Harmony USB discovery. After the verified MH
-session handshake it attempts Concordance's transient `/ir/ir_cap` receive
-sequence for architecture 16: an open/read packet, capture acknowledgement,
-up to 10 seconds to press one button on another IR remote, followed by
-explicit STOP (0x06) and sequence CLOSE (0x07) packets. The STOP/CLOSE
-cleanup runs even when receiving fails after a confirmed open. All OUT
-reports are 64-byte zero-padded HID messages.
-
-The first version is **diagnostic only**. It reports packets, unprocessed
-timing words and an estimated carrier frequency. It deliberately does not
-store, transmit, replay, export, or reprogram any captured command. The
-receiver listens only for a single press and caps the duration and number
-of IR packets. No firmware, flash, configuration, or persistent writes are
-attempted. If a test fails, disconnect USB and briefly remove/reinstall
-the batteries before trying again; avoid repeated rapid test attempts.
-
-This new functionality is independent of the existing **Read Harmony identity**
-action, which remains available and unchanged.
-
-
-## Longer bounded Harmony IR receiving diagnostic — v0.1.15-alpha
-
-The v0.1.14-alpha hardware test successfully captured an estimated **38,173 Hz**
-carrier and 33 raw IR timing words from another remote. The capture stopped at
-the prototype's 16-report cap without seeing a capture-end marker. Because
-some incoming IR reports can contain no additional timing words, that cap
-cannot establish whether the command waveform was complete.
-
-This release distinguishes USB IR reports **with timing data** from zero-word
-reports and extends the cap to 128 reports, with an overall 15-second deadline.
-After receiving timing data, 24 consecutive empty reports also end listening.
-No automatic USB command retries are sent. The diagnostic records exactly
-why listening stopped, elapsed time, data/empty report counts, and up to 128
-raw timing words. It explicitly labels timing capture as unverified when no
-end marker is seen.
-
-The start, ACK, STOP and CLOSE packets remain unchanged; STOP/CLOSE are always
-attempted after opening the transient IR receive session. As before,
-no captured command is saved, replayed, exported or sent to the Harmony's
-persistent storage.
-
-
-## First repeat boundary and verified IR session close — v0.1.16-alpha
-
-The v0.1.15-alpha hardware trace captured 128/128 IR reports in ~2.3
-seconds, yielding 257 raw timing words at about **38,192 Hz**. The raw
-timing output includes repeated header patterns `4006, 7995` preceded
-by ~8,800 microsecond gaps. This suggests repeated copies of a button
-transmission, possibly because the source remote's button remained held.
-
-The IR receive diagnostic now uses a **conservative repeat-frame hint**:
-it identifies the first reappearance of the leading header burst/period
-after a long gap and stops gathering raw timing words at that boundary.
-This is not proof of a complete signal and is never automatically saved
-as a reusable IR command. If no repeat boundary appears, the 128-report
-and 15-second limits still apply.
-
-The cleanup now separately sends zero-padded 64-byte STOP and CLOSE OUT
-commands and performs bounded IN draining for each. IR data reports
-(`90 ..`) no longer count as STOP acknowledgement, and the IR end marker
-(`F0 ..`) no longer counts as a verified CLOSE reply. The app looks for
-the end marker after STOP and for the expected `FF 07 83 ..` reply
-after CLOSE, logging how many stale packets were discarded. Both cleanup
-phases have finite time/report limits.
-
-To test, use a **quick tap and release** on the source remote pointed at
-the Harmony's receiver. Avoid holding the button down. No saved remote,
-flash or firmware is modified; this remains a diagnostic capture, not
-a Pronto Hex export feature.
-
-
-## Duplicate stage-one MH handshake reply — v0.1.17-alpha
-
-A v0.1.16 IR test stopped *before activating the receiver* because
-the response to the documented FF 00 02 session continuation was
-FF FF 81 00 81 (a repeat of the previously seen first-stage response),
-rather than the expected FF 00 82 00 7D.
-
-Version 0.1.17 preserves **all existing USB OUT commands**. Only when
-a complete continuation exchange returns that exact stage-one duplicate,
-the app checks **one additional incoming 64-byte USB report** within the
-original 4-second deadline. It does not resend the command and never
-starts an IR capture unless the extra report matches the known stage-two
-response. Unexpected replies and timeouts still fail closed.
-
-The user interface now displays "Connecting to Harmony..." during the
-MH handshake and shows a prominent READY prompt/Toast *only after* the
-`/ir/ir_cap` receiver ACK succeeds. Tap and release the button on the
-other infrared remote when that READY prompt appears, not before.
-The 10-second window applies to the first IR receive report and is not
-available when the initial MH handshake fails.
-
-No configuration/firmware writes, automatic reprogramming or saving/
-exporting of captured commands. Disconnect the Harmony's USB and briefly
-remove/reinstall batteries if stale replies persist across tests.
-
-
-## Experimental Pronto Hex candidate — v0.1.18-alpha
-
-The v0.1.17-alpha test successfully collected a 57-word sample on the
-Harmony 300: ~38,183 Hz, a probable repeat boundary at word 54, and a
-verified IR STOP end marker and CLOSE response. The raw word stream
-contains a complete-looking first frame before the repeated leading burst.
-
-The app now optionally **previews a one-shot raw Pronto Hex (0000) code**
-in the capture report only when the probable repeat frame boundary is
-found and all marks/spaces are structurally valid. It takes only the first
-frame before the repeat, converts the first mark+carrier-cycle count into
-a Pronto frequency divider, turns each MH mark+total-period pair into
-individual mark and space durations, and rounds the durations to carrier
-cycle counts. The resulting code is validated by the app's existing
-`IrplusCodec.decodePronto` before it appears in the report.
-
-**This is an unverified candidate, not an automatically saved remote
-command.** The capture results still require real device replay testing
-before the signal is treated as reliable. Nothing is automatically
-transmitted, written to Harmony, installed in its configuration, or
-added to the IR Remote Studio library. Users can copy the diagnostic
-text containing the candidate code.
-
-Tests use the actual 57-word sample (26 timing pairs, Pronto frequency
-divider 006D), and reject malformed frames, missing repeat boundaries,
-and implausible carrier frequencies. The USB handshake, IR receiver
-start/ACK, STOP and CLOSE implementation are unchanged.
-
-
-## Learn & Library workflow — v0.2.0-alpha
-
-The first successful Harmony 300 capture was decoded into a working Pronto
-command and replayed successfully from the OnePlus 15. With this proof of
-capture-to-replay, the app now offers a usable, opt-in **Learn IR Button**
-workflow on its home screen.
-
-1. Attach a supported Harmony 300/350 over USB and grant Android USB
-   permission via **Harmony USB Connection & Diagnostics**.
-2. Tap **Learn IR Button**, wait for the confirmed READY indication, then
-   briefly press and release a button on another IR remote.
-3. The app offers a validated raw Pronto 0000 candidate only when it
-   recognizes a probable first frame *and* verifies STOP/DONE and
-   CLOSE acknowledgments from the Harmony. Incomplete captures remain
-   diagnostics only and cannot be saved via the learning flow.
-4. **Test IR on target device** sends a single one-shot signal with
-   Android's public ConsumerIrManager API, where available. This action
-   is manual and does not alter the Harmony.
-5. Name the new button, select an existing remote or create a new one,
-   and tap **Save button** to persist the learned command on the
-   phone's existing private `remotes.json` library.
-6. Long-press a remote heading to rename/delete a remote, or long-press
-   a button to rename/delete it; changes are subject to confirmation.
-7. Use the existing **Export Remote** button to write an .irplus backup
-   with the newly learned buttons; import remains supported.
-
-This Android release includes a refreshed dark interface, a prominent
-Learn button and new-remote action, accessible READY indication,
-capture preview with test/copy/report controls, and rollback if a local
-library save fails. The entire existing Harmony identity and advanced
-USB diagnostic section is preserved.
-
-**Safety:** learning uses only the transient Harmony `/ir/ir_cap` read
-receiver; NO commands to modify its existing stored button mapping,
-flash, firmware or persistent configuration. Code can be saved to the
-phone only after successful protocol cleanup and explicit user action.
-Replay requires a separate manual test or tapping a saved button.
-
-
-## Save & Learn Another — v0.2.1-alpha
-
-The verified capture preview now includes a prominent
-**Save & Learn Another Button** action. It uses the exact same
-local-library validation/persistence path as **Save button**. If the
-button name or remote name is missing, duplicates an existing name, or
-fails to save, the preview stays open and no new USB session starts.
-After a successful save, it closes the preview and launches the normal
-user-confirmed Harmony IR learning flow for the next button, while the
-saved remote remains selected. No automatic IR capture, transmission,
-firmware write or persistent Harmony configuration change.
+On Android, AlertDialog does not display its `setItems` list if `setMessage` is also used. In the previous alpha, **U1 Backups / Restore** showed only its explanation and **Close**, hiding all saved files. This build restores the selectable list and fixes the same issue in the **Restore into Android library** destination picker. If no backup files exist, the list explicitly says so. Nothing in the tested Bluetooth connection, learning, preflight backup, or IR export engines changed.

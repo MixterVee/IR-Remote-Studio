@@ -2,6 +2,16 @@ plugins {
     id 'com.android.application'
 }
 
+// Reuse ONE private APK signing key across GitHub Actions runs.
+// Without these environment variables, local Android Studio builds still
+// use their own developer debug key. Public CI must fail rather than
+// distribute another differently signed artifact.
+def stableKeystorePath = System.getenv('IR_STUDIO_ANDROID_KEYSTORE_PATH')
+def stableKeystorePassword = System.getenv('IR_STUDIO_ANDROID_KEYSTORE_PASSWORD')
+def stableSigningConfigured =
+        stableKeystorePath != null && !stableKeystorePath.isBlank()
+        && stableKeystorePassword != null && !stableKeystorePassword.isBlank()
+
 android {
     namespace 'com.mixtervee.irstudio'
     compileSdk 35
@@ -10,8 +20,33 @@ android {
         applicationId 'com.mixtervee.irstudio'
         minSdk 26
         targetSdk 34
-        versionCode 21
-        versionName '0.2.1-alpha'
+        versionCode 25
+        versionName '0.4.2-alpha'
+    }
+
+    // This dedicated test signing key must never be committed to Git.
+    signingConfigs {
+        persistentDebug {
+            if (stableSigningConfigured) {
+                storeFile file(stableKeystorePath)
+                storePassword stableKeystorePassword
+                keyAlias 'irstudio'
+                keyPassword stableKeystorePassword
+                storeType 'PKCS12'
+            }
+        }
+    }
+
+    buildTypes {
+        debug {
+            if (stableSigningConfigured) {
+                signingConfig signingConfigs.persistentDebug
+            }
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
     }
 
     compileOptions {
