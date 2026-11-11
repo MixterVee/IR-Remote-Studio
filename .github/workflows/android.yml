@@ -12,6 +12,12 @@ on:
       - '.github/workflows/android.yml'
   workflow_dispatch:
 
+# Keep only the newest run for each PR + workflow when making successive
+# small fixes. Android and Windows have separate groups.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
