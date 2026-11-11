@@ -625,11 +625,86 @@ public class MainActivity extends Activity {
         return new File(getFilesDir(), "U1-Learn-Backups");
     }
 
+    private void selectLearner(int learner) {
+        if (u1Ble != null && u1Ble.isLearning()
+                || learnButton != null && !learnButton.isEnabled()) {
+            toast("Finish the current IR capture before changing learners.");
+            return;
+        }
+        selectedLearner = LearnerSource.normalize(learner);
+        getPreferences(MODE_PRIVATE).edit()
+                .putInt("selected_learner", selectedLearner).apply();
+        updateLearnerPanel();
+        setStatus(selectedLearner == LearnerSource.SOFABATON_U1
+                ? "SofaBaton U1 selected — Bluetooth learning."
+                : "Harmony 300/350 selected — USB learning.");
+    }
+
+    private void openSelectedLearner() {
+        if (selectedLearner == LearnerSource.HARMONY_USB) {
+            UsbHarmonyInspector.show(this);
+            // USB permission may be granted from the Android system dialog.
+            if (u1ConnectionButton != null) {
+                u1ConnectionButton.postDelayed(this::updateLearnerPanel, 1200);
+            }
+        } else {
+            openU1Connection();
+        }
+    }
+
+    private String harmonyUsbStatus() {
+        UsbManager usb = (UsbManager) getSystemService(USB_SERVICE);
+        if (usb == null) return "HARMONY USB — Android USB service unavailable";
+        try {
+            for (UsbDevice device : usb.getDeviceList().values()) {
+                if (HarmonyUsbIds.isHarmony300Or350(device.getVendorId(),
+                        device.getProductId())) {
+                    return usb.hasPermission(device)
+                            ? "USB ACCESS GRANTED — Ready to learn"
+                            : "HARMONY DETECTED — Tap USB Setup for permission";
+                }
+            }
+        } catch (RuntimeException failure) {
+            return "HARMONY USB — Reconnect your USB cable";
+        }
+        return "NOT CONNECTED — Plug in Harmony 300/350";
+    }
+
+    private void updateLearnerPanel() {
+        boolean u1Selected = selectedLearner == LearnerSource.SOFABATON_U1;
+        boolean connected = u1Ble != null && u1Ble.isConnected();
+        if (u1SourceButton != null) {
+            u1SourceButton.setSelected(u1Selected);
+            u1SourceButton.setBackground(background(
+                    u1Selected ? TEAL : Color.rgb(44, 61, 88), 9));
+        }
+        if (harmonySourceButton != null) {
+            harmonySourceButton.setSelected(!u1Selected);
+            harmonySourceButton.setBackground(background(
+                    u1Selected ? Color.rgb(44, 61, 88) : TEAL, 9));
+        }
+        if (u1ConnectionButton != null) {
+            u1ConnectionButton.setText(LearnerSource.connectionLabel(
+                    selectedLearner, connected));
+        }
+        if (u1Status != null) {
+            u1Status.setText(u1Selected ? lastU1Status : harmonyUsbStatus());
+            int color = u1Selected
+                    ? (connected ? TEAL : MUTED)
+                    : (harmonyUsbStatus().startsWith("USB ACCESS GRANTED")
+                            ? TEAL : MUTED);
+            u1Status.setTextColor(color);
+        }
+        if (learnButton != null && learnButton.isEnabled()
+                && (u1Ble == null || !u1Ble.isLearning())) {
+            learnButton.setText(LearnerSource.learnLabel(selectedLearner));
+        }
+    }
+
     private void restoreLearnButton() {
         if (learnButton == null) return;
         learnButton.setEnabled(true);
-        learnButton.setText(u1Ble != null && u1Ble.isConnected()
-                ? "◉  Learn IR • U1 Bluetooth" : "◉  Learn IR Button");
+        updateLearnerPanel();
     }
 
     private boolean hasU1Permissions() {
@@ -676,8 +751,7 @@ public class MainActivity extends Activity {
                     .setPositiveButton("Keep connected", null)
                     .setNegativeButton("Disconnect", (d, w) -> {
                         u1Ble.disconnect();
-                        u1Status.setText("NOT CONNECTED — Scan again");
-                        u1ConnectionButton.setText("Connect U1");
+                        lastU1Status = "NOT CONNECTED — Scan again";
                         restoreLearnButton();
                     }).show();
         } else {
