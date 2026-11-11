@@ -226,22 +226,44 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.WRAP_CONTENT);
         connectionParams.setMargins(0, dp(11), 0, dp(9));
         root.addView(connection, connectionParams);
+        connection.addView(text("SELECT IR LEARNER", 11, MUTED, true));
+        // Two equally visible choices instead of hiding Harmony in Tools.
+        LinearLayout sourceRow = new LinearLayout(this);
+        sourceRow.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams sourceParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(44));
+        sourceParams.setMargins(0, dp(7), 0, dp(7));
+        connection.addView(sourceRow, sourceParams);
+        u1SourceButton = actionButton("SofaBaton U1", TEAL);
+        u1SourceButton.setTextSize(12);
+        u1SourceButton.setOnClickListener(v ->
+                selectLearner(LearnerSource.SOFABATON_U1));
+        sourceRow.addView(u1SourceButton, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        harmonySourceButton = actionButton("Harmony USB", Color.rgb(44, 61, 88));
+        harmonySourceButton.setTextSize(12);
+        harmonySourceButton.setOnClickListener(v ->
+                selectLearner(LearnerSource.HARMONY_USB));
+        LinearLayout.LayoutParams harmonyParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
+        harmonyParams.setMargins(dp(7), 0, 0, 0);
+        sourceRow.addView(harmonySourceButton, harmonyParams);
+
         LinearLayout connectionRow = new LinearLayout(this);
         connectionRow.setOrientation(LinearLayout.HORIZONTAL);
         connectionRow.setGravity(Gravity.CENTER_VERTICAL);
-        connectionRow.addView(text("SOFABATON U1", 13, WHITE, true),
-                new LinearLayout.LayoutParams(0,
-                        ViewGroup.LayoutParams.WRAP_CONTENT, 1));
-        u1ConnectionButton = actionButton("Connect U1", TEAL);
-        u1ConnectionButton.setTextSize(13);
-        u1ConnectionButton.setOnClickListener(v -> openU1Connection());
-        connectionRow.addView(u1ConnectionButton,
-                new LinearLayout.LayoutParams(dp(122), dp(42)));
-        connection.addView(connectionRow);
         u1Status = text("NOT CONNECTED — Tap Connect U1", 12, MUTED, false);
-        u1Status.setPadding(dp(1), dp(5), dp(1), 0);
-        u1Status.setMaxLines(2);
-        connection.addView(u1Status);
+        u1Status.setMaxLines(3);
+        connectionRow.addView(u1Status, new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1));
+        u1ConnectionButton = actionButton("Connect U1", Color.rgb(34, 93, 131));
+        u1ConnectionButton.setTextSize(12);
+        u1ConnectionButton.setOnClickListener(v -> openSelectedLearner());
+        LinearLayout.LayoutParams connectParams = new LinearLayout.LayoutParams(
+                dp(117), dp(41));
+        connectParams.setMargins(dp(7), 0, 0, 0);
+        connectionRow.addView(u1ConnectionButton, connectParams);
+        connection.addView(connectionRow);
 
         learnButton = actionButton("◉  Learn IR Button", TEAL);
         learnButton.setOnClickListener(v -> startLearning());
@@ -320,6 +342,7 @@ public class MainActivity extends Activity {
         root.addView(remoteLayout, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
+        updateLearnerPanel();
     }
 
     private void showToolsMenu() {
