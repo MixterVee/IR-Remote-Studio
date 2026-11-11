@@ -22,6 +22,10 @@ from irstudio.sofabaton_ble_ui import SofaBatonBleDialog
 from irstudio.sofabaton_u1_session import U1Session
 
 
+# Visible Bluetooth capture choice. Never pass to the USB-only receiver registry.
+U1_RECEIVER = "SofaBaton U1 — Bluetooth"
+
+
 class Studio(tk.Tk):
     def __init__(self):
         super().__init__()
@@ -111,7 +115,7 @@ class Studio(tk.Tk):
         ttk.Label(connection_top, text="Receiver:").pack(side="left", padx=(0, 8))
         self.receiver_picker = ttk.Combobox(
             connection_top, textvariable=self.receiver_var,
-            values=BACKENDS, state="readonly", width=39)
+            values=(U1_RECEIVER, *BACKENDS), state="readonly", width=39)
         self.receiver_picker.pack(side="left", padx=(0, 12))
         self.receiver_picker.bind("<<ComboboxSelected>>", self._receiver_changed)
         self.probe_btn = ttk.Button(
@@ -335,18 +339,16 @@ class Studio(tk.Tk):
         snapshot = self.u1_session.snapshot()
         new_state = (snapshot.state, snapshot.name, snapshot.address, snapshot.detail)
         if new_state != self._u1_last_status:
+            was_connected = bool(self._u1_last_status and
+                                 self._u1_last_status[0] == "CONNECTED")
             self._u1_last_status = new_state
-            if snapshot.connected and self.receiver_var.get() == AUTO:
-                self.capture_btn.configure(
-                    text="Capture selected button (SofaBaton U1)")
-                self.aim_var.set(
-                    "When the U1 displays Learning, aim the original IR "
-                    "remote at it and press and release one button.")
-            else:
-                self.capture_btn.configure(text="Capture selected button (USB)")
-                self.aim_var.set(
-                    "USB: aim the original remote at the learning receiver, "
-                    "about 5–10 cm away.")
+            # When a verified U1 comes online, make it the actual selected
+            # capture source. Previously the green connection banner hid the
+            # fact that the dropdown still pointed at Harmony, causing the
+            # next Capture to attempt a nonexistent USB HID receiver.
+            if snapshot.connected and not was_connected and not self.running:
+                self.receiver_var.set(U1_RECEIVER)
+            self._update_capture_source_ui()
             self.u1_state_var.set(
                 f"CONNECTED — READY ({snapshot.name})" if snapshot.connected
                 else "BLUETOOTH — CONNECTING..." if snapshot.state == "CONNECTING"
@@ -803,19 +805,41 @@ class Studio(tk.Tk):
         self._usb_connection_detail = detail
         self._render_connection_status()
 
+    def _u1_capture_selected(self) -> bool:
+        """Bluetooth is explicit, or is selected by Auto when U1 is ready."""
+        receiver = self.receiver_var.get()
+        return receiver == U1_RECEIVER or (
+            receiver == AUTO and self.u1_session.snapshot().connected)
+
+    def _update_capture_source_ui(self) -> None:
+        """Capture, prompts and connection action always agree on hardware."""
+        u1_selected = self._u1_capture_selected()
+        self.capture_btn.configure(
+            text=("Capture selected button (SofaBaton U1)" if u1_selected
+                  else "Capture selected button (USB)"))
+        self.probe_btn.configure(
+            text="Connect U1" if self.receiver_var.get() == U1_RECEIVER
+            else "Connect USB")
+        self.aim_var.set(
+            "When the U1 displays Learning, aim the original IR remote "
+            "at it and press and release one button."
+            if u1_selected else
+            "USB: aim the original remote at the learning receiver, "
+            "about 5–10 cm away.")
+
     def _receiver_changed(self, event=None) -> None:
-        """Changing receiver invalidates any previous handshake result."""
-        snap = self.u1_session.snapshot()
-        if snap.connected and self.receiver_var.get() == AUTO:
-            self.capture_btn.configure(text="Capture selected button (SofaBaton U1)")
-        else:
-            self.capture_btn.configure(text="Capture selected button (USB)")
+        """Honor explicit USB selection, but never confuse it with active BLE."""
+        self._update_capture_source_ui()
         if self.running or self._scan_in_progress:
             return
         self.connected_model = None
-        self._set_connection(
-            "not-connected", "Receiver selection changed. Click Connect USB "
-            "to verify the selected hardware before learning.")
+        if self.receiver_var.get() == U1_RECEIVER:
+            self._set_connection("not-connected",
+                                 "Use Connect U1 if not already connected.")
+        else:
+            self._set_connection(
+                "not-connected", "Receiver selection changed. Click Connect USB "
+                "to verify the selected hardware before learning.")
 
     def _capture_ready(self, operation_id: int) -> None:
         # Ignore queued READY callbacks that arrived after capture completed.
@@ -910,6 +934,14 @@ class Studio(tk.Tk):
     def probe(self):
         if self._scan_in_progress:
             return
+        if self.receiver_var.get() == U1_RECEIVER:
+            if self.u1_session.snapshot().connected:
+                self.status_var.set(
+                    "SofaBaton U1 is connected and ready. Select a button "
+                    "and click Capture to learn over Bluetooth.")
+            else:
+                self.open_sofabaton_ble()
+            return
         def done(result, error):
             self._end_background()
             if error:
@@ -933,10 +965,17 @@ class Studio(tk.Tk):
         self._background("Probe", done)
 
     def capture(self):
-        # A connected U1 takes priority only in Auto receiver mode; a USB
-        # backend explicitly selected by the user is never overridden.
-        if (self.u1_session.snapshot().connected
-                and self.receiver_var.get() == AUTO):
+        # Explicit Bluetooth choice must NEVER fall through to Harmony USB.
+        # Auto uses Bluetooth if it has a verified U1 session.
+        if self._u1_capture_selected():
+            if not self.u1_session.snapshot().connected:
+                self.status_var.set(
+                    "SofaBaton U1 is disconnected. Click Connect U1 before capture.")
+                return messagebox.showwarning(
+                    "Connect SofaBaton U1",
+                    "The SofaBaton U1 is not connected. Select Connect U1 "
+                    "and wait for the green CONNECTED status before capturing.",
+                    parent=self)
             return self._capture_ble_main()
         if self._scan_in_progress or self.running:
             return
