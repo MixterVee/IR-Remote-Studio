@@ -1,4 +1,4 @@
-"""U1 Bluetooth connection, optional OS pairing, diagnostics and stored IR."""
+"""SofaBaton U1 connection and optional stored-code troubleshooting UI."""
 from __future__ import annotations
 
 import threading
@@ -12,16 +12,19 @@ from irstudio import sofabaton_u1_read as u1
 class SofaBatonBleDialog(tk.Toplevel):
     def __init__(self, parent, *, auto_scan=True):
         super().__init__(parent)
-        self.title("SofaBaton U1 — Bluetooth")
-        self.minsize(710, 430)
-        self.geometry("850x590")
+        self.title("Connect SofaBaton U1")
+        self.minsize(710, 420)
+        self.geometry("850x410")
         self._busy = False
         self._devices: list[ble.BleEntry] = []
         self._capture: u1.IrRead | None = None
         self.slot_var = tk.StringVar(value="8")
         self.pair_var = tk.BooleanVar(value=False)
-        self.link_var = tk.StringVar(value="NOT CONNECTED")
+        self.link_var = tk.StringVar(value="SEARCHING FOR SOFABATON U1...")
+        self._scanning = bool(auto_scan)
+        self._scan_completed = False
         self._last_link = None
+        self._poll_after = None
         self.advanced_open = False
         self.status_var = tk.StringVar(
             value="Searching for your SofaBaton U1 automatically...")
@@ -42,7 +45,7 @@ class SofaBatonBleDialog(tk.Toplevel):
 
         self.link_label = ttk.Label(
             outer, textvariable=self.link_var,
-            foreground="#bc2525", font=("Segoe UI Semibold", 12))
+            foreground="#9a6300", font=("Segoe UI Semibold", 12))
         self.link_label.pack(anchor="w")
         toolbar = ttk.Frame(outer)
         toolbar.pack(fill="x", pady=(11, 6))
@@ -52,7 +55,7 @@ class SofaBatonBleDialog(tk.Toplevel):
         self.connect_button = ttk.Button(
             toolbar, text="Connect U1", command=self.connect_u1,
             state="disabled")
-        self.connect_button.pack(side="left", padx=(9, 0), ipadx=11, ipady=5)
+        # Manual Connect is hidden until a scan needs user selection.
         self.disconnect_button = ttk.Button(
             toolbar, text="Disconnect", command=self.disconnect_u1,
             state="disabled")
@@ -61,40 +64,50 @@ class SofaBatonBleDialog(tk.Toplevel):
             outer, textvariable=self.status_var, wraplength=790,
             foreground="#536277").pack(anchor="w", pady=(6, 8))
 
-        ttk.Label(outer, text="Bluetooth devices").pack(anchor="w")
+        # The routine path displays only progress and connection state.
+        # Keep the original Listbox for existing v0.3.3 capture worker
+        # selection; show it ONLY when automatic connection is ambiguous.
+        self.manual_frame = ttk.Frame(outer)
+        self.manual_hint = ttk.Label(
+            self.manual_frame, text="Select your SofaBaton U1:",
+            foreground="#536277")
+        self.manual_hint.pack(anchor="w")
         self.device_list = tk.Listbox(
-            outer, height=5, exportselection=False, activestyle="none")
-        self.device_list.pack(fill="x", pady=(4, 12))
+            self.manual_frame, height=3, exportselection=False,
+            activestyle="none")
+        self.device_list.pack(fill="x", pady=(4, 6))
         self.device_list.bind("<<ListboxSelect>>", self._select_device)
+        # Connect U1 remains in its original toolbar parent and is
+        # visible only when manual selection becomes necessary.
 
         ttk.Label(
-            outer, text="Once connected, learn IR from the main window: "
-                        "select a device and button, then click Capture. "
-                        "Saving and exporting also happen there.",
-            foreground="#147b3b", wraplength=770, justify="left"
-        ).pack(anchor="w", pady=(0, 12))
+            outer,
+            text="After connecting, return to the main window to learn IR "
+                 "commands. The U1 stays connected while you work.",
+            foreground="#315c88", wraplength=790,
+            justify="left").pack(anchor="w", pady=(0, 11))
 
         self.advanced_toggle_button = ttk.Button(
-            outer, text="Advanced  ▸", command=self.toggle_advanced)
+            outer, text="Troubleshooting  ▸", command=self.toggle_advanced)
         self.advanced_toggle_button.pack(anchor="w")
         # Never show slots or low-level diagnostics in the normal workflow.
         self.advanced_panel = ttk.LabelFrame(
-            outer, text="Advanced — stored IR and diagnostics", padding=10)
+            outer, text="Troubleshooting — stored IR and Bluetooth log", padding=10)
 
         read_row = ttk.Frame(self.advanced_panel)
         read_row.pack(fill="x", pady=(0, 7))
-        ttk.Label(read_row, text="Existing U1 IR slot:").pack(side="left")
+        ttk.Label(read_row, text="Stored command slot:").pack(side="left")
         self.slot_combo = ttk.Combobox(
             read_row, textvariable=self.slot_var,
             values=[str(i) for i in u1.ALLOWED_SLOTS],
             state="readonly", width=4)
         self.slot_combo.pack(side="left", padx=(8, 12))
         self.read_button = ttk.Button(
-            read_row, text="Read stored IR (test)",
+            read_row, text="Read stored code",
             command=self.read_ir, state="disabled")
         self.read_button.pack(side="left", ipadx=7, ipady=4)
         self.save_capture_button = ttk.Button(
-            read_row, text="Save to selected button",
+            read_row, text="Save to library button",
             command=self.save_capture, state="disabled")
         self.save_capture_button.pack(
             side="left", padx=(10, 0), ipadx=7, ipady=4)
@@ -102,7 +115,7 @@ class SofaBatonBleDialog(tk.Toplevel):
         tools_row = ttk.Frame(self.advanced_panel)
         tools_row.pack(fill="x", pady=(0, 5))
         self.inspect_button = ttk.Button(
-            tools_row, text="Inspect services",
+            tools_row, text="Inspect Bluetooth",
             command=self.inspect, state="disabled")
         self.inspect_button.pack(side="left", ipadx=6)
         self.pair_check = ttk.Checkbutton(
@@ -116,7 +129,7 @@ class SofaBatonBleDialog(tk.Toplevel):
             tools_row, text="Copy report", command=self.copy).pack(
                 side="right", padx=(0, 8))
         ttk.Label(
-            self.advanced_panel, text="Bluetooth diagnostic report:",
+            self.advanced_panel, text="Bluetooth activity log (optional):",
             foreground="#536277").pack(anchor="w", pady=(5, 0))
         report_frame = ttk.Frame(self.advanced_panel)
         report_frame.pack(fill="both", expand=True, pady=(4, 0))
@@ -128,21 +141,8 @@ class SofaBatonBleDialog(tk.Toplevel):
         scrollbar.pack(side="right", fill="y")
         self.report.configure(yscrollcommand=scrollbar.set)
         self._append(
-            "SofaBaton U1 Bluetooth — diagnostics\n"
-            "1. Fit batteries, close the SofaBaton phone app, put the U1 "
-            "in app pairing mode (- and E).\n"
-            "2. Bluetooth scan starts automatically when opened. The app\n"
-            "   auto-connects one positively identified SB<serial> U1.\n"
-            "3. Connection verifies U1 service and identity before main\n"
-            "   window displays green CONNECTED. No extra click needed.\n"
-            "4. Advanced: optionally read a stored IR code (slot 1–8), "
-            "then Save to selected button in the main library.\n"
-            "5. New IR learning uses Capture on the main screen, with "
-            "Save, Save & Learn another and Export there too.\n"
-            "6. The app automatically backs up the previous U1 IR command "
-            "before learning. A local backup cannot restore U1 programming.\n"
-            "7. Windows pairing is optional; enable only if normal "
-            "Bluetooth connection fails.\n\n"
+            "SofaBaton U1 connection log. Learning happens in "
+            "the main Studio window.\n\n"
         )
         self.transient(parent)
         # A live session survives closing this popup and can be reused here.
@@ -152,12 +152,12 @@ class SofaBatonBleDialog(tk.Toplevel):
                 name=snap.name, address=snap.address, rssi=None,
                 advertised_services=(u1.SVC,), likely_sofabaton=True)]
             self.device_list.insert(
-                "end", f"{snap.name} — CONNECTED — {snap.address}")
+                "end", f"{snap.name} — CONNECTED")
             self.device_list.selection_set(0)
         self._poll_connection()
         # Schedule after construction so controls, lists and callbacks exist.
         # Do not scan when reopening an already connected session: users may
-        # be opening Advanced to read an existing stored IR command.
+        # be opening Troubleshooting to read an existing stored IR command.
         if auto_scan and not snap.connected:
             self.after(250, self._auto_scan_on_open)
 
@@ -173,10 +173,10 @@ class SofaBatonBleDialog(tk.Toplevel):
         self.advanced_open = not self.advanced_open
         # Free vertical space for advanced controls on smaller laptop displays.
         # The device list and diagnostic report retain their own scrolling.
-        self.device_list.configure(height=2 if self.advanced_open else 5)
+        self.device_list.configure(height=2 if self.advanced_open else 3)
         self.report.configure(height=2 if self.advanced_open else 6)
         if self.advanced_open:
-            self.advanced_toggle_button.configure(text="Advanced  ▾")
+            self.advanced_toggle_button.configure(text="Troubleshooting  ▾")
             self.advanced_panel.pack(fill="both", expand=True, pady=(9, 0))
             # Grow within the display, leaving taskbar clearance.
             self.update_idletasks()
@@ -186,8 +186,8 @@ class SofaBatonBleDialog(tk.Toplevel):
                 self.geometry(f"{self.winfo_width()}x{target}")
         else:
             self.advanced_panel.pack_forget()
-            self.advanced_toggle_button.configure(text="Advanced  ▸")
-            self.geometry(f"{self.winfo_width()}x590")
+            self.advanced_toggle_button.configure(text="Troubleshooting  ▸")
+            self.geometry(f"{self.winfo_width()}x410")
 
     def _poll_connection(self):
         if not self.winfo_exists():
@@ -197,16 +197,34 @@ class SofaBatonBleDialog(tk.Toplevel):
         if state != self._last_link:
             self._last_link = state
             self.link_var.set(
-                f"CONNECTED — READY: {snap.name}" if snap.connected
-                else "CONNECTING..." if snap.state == "CONNECTING"
-                else "CONNECTION LOST — reconnect" if snap.state == "LOST"
-                else "CONNECTION FAILED — retry" if snap.state == "FAILED"
-                else "NOT CONNECTED")
+                f"CONNECTED — {snap.name}" if snap.connected
+                else "CONNECTING TO SOFABATON U1..." if snap.state == "CONNECTING"
+                else "CONNECTION LOST — Scan again" if snap.state == "LOST"
+                else "CONNECTION FAILED — Scan again" if snap.state == "FAILED"
+                else "SEARCHING FOR SOFABATON U1..." if self._scanning
+                else "NO U1 FOUND — Scan again" if self._scan_completed
+                else "SEARCHING FOR SOFABATON U1...")
             self.link_label.configure(foreground=(
                 "#147b3b" if snap.connected else
                 "#9a6300" if snap.state == "CONNECTING" else "#bc2525"))
             self._select_device()
-        self.after(450, self._poll_connection)
+        if self._poll_after is not None:
+            try:
+                self.after_cancel(self._poll_after)
+            except tk.TclError:
+                pass
+        self._poll_after = self.after(450, self._poll_connection)
+
+    def destroy(self):
+        """Stop connection polling before removing Tk variables/widgets."""
+        callback_id = self._poll_after
+        self._poll_after = None
+        if callback_id is not None:
+            try:
+                self.after_cancel(callback_id)
+            except tk.TclError:
+                pass
+        super().destroy()
 
     def _append(self, content: str):
         if self.winfo_exists():
@@ -231,7 +249,7 @@ class SofaBatonBleDialog(tk.Toplevel):
             state="normal" if self._capture is not None and not self._busy
             else "disabled")
 
-    def _run(self, name, task, complete):
+    def _run(self, name, task, complete, on_error=None):
         if self._busy:
             return
         self._busy = True
@@ -259,18 +277,27 @@ class SofaBatonBleDialog(tk.Toplevel):
                 self._select_device()
                 if error is not None:
                     if name == "Connecting U1":
+                        if self._devices:
+                            self.manual_frame.pack(fill="x", pady=(4, 10))
+                            self.connect_button.pack(
+                                side="left", padx=(9, 0), ipadx=11, ipady=5)
                         self.status_var.set(
                             "Could not connect to the U1. Keep it in Pairing "
                             "mode, check the batteries, and select Scan again. "
-                            "For Windows pairing, expand Advanced. "
+                            "Open Troubleshooting if Windows pairing is needed. "
                             f"Details: {error[:160]}")
                     elif name == "Scanning":
+                        self._scanning = False
+                        self._scan_completed = True
+                        self.link_var.set("BLUETOOTH SEARCH FAILED")
                         self.status_var.set(
                             "Bluetooth scan failed. Check Windows Bluetooth "
                             "and press Scan again. " + error[:140])
                     else:
                         self.status_var.set(name + " failed. See report.")
                     self._append(name + " FAILED: " + error + "\n")
+                    if on_error is not None:
+                        on_error(error)
                 else:
                     complete(result)
             try:
@@ -285,18 +312,29 @@ class SofaBatonBleDialog(tk.Toplevel):
         self.save_capture_button.configure(state="disabled")
         self._devices = []
         self.device_list.delete(0, "end")
+        self.manual_frame.pack_forget()
+        self.connect_button.pack_forget()
+        self._scanning = True
+        self._scan_completed = False
+        self.link_var.set("SEARCHING FOR SOFABATON U1...")
+        self.link_label.configure(foreground="#9a6300")
+        self.status_var.set("Scanning for your U1...")
         self._append("Scanning BLE advertisements (7 seconds)...\n")
 
         def complete(devices):
-            self._devices = devices
-            for d in devices:
-                quality = f"{d.rssi} dBm" if d.rssi is not None else "RSSI unknown"
-                candidate = "  [Possible SofaBaton]" if d.likely_sofabaton else ""
-                self.device_list.insert(
-                    "end", f"{d.name} — {quality} — {d.address}{candidate}")
+            self._scanning = False
+            self._scan_completed = True
+            # Do not expose nearby phones, TVs, watches or MAC addresses.
+            # Only identified U1 advertisements can be manually selected.
+            self._devices = [d for d in devices
+                             if d.likely_sofabaton or
+                             any(s.lower() == u1.SVC
+                                 for s in d.advertised_services)]
+            for d in self._devices:
+                self.device_list.insert("end", d.name)
             candidate = ble.auto_connect_candidate(devices)
             if candidate is not None:
-                index = devices.index(candidate)
+                index = self._devices.index(candidate)
                 self.device_list.selection_clear(0, "end")
                 self.device_list.selection_set(index)
                 self.device_list.see(index)
@@ -304,26 +342,34 @@ class SofaBatonBleDialog(tk.Toplevel):
                 self._append(
                     f"Found U1 {candidate.name} ({candidate.address}); "
                     "connecting automatically without prompting...\n")
+                self.link_var.set("CONNECTING TO SOFABATON U1...")
                 self.status_var.set(
                     f"Found {candidate.name}. Connecting automatically...")
                 # Reuse exactly the verified, persistent BLE connection path.
                 self._connect_device(candidate, automatic=True)
             else:
+                if self._devices:
+                    self.manual_frame.pack(fill="x", pady=(4, 10))
+                    self.connect_button.pack(
+                        side="left", padx=(9, 0), ipadx=11, ipady=5)
                 sb_count = sum(
                     bool(ble.auto_connect_candidate([d])) for d in devices)
                 if sb_count > 1:
+                    self.link_var.set("MULTIPLE U1 REMOTES FOUND")
                     self.status_var.set(
                         "More than one U1 was found. Select yours and click "
                         "Connect U1; automatic selection was skipped.")
                 elif devices:
+                    self.link_var.set("NO SOFABATON U1 IDENTIFIED")
                     self.status_var.set(
-                        f"Found {len(devices)} Bluetooth devices, but no unique "
-                        "SB-prefixed U1. Keep the remote in Pairing mode and "
-                        "press Scan again, or manually select it and Connect U1.")
+                        "No matching U1 found. Put it in Pairing mode, "
+                        "then press Scan again. If a candidate appears "
+                        "below, you can connect to it manually.")
                 else:
+                    self.link_var.set("NO U1 FOUND — Scan again")
                     self.status_var.set(
-                        "No Bluetooth devices found. Check the U1 batteries, "
-                        "hold - and E until Pairing, then press Scan again.")
+                        "No U1 found. Check its batteries, hold - and E "
+                        "until Pairing, then press Scan again.")
             self._append(f"BLE scan: {len(devices)} advertising device(s).\n")
             for d in devices:
                 self._append(f"  {d.name} / {d.address} / "
@@ -425,6 +471,50 @@ class SofaBatonBleDialog(tk.Toplevel):
         self._run("Disconnecting U1",
                   self.master.u1_session.disconnect, complete)
 
+    def start_main_capture(self, on_complete, on_error):
+        """Run the exact v0.3.3 dialog worker, but report to main Studio.
+
+        Preserve the original connection, notify, preflight backup, and
+        learning implementation, including its thread scheduling.
+        No LEARN 8 prompt and no Bluetooth protocol changes.
+        """
+        if self._busy:
+            on_error("Bluetooth learning is already running.")
+            return
+        snap = self.master.u1_session.snapshot()
+        if not snap.connected:
+            on_error("Connect your verified SofaBaton U1 first.")
+            return
+        selection = self.device_list.curselection()
+        if not selection or self._devices[selection[0]].address != snap.address:
+            on_error("The selected U1 is not the active Bluetooth connection.")
+            return
+        self._capture = None
+        self.save_capture_button.configure(state="disabled")
+        self._append(
+            "Reading and backing up U1 slot 8, then using the original "
+            "v0.3.3 learning routine.\n")
+        self.status_var.set(
+            "When SofaBaton enters Learning, aim the original IR remote "
+            "and press and release the command.")
+
+        def complete(pair):
+            try:
+                self._capture = pair[0]
+                on_complete(pair)
+            finally:
+                self.destroy()
+
+        def failed(error):
+            try:
+                on_error(error)
+            finally:
+                self.destroy()
+
+        self._run("SofaBaton learning", lambda:
+                  self.master.u1_session.learn_ir_experimental(
+                      self.master.folder), complete, on_error=failed)
+
     def read_ir(self):
         """Opt-in query of IR already stored in the selected U1 slot."""
         selected = self.device_list.curselection()
@@ -448,7 +538,7 @@ class SofaBatonBleDialog(tk.Toplevel):
             "Read stored U1 infrared code?",
             f"Read the IR code already stored in slot {slot} of {device.name}?\n\n"
             "Experimental: uses the verified active Bluetooth connection "
-            "to send read-code (0x0C) only. No new learning, profile updates "
+            "to send read-code (0x0C) only. No new learning or profile updates "
             "or firmware commands are sent.\n\n"
             "Only proceed if this really is your SofaBaton U1. "
             "Disconnect the SofaBaton phone app first.",
