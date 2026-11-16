@@ -51,6 +51,7 @@ import java.util.concurrent.atomic.AtomicReference;
 public class MainActivity extends Activity {
     private static final int IMPORT_DEVICE = 1001;
     private static final int EXPORT_DEVICE = 1002;
+    private static final int EXPORT_OCRUSTAR_EXPERIMENT = 1007;
     private static final int BACKUP_LIBRARY = 1003;
     private static final int RESTORE_LIBRARY = 1004;
     private static final int EXPORT_U1_BACKUP = 1005;
@@ -358,6 +359,7 @@ public class MainActivity extends Activity {
         final String[] options = {
                 "Import .irplus remote",
                 "Export selected remote (.irplus)",
+                "Export Ocrustar UIR JSON (experimental)",
                 "Layout Editor",
                 "Manage selected remote",
                 "U1 waveform backups / restore",
@@ -374,15 +376,16 @@ public class MainActivity extends Activity {
                             if (current() == null) toast("Create a remote first.");
                             else openExport();
                             break;
-                        case 2: showLayoutEditor(); break;
-                        case 3:
+                        case 2: openOcrustarExperiment(); break;
+                        case 3: showLayoutEditor(); break;
+                        case 4:
                             if (current() == null) toast("Select a remote first.");
                             else manageRemote(current());
                             break;
-                        case 4: openU1Backups(); break;
-                        case 5: showLibraryBackupMenu(); break;
-                        case 6: UsbHarmonyInspector.show(this); break;
-                        case 7: showAbout(); break;
+                        case 5: openU1Backups(); break;
+                        case 6: showLibraryBackupMenu(); break;
+                        case 7: UsbHarmonyInspector.show(this); break;
+                        case 8: showAbout(); break;
                         default: break;
                     }
                 })
@@ -1779,6 +1782,45 @@ public class MainActivity extends Activity {
         startActivityForResult(intent, EXPORT_DEVICE);
     }
 
+    private void openOcrustarExperiment() {
+        IrplusCodec.Remote remote = current();
+        if (remote == null) {
+            toast("Create or select a remote with learned IR buttons first.");
+            return;
+        }
+        // Check conversion before opening a document picker; no export file
+        // should be created if data are invalid or contain mixed carriers.
+        try {
+            OcrustarUirExporter.export(remote);
+        } catch (IllegalArgumentException issue) {
+            new AlertDialog.Builder(this).setTitle("Cannot export UIR test data")
+                    .setMessage(issue.getMessage())
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Experimental Ocrustar data export")
+                .setMessage("This saves a JSON record based on the documented "
+                        + "ElkSmart/Ocrustar UIR data structure. We have NOT "
+                        + "verified that the official Ocrustar app accepts "
+                        + "files of this type, or that it offers a file-import "
+                        + "option. The generated key IDs are placeholders. "
+                        + "This does not upload anything, change any remote, "
+                        + "or modify Ocrustar. Save a test file?")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Save test JSON", (d, w) -> {
+                    Intent intent = new Intent(Intent.ACTION_CREATE_DOCUMENT);
+                    intent.setType("application/json");
+                    intent.addCategory(Intent.CATEGORY_OPENABLE);
+                    String clean = remote.displayName().replaceAll(
+                            "[^a-zA-Z0-9._ -]", "_").trim();
+                    intent.putExtra(Intent.EXTRA_TITLE,
+                            (clean.isEmpty() ? "Remote" : clean)
+                                    + "-Ocrustar-UIR-EXPERIMENT.json");
+                    startActivityForResult(intent, EXPORT_OCRUSTAR_EXPERIMENT);
+                }).show();
+    }
+
     @Override @SuppressWarnings("deprecation")
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -1866,6 +1908,24 @@ public class MainActivity extends Activity {
                 new AlertDialog.Builder(this).setTitle("Invalid library backup")
                         .setMessage(error.getMessage()).setPositiveButton("OK", null)
                         .show();
+            }
+        } else if (requestCode == EXPORT_OCRUSTAR_EXPERIMENT) {
+            try {
+                IrplusCodec.Remote remote = current();
+                if (remote == null) throw new IllegalArgumentException(
+                        "The selected remote is no longer available.");
+                String json = OcrustarUirExporter.export(remote);
+                try (OutputStream output = getContentResolver().openOutputStream(uri)) {
+                    if (output == null) throw new IllegalArgumentException(
+                            "Cannot write test JSON destination.");
+                    output.write(json.getBytes(StandardCharsets.UTF_8));
+                    output.flush();
+                }
+                setStatus("Experimental Ocrustar UIR JSON saved. "
+                        + "Official Ocrustar app import is NOT confirmed.");
+            } catch (Exception problem) {
+                setStatus("Ocrustar test export failed: " + problem.getMessage());
+                toast("UIR test export failed: " + problem.getMessage());
             }
         } else if (requestCode == EXPORT_DEVICE) {
             try (OutputStream output = getContentResolver().openOutputStream(uri)) {
