@@ -2,6 +2,30 @@
 
 **Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
+## v0.4.5-alpha: Experimental Ocrustar UIR data export
+
+**Research prototype, NOT confirmed compatible with the official Ocrustar app.**
+IR Remote Studio can convert the selected remote's **learned Pronto Hex** buttons
+into JSON matching the independently documented `UirUploadParam` **cloud data**
+shape (`frequency`, `irkeys[]` with `keyId`, `keyName`, `irData[]`).
+It can save this test JSON to Downloads using Android's document picker.
+The app does **not** know whether Ocrustar can import JSON files and does
+**not** call ElkSmart services, alter the Ocrustar app, or send user data anywhere.
+
+- **Tools & Settings → Export Ocrustar UIR JSON (experimental)**.
+- One filename ending `-Ocrustar-UIR-EXPERIMENT.json`.
+- Spacer and unlearned buttons are omitted; real carrier frequencies and pulse
+  durations are derived from the user's captured signal.
+- Rejects malformed Pronto, remotes with no learned buttons, and mixed-carrier
+  codes too far apart to encode with one `frequency` value.
+- Numeric `keyId` fields are **local sequential placeholders**, not vendor IDs.
+- This is for further research and an eventual documented import pathway;
+  **do not expect the Ocrustar app to accept the file today**.
+
+Because this release increases Android `versionCode` to 28 and preserves the
+private permanent Android signing certificate, install it **over** v0.4.4 or
+v0.4.3; do not uninstall to upgrade and wipe your local backups.
+
 ## v0.4.4-alpha: Equal access to both supported learners
 
 The home screen now gives **SofaBaton U1** and **Harmony USB** the same prominent, side-by-side receiver choices. Select the IR learner you want, then use its connection action and Learn button. A short guide automatically appears immediately below the chosen receiver's status:
