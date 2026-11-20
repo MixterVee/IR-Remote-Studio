@@ -98,11 +98,10 @@ public final class OcrustarUsbProtocol {
     }
 
     /**
-     * Identify the exact 045C:0132 model using the two independently
-     * observed Android reply forms: FC×4 + D226/D552 identity or
-     * FA×4 + firmware/version bytes. This device's native Android driver
-     * does NOT send a second FA acknowledgement after identification.
-     * The older 02AA path remains on its established handshake.
+     * Identify 045C:0132 from either FC×4 + D226/D552 model identity,
+     * or FA×4 + firmware/version metadata. Whether an FA follow-up is
+     * appropriate depends on the reply header; see shouldAcknowledgeIdentity.
+     * The older 02AA path retains its existing model-handshake behavior.
      */
     public static String identifyForUsbPid(int pid, byte[] bytes, int count) {
         if (pid == 0x0132) {
@@ -111,6 +110,19 @@ public final class OcrustarUsbProtocol {
             return identifyHello(bytes, count);
         }
         return identifyHello(bytes, count);
+    }
+
+    /**
+     * Experimental 045C:0132 handshake correction. When real hardware
+     * responds FC FC FC FC 70 01 (D552), send the single documented
+     * FA FA FA FA acknowledgement before FE learning. If an FA-version
+     * reply is already received instead, do NOT send FA again: that can
+     * cause an endless acknowledgment loop. Invalid replies fail closed.
+     */
+    public static boolean shouldAcknowledgeIdentity(int pid, byte[] bytes, int count) {
+        if (pid == 0x0132 && isFirmwareVersionReply(bytes, count)) return false;
+        identifyHello(bytes, count);
+        return true;
     }
 
     /**
