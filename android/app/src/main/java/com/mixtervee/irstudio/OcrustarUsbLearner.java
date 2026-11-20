@@ -101,6 +101,87 @@ public final class OcrustarUsbLearner {
         return null;
     }
 
+
+    /**
+     * USB-only transaction trace. Does not record entire learned IR payloads,
+     * serial numbers, stored remotes, or any personal data. Diagnostic bytes are
+     * capped at the first 16 of each *initial* incoming packet.
+     *
+     * Android bulkTransfer() returns -1 for both timeout and some USB errors;
+     * do not claim that -1 proves either condition.
+     */
+    private static final class UsbTrace {
+        private static final String[] PHASES =
+                {"DRAIN", "IDENTITY", "POST-AUTH", "LEARNING"};
+        private final int[] reads = new int[4];
+        private final int[] empty = new int[4];
+        private final int[] packets = new int[4];
+        private final int[] bytes = new int[4];
+        private final StringBuilder events = new StringBuilder();
+        private int eventCount;
+
+        void log(String event) {
+            if (eventCount++ < 45) {
+                events.append("  ").append(event).append('\n');
+            } else if (eventCount == 46) {
+                events.append("  (additional events omitted)\n");
+            }
+        }
+
+        void write(String label, byte[] data, int result) {
+            log("OUT " + label + ": " + result + "/" + data.length
+                    + " bytes, command " + shortHex(data, data.length));
+        }
+
+        void read(int phase, int result, byte[] data) {
+            reads[phase]++;
+            if (result <= 0) {
+                empty[phase]++;
+                return;
+            }
+            packets[phase]++;
+            bytes[phase] += result;
+            // Record only a few initial packets, never a full remote waveform.
+            if (packets[phase] <= 3)
+                log("IN " + PHASES[phase] + ": " + result
+                        + " bytes, first bytes " + shortHex(data, result));
+        }
+
+        String report() {
+            StringBuilder result = new StringBuilder();
+            for (int i = 0; i < PHASES.length; i++) {
+                result.append(PHASES[i]).append(": ")
+                        .append(reads[i]).append(" reads, ")
+                        .append(empty[i]).append(" no-data/-1, ")
+                        .append(packets[i]).append(" received packets, ")
+                        .append(bytes[i]).append(" bytes\n");
+            }
+            result.append("Note: Android bulkTransfer -1 can mean a timeout ")
+                    .append("or a transfer error; the USB API does not distinguish them.\n")
+                    .append("USB EVENTS (bounded):\n").append(events);
+            return result.toString();
+        }
+
+        private static String shortHex(byte[] data, int length) {
+            if (data == null || length <= 0) return "(none)";
+            StringBuilder result = new StringBuilder();
+            for (int i = 0; i < Math.min(length, 16); i++) {
+                if (i > 0) result.append(' ');
+                result.append(String.format(Locale.ROOT, "%02X", data[i] & 0xFF));
+            }
+            if (length > 16) result.append(" ...");
+            return result.toString();
+        }
+    }
+
+    private static int read(UsbDeviceConnection conn, UsbEndpoint endpoint,
+                            byte[] bytes, int timeoutMs,
+                            UsbTrace trace, int phase) {
+        int count = conn.bulkTransfer(endpoint, bytes, bytes.length, timeoutMs);
+        trace.read(phase, count, bytes);
+        return count;
+    }
+
     public static String describeUsb(UsbManager manager) {
         UsbDevice device = find(manager);
         if (device == null) {
@@ -152,25 +233,27 @@ public final class OcrustarUsbLearner {
     }
 
     private static void write(UsbDeviceConnection conn, UsbEndpoint out,
-                              byte[] bytes, String label) {
+                              byte[] bytes, String label, UsbTrace trace) {
         int sent = conn.bulkTransfer(out, bytes, bytes.length, 1000);
+        trace.write(label, bytes, sent);
         if (sent != bytes.length)
             throw new IllegalStateException(label + " USB write failed ("
                     + sent + "/" + bytes.length + ").");
     }
 
-    private static String handshake(UsbDeviceConnection conn, Port port, int productId) {
+    private static String handshake(UsbDeviceConnection conn, Port port,
+                                    int productId, UsbTrace trace) {
         // Stale IN data from a previous vendor app session must not be
         // mistaken for a valid reply. Read only, bounded to five packets.
         byte[] packet = new byte[512];
         for (int i = 0; i < 5; i++) {
-            if (conn.bulkTransfer(port.in, packet, packet.length, 15) <= 0) break;
+            if (read(conn, port.in, packet, 15, trace, 0) <= 0) break;
         }
         for (int attempt = 0; attempt < 3; attempt++) {
-            write(conn, port.out, OcrustarUsbProtocol.HELLO, "Identity");
+            write(conn, port.out, OcrustarUsbProtocol.HELLO, "Identity", trace);
             long deadline = SystemClock.elapsedRealtime() + 1000;
             while (SystemClock.elapsedRealtime() < deadline) {
-                int received = conn.bulkTransfer(port.in, packet, packet.length, 200);
+                int received = read(conn, port.in, packet, 200, trace, 1);
                 if (received <= 0) continue;
                 // Do not arm an unrecognized reply. For the 0132 device,
                 // a verified independent Android implementation uses the
@@ -178,9 +261,12 @@ public final class OcrustarUsbLearner {
                 // sending a second FA token. Keep FA only for older models.
                 String type = OcrustarUsbProtocol.identifyForUsbPid(
                         productId, packet, received);
+                trace.log("Identity classified as " + type + " for PID "
+                        + String.format(Locale.ROOT, "%04X", productId));
                 if (productId != 0x0132)
                     write(conn, port.out, OcrustarUsbProtocol.ACK,
-                            "Identity acknowledgment");
+                            "Identity acknowledgment", trace);
+                else trace.log("0132: no extra FA acknowledgement sent");
                 return type;
             }
         }
@@ -196,13 +282,14 @@ public final class OcrustarUsbLearner {
      * This bounded read-only settling period avoids overlapping AUTH_ACK
      * processing with FE learn activation. No extra commands are sent.
      */
-    private static String readPostAuthVersion(UsbDeviceConnection conn, Port port) {
+    private static String readPostAuthVersion(UsbDeviceConnection conn, Port port,
+                                              UsbTrace trace) {
         byte[] read = new byte[64];
         byte[] prefix = new byte[32];
         int size = 0, packets = 0;
         long deadline = SystemClock.elapsedRealtime() + 450;
         while (SystemClock.elapsedRealtime() < deadline && packets < 8) {
-            int n = conn.bulkTransfer(port.in, read, read.length, 100);
+            int n = read(conn, port.in, read, 100, trace, 2);
             if (n <= 0) continue;
             packets++;
             int add = Math.min(n, prefix.length - size);
@@ -250,20 +337,29 @@ public final class OcrustarUsbLearner {
             throw new IllegalStateException(
                     "Cannot open dongle. Close the official Ocrustar app first.");
         boolean claimed = false, armed = false;
+        String pronto = null;
+        RuntimeException failure = null;
+        UsbTrace trace = new UsbTrace();
         try {
+            trace.log(String.format(Locale.ROOT,
+                    "Device %04X:%04X, interface %d, OUT 0x%02X / IN 0x%02X",
+                    device.getVendorId(), device.getProductId(),
+                    port.usbInterface.getId(), port.out.getAddress(),
+                    port.in.getAddress()));
             claimed = connection.claimInterface(port.usbInterface, false);
+            trace.log("claimInterface(force=false): " + (claimed ? "SUCCESS" : "FAILED"));
             if (!claimed)
                 throw new IllegalStateException(
                         "USB interface busy. Close the Ocrustar app.");
             final boolean native0132 = device.getProductId() == 0x0132;
-            String type = handshake(connection, port, device.getProductId());
+            String type = handshake(connection, port, device.getProductId(), trace);
             // Only old D226/D552 protocol requires the FA follow-up ACK.
             // Do not poll a nonexistent FA-after-ACK response on 0132.
             String authFollowUp = native0132
                     ? "045C:0132 native Android path: no extra FA ACK sent."
-                    : readPostAuthVersion(connection, port);
+                    : readPostAuthVersion(connection, port, trace);
             write(connection, port.out, OcrustarUsbProtocol.START_LEARN,
-                    "Start IR learning");
+                    "Start IR learning", trace);
             armed = true;
             if (progress != null) progress.ready(type);
             OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
@@ -272,7 +368,7 @@ public final class OcrustarUsbLearner {
                 long deadline = SystemClock.elapsedRealtime() + 15_000;
                 boolean acknowledged = false;
                 while (SystemClock.elapsedRealtime() < deadline && !capture.complete()) {
-                    int count = connection.bulkTransfer(port.in, buffer, buffer.length, 300);
+                    int count = read(connection, port.in, buffer, 300, trace, 3);
                     if (count > 0) {
                         capture.accept(buffer, count);
                         if (!acknowledged && capture.sawLearnAck()) {
@@ -305,7 +401,7 @@ public final class OcrustarUsbLearner {
                             + "IR signal arrived in 15 seconds. Aim the "
                             + "physical source remote at the dongle's receiver.");
                 }
-                return capture.pronto();
+                pronto = capture.pronto();
             } catch (RuntimeException problem) {
                 // A timeout alone cannot distinguish missing IR, unacknowledged
                 // learn mode or a payload framing mismatch. Surface the evidence.
@@ -315,17 +411,35 @@ public final class OcrustarUsbLearner {
                         + "\n\nUSB RECEIVE DIAGNOSTICS\n"
                         + capture.diagnostic(), problem);
             }
+        } catch (RuntimeException error) {
+            failure = error;
         } finally {
             if (armed) {
                 try {
                     write(connection, port.out, OcrustarUsbProtocol.STOP_LEARN,
-                            "Stop IR learning");
-                } catch (RuntimeException ignored) {
+                            "Stop IR learning", trace);
+                } catch (RuntimeException stopFailure) {
+                    trace.log("Stop command failed: " + stopFailure.getMessage());
                     // Closing the USB session is still mandatory.
                 }
+            } else {
+                trace.log("STOP not sent; START was not successfully written");
             }
-            if (claimed) connection.releaseInterface(port.usbInterface);
+            if (claimed) {
+                try {
+                    trace.log("releaseInterface: "
+                            + (connection.releaseInterface(port.usbInterface)
+                                    ? "SUCCESS" : "FAILED"));
+                } catch (RuntimeException releaseError) {
+                    trace.log("releaseInterface error: " + releaseError.getMessage());
+                }
+            }
             connection.close();
+            trace.log("USB connection closed");
         }
+        if (failure != null)
+            throw new IllegalStateException(failure.getMessage()
+                    + "\n\nUSB TRANSACTION TRACE\n" + trace.report(), failure);
+        return pronto;
     }
 }
