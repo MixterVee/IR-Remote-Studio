@@ -161,6 +161,18 @@ public class OcrustarUsbProtocolTest {
         } catch (IllegalArgumentException expected) { }
     }
 
+    @Test public void silentLearnRetriesAreBoundedAndStopOnAnyReply() {
+        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(2499, 0, false));
+        assertTrue(OcrustarUsbProtocol.silentLearnRetryDue(2500, 0, false));
+        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(5499, 1, false));
+        assertTrue(OcrustarUsbProtocol.silentLearnRetryDue(5500, 1, false));
+        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(8999, 2, false));
+        assertTrue(OcrustarUsbProtocol.silentLearnRetryDue(9000, 2, false));
+        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(14000, 3, false));
+        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(14000, 0, true));
+        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(14000, -1, false));
+    }
+
     @Test public void native0132CapturesFeFrameWithoutSeparateFfAck() {
         byte[] raw = rawTimings(8992, 4496, 560, 560, 560, 1680,
                 560, 560, 560, 1680, 560, 560, 560, 40000);
