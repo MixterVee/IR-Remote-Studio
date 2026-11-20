@@ -1222,14 +1222,28 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             String pronto = null, problem = null;
             try {
-                pronto = OcrustarUsbLearner.learn(usb, dongle, model ->
+                pronto = OcrustarUsbLearner.learn(usb, dongle,
+                        new OcrustarUsbLearner.Progress() {
+                    @Override public void ready(String model) {
                         runOnUiThread(() -> {
                             if (isFinishing() || isDestroyed()) return;
-                            learnButton.setText("LISTENING — Press source remote button");
+                            learnButton.setText("LISTENING — Learning ACK pending");
                             setStatus("Ocrustar " + model
-                                    + " learning request sent. Aim the separate physical "
-                                    + "remote at the dongle and press one button now.");
-                        }));
+                                    + ": learning request sent, ACK not yet confirmed. "
+                                    + "Aim the separate physical remote at the dongle.");
+                        });
+                    }
+
+                    @Override public void acknowledged(String model) {
+                        runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) return;
+                            learnButton.setText("READY — Press source remote NOW");
+                            setStatus("Ocrustar " + model
+                                    + " confirmed IR-learning mode. "
+                                    + "Press and release the physical remote button now.");
+                        });
+                    }
+                });
             } catch (Exception error) {
                 problem = error.getMessage();
                 if (problem == null) problem = error.getClass().getSimpleName();
