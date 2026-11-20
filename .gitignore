@@ -5,3 +5,13 @@ __pycache__/
 build/
 dist/
 *.spec
+
+# Never commit Android private signing credentials.
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.key
+signing.properties
+secrets.properties
