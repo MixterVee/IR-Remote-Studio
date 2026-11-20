@@ -15,7 +15,7 @@ public final class UsbAccessReceiver extends BroadcastReceiver {
         if (!ACTION_USB_GRANT.equals(intent.getAction())) return;
         boolean granted = intent.getBooleanExtra(UsbManager.EXTRA_PERMISSION_GRANTED, false);
         Toast.makeText(context, granted
-                ? "USB access granted — tap Detect Harmony USB again."
+                ? "USB access granted — return to IR Remote Studio and tap Learn."
                 : "USB access declined.", Toast.LENGTH_LONG).show();
     }
 }
