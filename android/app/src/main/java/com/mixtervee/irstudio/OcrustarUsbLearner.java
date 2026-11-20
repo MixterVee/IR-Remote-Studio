@@ -383,18 +383,42 @@ public final class OcrustarUsbLearner {
             OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
             byte[] buffer = new byte[512];
             try {
-                long deadline = SystemClock.elapsedRealtime() + 15_000;
+                long startAt = SystemClock.elapsedRealtime();
+                long deadline = startAt + 15_000;
                 boolean acknowledged = false;
+                boolean sawLearnReply = false;
+                int silentRetries = 0;
+                // One independent Android ElkSmart learner refreshes FE during
+                // silent listening. Experiment only on the reported 0132:
+                // three bounded retries, never after ANY USB learning reply.
+                // This is not a proven 0132 requirement; the trace tells us
+                // whether it causes an FF acknowledgement or FE capture.
                 while (SystemClock.elapsedRealtime() < deadline && !capture.complete()) {
                     int count = read(connection, port.in, buffer, 300, trace, 3);
                     if (count > 0) {
+                        sawLearnReply = true;
                         capture.accept(buffer, count);
                         if (!acknowledged && capture.sawLearnAck()) {
                             acknowledged = true;
                             if (progress != null) progress.acknowledged(type);
                         }
                     }
+                    long elapsedMs = SystemClock.elapsedRealtime() - startAt;
+                    if (native0132
+                            && OcrustarUsbProtocol.silentLearnRetryDue(
+                                    elapsedMs, silentRetries, sawLearnReply)
+                            && !capture.complete()) {
+                        silentRetries++;
+                        trace.log("0132 silent learn: retry FE #" + silentRetries
+                                + " at " + elapsedMs + " ms (no USB learn reply)");
+                        write(connection, port.out,
+                                OcrustarUsbProtocol.START_LEARN,
+                                "Silent IR learning retry " + silentRetries, trace);
+                    }
                 }
+                trace.log("Learn result: retries=" + silentRetries
+                        + ", sawAnyLearningReply=" + sawLearnReply
+                        + ", captured=" + capture.complete());
                 if (!capture.complete()) {
                     if (native0132) {
                         // Android's independently published 0132 driver
