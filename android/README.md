@@ -2,6 +2,59 @@
 
 **Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
+## v0.4.6-alpha: Direct Ocrustar / ElkSmart USB learning (hardware test pending)
+
+The Android home screen now has **three equally visible IR learners**:
+**SofaBaton U1**, **Harmony**, and **Ocrustar**. This is a real Android
+USB-host *learning* integration, not the experimental Ocrustar JSON export
+format. It uses the published D226/D552 USB protocol without the vendor app,
+cloud service or network connection. The previous Harmony and U1 capture
+engines and file formats are unchanged.
+
+**First hardware test on a OnePlus 15:**
+
+1. Insert the Ocrustar USB-C IR learning dongle in the phone. Close the
+   official Ocrustar app completely so it does not claim the USB interface.
+2. Open IR Remote Studio, select **Ocrustar** from the three learner choices
+   and tap **USB Setup**. The diagnostic window displays the **exact USB
+   VID:PID** and the presence of bulk IN 0x81 / OUT 0x01 endpoints.
+   For a known USB variant, tap **Grant USB access**, then approve Android's
+   USB permission dialog.
+3. Create/select a remote and a named button, then tap **Learn IR • Ocrustar USB**.
+   The driver must first verify the documented FC handshake, receive the
+   D226/D552 identity bytes, and send the FA acknowledgment. Unknown or
+   incompatible devices fail closed: no learning request is sent.
+4. When **READY** appears, aim the original physical IR remote at the
+   Ocrustar dongle and press the chosen key *once*. The app starts learning
+   with FE FE FE FE and sends FD FD FD FD to stop the receiver afterwards,
+   including on failure. It reads the raw timing payload through Android
+   bulk IN, validates it, converts to Pronto Hex and automatically saves
+   it to the selected IR Remote Studio library button.
+5. Check the remote's button capture status. The existing .irplus export
+   remains available under Tools & Settings.
+
+**Known limitations:** USB IDs associated with the ElkSmart family are
+identified, but physical learning on the user's *exact hardware revision*
+is **not confirmed** until tested. Different dongle revisions can
+have different USB protocols. This version recognizes identity replies
+D226 and D552 only and requires the documented bulk endpoints. The receive
+packet does **not encode its carrier frequency**, so captured raw durations
+are converted using an explicitly assumed **38 kHz** carrier; verify the
+exported code works on the actual target equipment. USB transmission
+through the dongle is **not yet implemented**; IR Remote Studio's built-in
+phone transmitter path remains unchanged. This build does not program
+firmware, erase device data, or access the official Ocrustar app's database.
+No unrecognized devices receive protocol commands.
+
+Based on independent research:
+- https://github.com/deadboy18/Ocrustar-USB-IR/blob/main/docs/PROTOCOL.md
+- https://github.com/thecaticorn01/IR-Controller (ElkSmart dongle families)
+
+This build uses the same permanent APK signing certificate, with
+`versionCode 29`. **Install directly over v0.4.5, v0.4.4 or v0.4.3
+without uninstalling.** Preserve private capture data by avoiding
+uninstall/reinstall.
+
 ## v0.4.5-alpha: Experimental Ocrustar UIR data export
 
 **Research prototype, NOT confirmed compatible with the official Ocrustar app.**
