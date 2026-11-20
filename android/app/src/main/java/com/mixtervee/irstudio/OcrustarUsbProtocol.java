@@ -87,6 +87,31 @@ public final class OcrustarUsbProtocol {
         private final ByteArrayOutputStream pending = new ByteArrayOutputStream();
         private final ByteArrayOutputStream payload = new ByteArrayOutputStream();
         private int expected = -1;
+        private int usbPackets = 0;
+        private int usbBytes = 0;
+        private int learnAckCount = 0;
+        private int rolling4 = 0;
+        private final StringBuilder initialBytes = new StringBuilder();
+
+        /**
+         * Hardware diagnostics, read-only and bounded. Helps distinguish
+         * no USB replies from malformed or incomplete capture framing.
+         * Only the first 32 bytes are logged; no saved IR code is changed.
+         */
+        public String diagnostic() {
+            return "USB receive packets: " + usbPackets
+                    + "\nUSB bytes read: " + usbBytes
+                    + "\nLearn ACK (FF FF FF FF): "
+                    + (learnAckCount > 0 ? "SEEN" : "not observed")
+                    + "\nFE capture header: "
+                    + (expected > 0 ? "FOUND" : "not observed")
+                    + "\nCapture bytes collected: " + payload.size()
+                    + " / " + (expected < 0 ? "unknown" : expected)
+                    + "\nFirst USB bytes: "
+                    + (initialBytes.length() == 0 ? "(none)" : initialBytes);
+        }
+
+        public boolean sawLearnAck() { return learnAckCount > 0; }
 
         public boolean complete() { return expected > 0 && payload.size() >= expected; }
         public int received() { return payload.size(); }
@@ -96,6 +121,17 @@ public final class OcrustarUsbProtocol {
             if (chunk == null || length < 0 || length > chunk.length)
                 throw new IllegalArgumentException("Invalid USB read length.");
             if (complete() || length == 0) return;
+            usbPackets++;
+            usbBytes += length;
+            for (int i = 0; i < length; i++) {
+                int value = chunk[i] & 0xFF;
+                rolling4 = (rolling4 << 8) | value;
+                if (rolling4 == 0xFFFFFFFF) learnAckCount++;
+                if (usbBytes - length + i < 32) {
+                    if (initialBytes.length() > 0) initialBytes.append(' ');
+                    initialBytes.append(String.format(Locale.ROOT, "%02X", value));
+                }
+            }
             if (expected > 0) {
                 payload.write(chunk, 0, Math.min(length, expected - payload.size()));
                 return;
