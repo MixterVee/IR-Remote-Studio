@@ -214,9 +214,9 @@ public final class OcrustarUsbProtocol {
                         | ((bytes[i + 5] & 0xFFL) << 8)
                         | ((bytes[i + 6] & 0xFFL) << 16)
                         | ((bytes[i + 7] & 0xFFL) << 24);
-                boolean validTwo = bigEndianLength >= 12
+                boolean validTwo = bigEndianLength >= 8
                         && bigEndianLength <= MAX_RAW;
-                boolean validFour = littleEndianLength >= 12
+                boolean validFour = littleEndianLength >= 8
                         && littleEndianLength <= MAX_RAW;
                 // 4-byte LE frames use zero high bytes for our bounded
                 // max length. Prefer LE if its value is smaller than the
