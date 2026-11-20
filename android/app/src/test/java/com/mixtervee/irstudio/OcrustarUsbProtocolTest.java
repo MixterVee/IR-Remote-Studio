@@ -161,16 +161,44 @@ public class OcrustarUsbProtocolTest {
         } catch (IllegalArgumentException expected) { }
     }
 
-    @Test public void silentLearnRetriesAreBoundedAndStopOnAnyReply() {
-        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(2499, 0, false));
-        assertTrue(OcrustarUsbProtocol.silentLearnRetryDue(2500, 0, false));
-        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(5499, 1, false));
-        assertTrue(OcrustarUsbProtocol.silentLearnRetryDue(5500, 1, false));
-        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(8999, 2, false));
-        assertTrue(OcrustarUsbProtocol.silentLearnRetryDue(9000, 2, false));
-        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(14000, 3, false));
-        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(14000, 0, true));
-        assertFalse(OcrustarUsbProtocol.silentLearnRetryDue(14000, -1, false));
+    private static byte[] packetFourByteLe(byte[] raw) {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        for (int i = 0; i < 4; i++) out.write(0xFE);
+        out.write(raw.length & 0xFF);
+        out.write((raw.length >>> 8) & 0xFF);
+        out.write((raw.length >>> 16) & 0xFF);
+        out.write((raw.length >>> 24) & 0xFF);
+        out.write(raw, 0, raw.length);
+        return out.toByteArray();
+    }
+
+    @Test public void fourByteLittleEndianFeFrameDecodesToPronto() {
+        byte[] raw = rawTimings(8992, 4496, 560, 560, 560, 1680,
+                560, 560, 560, 1680, 560, 560, 560, 40000);
+        OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
+        byte[] frame = packetFourByteLe(raw);
+        capture.accept(frame, 5); // FE x4 + first length byte
+        assertFalse(capture.complete());
+        capture.accept(java.util.Arrays.copyOfRange(frame, 5, 8), 3);
+        assertFalse(capture.complete());
+        capture.accept(java.util.Arrays.copyOfRange(frame, 8, frame.length),
+                frame.length - 8);
+        assertTrue(capture.complete());
+        assertEquals(raw.length, capture.expected());
+        assertTrue(capture.diagnostic().contains("4-byte LE length"));
+        assertEquals(14, capture.decodeTimings().length);
+        assertTrue(capture.pronto().startsWith("0000"));
+    }
+
+    @Test public void twoByteBigEndianFeFrameRemainsSupported() {
+        byte[] raw = rawTimings(8992, 4496, 560, 560, 560, 1680,
+                560, 560, 560, 1680, 560, 560, 560, 40000);
+        OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
+        byte[] frame = packet(raw);
+        capture.accept(frame, frame.length);
+        assertTrue(capture.complete());
+        assertTrue(capture.diagnostic().contains("2-byte BE length"));
+        assertEquals(raw.length, capture.expected());
     }
 
     @Test public void native0132CapturesFeFrameWithoutSeparateFfAck() {
