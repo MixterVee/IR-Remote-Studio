@@ -1193,15 +1193,19 @@ public class MainActivity extends Activity {
         }
         new AlertDialog.Builder(this)
                 .setTitle("Learn with Ocrustar USB")
-                .setMessage("IR Remote Studio will verify your dongle's USB "
-                        + "identity, then enable its learning receiver for up to "
-                        + "15 seconds. Aim the original remote at the dongle "
-                        + "and press one button when READY appears. The receiver "
-                        + "is stopped afterwards, including on failure.\n\n"
-                        + "The USB learning response does not report carrier "
-                        + "frequency; 38 kHz will be assumed for the exported "
-                        + "Pronto Hex. This experimental driver is not yet "
-                        + "validated on your specific dongle.")
+                .setMessage("IR Remote Studio will identify your USB dongle "
+                        + "and request IR learning for up to 15 seconds.\n\n"
+                        + (dongle.getProductId() == 0x0132
+                                ? "For your 045C:0132 model, press the "
+                                + "physical source remote button as soon "
+                                + "as LISTENING appears. Do NOT wait for "
+                                + "a separate READY acknowledgement."
+                                : "Press one physical source remote button "
+                                + "when the learning indicator appears.")
+                        + "\n\nThe receiver stops afterwards, including "
+                        + "on failure. The dongle does not report carrier "
+                        + "frequency, so captures assume 38 kHz. "
+                        + "This driver remains experimental.")
                 .setNegativeButton("Cancel", null)
                 .setPositiveButton("Start learning", (d, w) ->
                         beginOcrustarCapture(usb, dongle, remote, button))
@@ -1227,10 +1231,18 @@ public class MainActivity extends Activity {
                     @Override public void ready(String model) {
                         runOnUiThread(() -> {
                             if (isFinishing() || isDestroyed()) return;
-                            learnButton.setText("LISTENING — Learning ACK pending");
-                            setStatus("Ocrustar " + model
-                                    + ": learning request sent, ACK not yet confirmed. "
-                                    + "Aim the separate physical remote at the dongle.");
+                            if (dongle.getProductId() == 0x0132) {
+                                learnButton.setText("LISTENING — Press remote NOW");
+                                setStatus("Ocrustar 045C:0132: IR learning "
+                                        + "requested. Press and release a physical "
+                                        + "IR remote button aimed at the dongle NOW. "
+                                        + "No FF ACK is required on this variant.");
+                            } else {
+                                learnButton.setText("LISTENING — Press source remote");
+                                setStatus("Ocrustar " + model
+                                        + ": IR learning request sent. Aim the "
+                                        + "physical remote at the dongle.");
+                            }
                         });
                     }
 
