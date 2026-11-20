@@ -2,6 +2,51 @@
 
 **Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
+## v0.5.0-alpha: Exact 045C:0132 native Android learning sequence
+
+The user's physical **Ocrustar 045C:0132** test of v0.4.9 confirmed
+`FA FA FA FA 22 01` as the firmware response, but after our FE learn
+request, the dongle returned **zero USB bytes** for 15 seconds.
+
+An independent Android ElkSmart driver that explicitly lists **045C:0132**
+reveals a meaningful protocol difference from the older **045C:02AA**:
+- It identifies with **FC×4** and classifies **either FC×4 + identity
+  bytes or FA×4 + firmware/version bytes** as a valid device identity.
+- For this model it proceeds **directly to FE×4 learning**, with **no
+  additional FA×4 host acknowledgement**. The D226/02AA handshake is
+  unchanged, including its required FA ACK.
+- Its Android learning code waits for an **FE×4 IR capture packet**
+  following a physical remote button press. It does not require a
+  separate **FF×4 acknowledgement**. An iOS/iAP2 reference observed FF
+  acknowledgements, but the two transports are not interchangeable.
+
+Accordingly, v0.5.0 changes **only PID 0x0132** to use that documented
+native Android sequence. The interface now tells users **LISTENING —
+Press source remote NOW**, not to wait for an optional READY signal.
+The original bounded USB response report and fail-closed IR capture
+validation remain. A complete FE-capture record can be saved even
+when no FF ACK is reported, while an incomplete/absent FE payload never
+saves any button.
+
+**Test:** Install the new signed v0.5.0 APK *over* v0.4.9, keep your
+local library, close the official Ocrustar app, select your OcruTest
+remote and Esc button, start learning, and **press a separate physical
+remote's button as soon as LISTENING appears** while aiming toward
+the Ocrustar receiver. If capture times out, choose Copy report and
+share the exact result.
+
+This is an **evidence-based experiment**, not yet a confirmed working
+capture with the user's hardware. Do not claim success until the
+physical remote sends a code, the app captures and saves it, and
+the exported code successfully replays. Carrier 38 kHz remains an
+assumption pending replay verification. No Harmony or SofaBaton
+protocol changes. Android versionCode 33, same permanent signing key.
+
+References:
+- https://github.com/thecaticorn01/IR-Controller/tree/android/core/src/main/kotlin/com/thecaticorn01/ircontroller/core/elksmart (native Android ElkSmart driver, explicit 0132 support)
+- https://github.com/ariemeir/infrared-reverse-engineering-iphone-remote-app/blob/main/elksmart_ir_reverse_engineering.md (0132 command markers and transport differences)
+- https://github.com/deadboy18/Ocrustar-USB-IR/blob/main/docs/PROTOCOL.md (older 02AA authentication sequence)
+
 ## v0.4.9-alpha: Real 045C:0132 FA firmware response vs FF learning ACK
 
 The user's physical v0.4.8 capture logged exactly one 6-byte USB
