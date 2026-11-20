@@ -2,6 +2,47 @@
 
 **Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
+## v0.4.9-alpha: Real 045C:0132 FA firmware response vs FF learning ACK
+
+The user's physical v0.4.8 capture logged exactly one 6-byte USB
+response: **FA FA FA FA 22 01**, no FF learning acknowledgment and no
+FE infrared capture header. Ocrustar/ElkSmart reverse-engineering confirms
+that **FA×4 + 2 bytes is an identity/firmware-version reply**, not a
+learn-success acknowledgment. For the 045C:0132 variant, the actual
+learn-start response should be **FF FF FF FF**, followed by a
+**FE FE FE FE [length] [IR payload]** report when an IR button is pressed.
+
+The v0.4.9 USB driver now:
+- After the known FC identity exchange and required FA ACK, performs a short
+  **read-only 450 ms post-auth settle** to receive the FA firmware response
+  *before* it sends FE learn-start. This changes no protocol commands,
+  persistent dongle settings or firmware.
+- Reports the observed post-auth version bytes (or lack of reply) in the
+  failure dialog's **Copy report** details. No matching means no assumptions.
+- Only changes to **READY — Press source remote NOW** when it actually
+  receives the documented **FF FF FF FF learning ACK**. A sent FE command
+  alone remains **LISTENING — Learning ACK pending**.
+- Explicitly distinguishes **learn request not acknowledged** from
+  **learning acknowledged, but no complete IR data arrived**.
+- Records separately any FA firmware replies that arrive in the capture
+  window, and retains packet totals and initial-byte diagnostics.
+- Adds regression tests based on the user's exact observed six-byte response.
+
+The existing versionCode is now 32, with the same permanent signing
+certificate as previous versions. **Install over v0.4.8 without uninstalling**.
+All SofaBaton U1 and Logitech Harmony learning code is unchanged.
+
+**Hardware retest:** Select Ocrustar and the existing test button with the
+dongle inserted; close the official app, then tap Learn IR. Wait for
+**READY** if the FF ACK arrives and press one original physical remote
+button aimed at the dongle. If it remains LISTENING and times out, choose
+**Copy report** and share the result. A real 0132 capture is **not yet
+confirmed**, and the current IR carrier is still estimated at 38 kHz.
+
+References:
+- https://github.com/deadboy18/Ocrustar-USB-IR (FA reply = firmware version)
+- https://github.com/ariemeir/infrared-reverse-engineering-iphone-remote-app/blob/main/elksmart_ir_reverse_engineering.md (physical 045C:0132 learn FF acknowledgement and FE captured data)
+
 ## v0.4.8-alpha: Diagnose 045C:0132 IR learning timeout
 
 Physical testing established that the **045C:0132** Ocrustar USB-C dongle
