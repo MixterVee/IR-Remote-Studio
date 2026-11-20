@@ -75,6 +75,8 @@ public class MainActivity extends Activity {
     private Button u1ConnectionButton;
     private Button u1SourceButton;
     private Button harmonySourceButton;
+    private Button ocrustarSourceButton;
+    private boolean ocrustarLearning;
     private TextView u1Status;
     private TextView receiverHelp;
     private int selectedLearner = LearnerSource.SOFABATON_U1;
@@ -229,7 +231,7 @@ public class MainActivity extends Activity {
         connectionParams.setMargins(0, dp(11), 0, dp(9));
         root.addView(connection, connectionParams);
         connection.addView(text("SELECT IR LEARNER", 11, MUTED, true));
-        // Two equally visible choices instead of hiding Harmony in Tools.
+        // Three equally visible learning choices, with one connection action.
         LinearLayout sourceRow = new LinearLayout(this);
         sourceRow.setOrientation(LinearLayout.HORIZONTAL);
         LinearLayout.LayoutParams sourceParams = new LinearLayout.LayoutParams(
@@ -237,19 +239,27 @@ public class MainActivity extends Activity {
         sourceParams.setMargins(0, dp(7), 0, dp(7));
         connection.addView(sourceRow, sourceParams);
         u1SourceButton = actionButton("SofaBaton U1", TEAL);
-        u1SourceButton.setTextSize(12);
+        u1SourceButton.setTextSize(11);
         u1SourceButton.setOnClickListener(v ->
                 selectLearner(LearnerSource.SOFABATON_U1));
         sourceRow.addView(u1SourceButton, new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.MATCH_PARENT, 1));
-        harmonySourceButton = actionButton("Harmony USB", Color.rgb(44, 61, 88));
-        harmonySourceButton.setTextSize(12);
+        harmonySourceButton = actionButton("Harmony", Color.rgb(44, 61, 88));
+        harmonySourceButton.setTextSize(11);
         harmonySourceButton.setOnClickListener(v ->
                 selectLearner(LearnerSource.HARMONY_USB));
         LinearLayout.LayoutParams harmonyParams = new LinearLayout.LayoutParams(
                 0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
         harmonyParams.setMargins(dp(7), 0, 0, 0);
         sourceRow.addView(harmonySourceButton, harmonyParams);
+        ocrustarSourceButton = actionButton("Ocrustar", Color.rgb(44, 61, 88));
+        ocrustarSourceButton.setTextSize(11);
+        ocrustarSourceButton.setOnClickListener(v ->
+                selectLearner(LearnerSource.OCRUSTAR_USB));
+        LinearLayout.LayoutParams ocrustarParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.MATCH_PARENT, 1);
+        ocrustarParams.setMargins(dp(7), 0, 0, 0);
+        sourceRow.addView(ocrustarSourceButton, ocrustarParams);
 
         LinearLayout connectionRow = new LinearLayout(this);
         connectionRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -636,8 +646,8 @@ public class MainActivity extends Activity {
     }
 
     private void selectLearner(int learner) {
-        if (u1Ble != null && u1Ble.isLearning()
-                || learnButton != null && !learnButton.isEnabled()) {
+        if ((u1Ble != null && u1Ble.isLearning()) || ocrustarLearning
+                || (learnButton != null && !learnButton.isEnabled())) {
             toast("Finish the current IR capture before changing learners.");
             return;
         }
@@ -647,10 +657,16 @@ public class MainActivity extends Activity {
         updateLearnerPanel();
         setStatus(selectedLearner == LearnerSource.SOFABATON_U1
                 ? "SofaBaton U1 selected — Bluetooth learning."
-                : "Harmony 300/350 selected — USB learning.");
+                : (selectedLearner == LearnerSource.OCRUSTAR_USB
+                        ? "Ocrustar USB selected — direct IR learning."
+                        : "Harmony 300/350 selected — USB learning."));
     }
 
     private void openSelectedLearner() {
+        if (selectedLearner == LearnerSource.OCRUSTAR_USB) {
+            showOcrustarSetup();
+            return;
+        }
         if (selectedLearner == LearnerSource.HARMONY_USB) {
             UsbHarmonyInspector.show(this);
             // USB permission may be granted from the Android system dialog.
