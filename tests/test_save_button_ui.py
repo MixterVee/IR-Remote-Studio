@@ -1,4 +1,4 @@
-"""Windows Save and Save & Learn Another are independent UI actions.
+"""Backend save/learn-another actions remain safe despite automatic UI saving.
 
 Run with a display (GitHub's Linux smoke runner provides Xvfb).
 No USB device or Harmony is contacted by these tests.
@@ -39,16 +39,18 @@ class SaveButtonUITests(unittest.TestCase):
             self.load_patch.stop()
 
     def test_standalone_save_confirms_without_recapturing_or_duplicating(self):
-        self.assertEqual(self.app.save_button_btn.cget("text"), "Save")
-        self.assertIn("Save & Learn another",
-                      self.app.save_next_btn.cget("text"))
+        # Visible Save buttons were removed in v1.0: capture autosaves.
+        self.assertFalse(hasattr(self.app, "save_button_btn"))
+        self.assertFalse(hasattr(self.app, "save_next_btn"))
+        self.assertEqual(self.app.capture_btn.cget("text"),
+                         "Capture selected button (USB)")
         self.button["pronto_hex"] = "0000 006D 0001 0000 0010 0020"
         with patch.object(self.app, "capture") as capture:
             self.assertTrue(self.app.save_current_button())
             capture.assert_not_called()
         self.assertEqual(len(self.device["buttons"]), 1)
         self.assertEqual(len(self.button["captures"]), 0)
-        self.assertIn("no new capture started",
+        self.assertIn("No extra capture started",
                       self.app.status_var.get())
         self.save_mock.assert_called()
 
@@ -83,6 +85,37 @@ class SaveButtonUITests(unittest.TestCase):
             capture.assert_not_called()
             self.assertEqual(len(self.device["buttons"]), 1)
             self.assertEqual(error.call_count, 2)
+
+
+    def test_usb_capture_autosaves_without_old_save_instructions(self):
+        signal = [3996, 3999] + [469, 2000] * 51
+        result = {"carrier_hz": 38095, "timings_us": signal,
+                  "model": "Synthetic USB learner"}
+        with patch.object(
+                self.app, "_background",
+                side_effect=lambda _name, callback: callback(result, None)):
+            self.app.capture()
+        self.assertEqual(len(self.button["captures"]), 1)
+        self.save_mock.assert_called()
+        message = self.app.status_var.get()
+        self.assertIn("Auto-saved", message)
+        self.assertIn("export to IRplus", message)
+        self.assertNotIn("Save & Learn another", message)
+
+    def test_usb_capture_save_error_does_not_retain_unsaved_sample(self):
+        signal = [3996, 3999] + [469, 2000] * 51
+        result = {"carrier_hz": 38095, "timings_us": signal,
+                  "model": "Synthetic USB learner"}
+        self.save_mock.side_effect = OSError("Disk full")
+        with patch.object(
+                self.app, "_background",
+                side_effect=lambda _name, callback: callback(result, None)), \
+             patch("irstudio.ui.messagebox.showerror") as error:
+            self.app.capture()
+            error.assert_called_once()
+        self.assertEqual(self.button["captures"], [])
+        self.assertEqual(self.button["selected"], 0)
+        self.assertIn("could not be saved", self.app.status_var.get())
 
 
 if __name__ == "__main__":
