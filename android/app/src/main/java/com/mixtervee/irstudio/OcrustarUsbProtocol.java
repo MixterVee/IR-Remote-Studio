@@ -126,19 +126,6 @@ public final class OcrustarUsbProtocol {
     }
 
     /**
-     * Diagnostic-only silent learning probe for PID 0132.
-     * Schedule at 2.5, 5.5 and 9 seconds after entering learning mode.
-     * Stop on the first USB response (even if not a valid FE capture).
-     * Never retry indefinitely, never transmit unrelated commands.
-     */
-    public static boolean silentLearnRetryDue(long elapsedMs, int retries,
-                                              boolean sawUsbLearnReply) {
-        if (sawUsbLearnReply || retries < 0 || retries >= 3) return false;
-        final long[] checkpointsMs = {2500L, 5500L, 9000L};
-        return elapsedMs >= checkpointsMs[retries];
-    }
-
-    /**
      * Bounded stream assembly: accepts multiple USB bulk chunks. Does not
      * assume every USB transfer is an entire learn response.
      */
@@ -147,6 +134,7 @@ public final class OcrustarUsbProtocol {
         private final ByteArrayOutputStream pending = new ByteArrayOutputStream();
         private final ByteArrayOutputStream payload = new ByteArrayOutputStream();
         private int expected = -1;
+        private String frameFormat = "";
         private int usbPackets = 0;
         private int usbBytes = 0;
         private int learnAckCount = 0;
@@ -170,7 +158,7 @@ public final class OcrustarUsbProtocol {
                     + "\nLearn ACK (FF FF FF FF): "
                     + (learnAckCount > 0 ? "SEEN" : "not observed")
                     + "\nFE capture header: "
-                    + (expected > 0 ? "FOUND" : "not observed")
+                    + (expected > 0 ? "FOUND (" + frameFormat + ")" : "not observed")
                     + "\nCapture bytes collected: " + payload.size()
                     + " / " + (expected < 0 ? "unknown" : expected)
                     + "\nFirst USB bytes: "
@@ -210,27 +198,48 @@ public final class OcrustarUsbProtocol {
             byte[] bytes = pending.toByteArray();
             if (bytes.length > MAX_RAW + 64) throw new IllegalArgumentException(
                     "IR response exceeded maximum allowed length.");
-            for (int i = 0; i + 5 < bytes.length; i++) {
+            // The installed Ocrustar APK recognizes both formats:
+            //   FE×4 [length big-endian: 2 bytes] [waveform]
+            //   FE×4 [length little-endian: 4 bytes] [waveform]
+            // In either case the length is byte count, not pulse count.
+            // Wait for 8 bytes before deciding, so a split header cannot
+            // accidentally be classified as a legacy two-byte response.
+            for (int i = 0; i + 7 < bytes.length; i++) {
                 if (bytes[i] != (byte) 0xFE || bytes[i + 1] != (byte) 0xFE
-                        || bytes[i + 2] != (byte) 0xFE || bytes[i + 3] != (byte) 0xFE)
-                    continue;
-                // Standalone four-byte FE acknowledgement followed by another
-                // FE header must not be mistaken for a 0xFEFE length.
-                int count = ((bytes[i + 4] & 0xFF) << 8) | (bytes[i + 5] & 0xFF);
-                if (count > MAX_RAW) continue;
-                if (count < 8) throw new IllegalArgumentException(
-                        "Invalid IR payload length " + count + ".");
-                expected = count;
-                int available = Math.min(count, bytes.length - i - 6);
-                payload.write(bytes, i + 6, available);
+                        || bytes[i + 2] != (byte) 0xFE
+                        || bytes[i + 3] != (byte) 0xFE) continue;
+                int bigEndianLength = ((bytes[i + 4] & 0xFF) << 8)
+                        | (bytes[i + 5] & 0xFF);
+                long littleEndianLength = (bytes[i + 4] & 0xFFL)
+                        | ((bytes[i + 5] & 0xFFL) << 8)
+                        | ((bytes[i + 6] & 0xFFL) << 16)
+                        | ((bytes[i + 7] & 0xFFL) << 24);
+                boolean validTwo = bigEndianLength >= 12
+                        && bigEndianLength <= MAX_RAW;
+                boolean validFour = littleEndianLength >= 12
+                        && littleEndianLength <= MAX_RAW;
+                // 4-byte LE frames use zero high bytes for our bounded
+                // max length. Prefer LE if its value is smaller than the
+                // 2-byte BE interpretation. Otherwise preserve legacy.
+                boolean useFour = validFour && (!validTwo
+                        || ((bytes[i + 6] & 0xFF) == 0
+                            && (bytes[i + 7] & 0xFF) == 0
+                            && littleEndianLength < bigEndianLength));
+                if (!useFour && !validTwo) continue;
+                expected = useFour ? (int) littleEndianLength : bigEndianLength;
+                int headerSize = useFour ? 8 : 6;
+                frameFormat = useFour ? "4-byte LE length" : "2-byte BE length";
+                int available = Math.min(expected,
+                        bytes.length - i - headerSize);
+                payload.write(bytes, i + headerSize, available);
                 pending.reset();
                 return;
             }
-            // If a standalone ACK (FE x4) arrives, only retain a short tail
-            // to recognize a header split across USB packet boundaries.
+            // Retain enough bytes to recognize FE×4 plus a fragmented
+            // four-byte length across transfers.
             if (bytes.length > 64) {
                 pending.reset();
-                pending.write(bytes, bytes.length - 5, 5);
+                pending.write(bytes, bytes.length - 7, 7);
             }
         }
 
