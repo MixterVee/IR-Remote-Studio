@@ -15,6 +15,25 @@ public class OcrustarUsbProtocolTest {
         assertEquals("045C:02AA", OcrustarUsbProtocol.usbId(0x045C, 0x02AA));
     }
 
+    @Test public void verifiedDifferentBulkEndpointsFor0132And02aa() {
+        // User's real dongle: Android detects 045C:0132. The documented
+        // iAP-capable USB-C hardware has bulk OUT 0x02 and IN 0x82.
+        assertEquals(0x02,
+                OcrustarUsbProtocol.expectedBulkOut(0x045C, 0x0132));
+        assertEquals(0x82,
+                OcrustarUsbProtocol.expectedBulkIn(0x045C, 0x0132));
+        // D226 USB-A reference uses a DIFFERENT physical endpoint pair.
+        assertEquals(0x01,
+                OcrustarUsbProtocol.expectedBulkOut(0x045C, 0x02AA));
+        assertEquals(0x81,
+                OcrustarUsbProtocol.expectedBulkIn(0x045C, 0x02AA));
+        // A Harmony or an unrecognized model must never be mapped.
+        assertEquals(-1,
+                OcrustarUsbProtocol.expectedBulkOut(0x046D, 0xC124));
+        assertEquals(-1,
+                OcrustarUsbProtocol.expectedBulkIn(0x045C, 0xFFFF));
+    }
+
     @Test public void validatesKnownHandshakeAndRefusesUnrecognizedVersions() {
         assertEquals("D226", OcrustarUsbProtocol.identifyHello(
                 new byte[]{(byte) 0xFC,(byte) 0xFC,(byte) 0xFC,
