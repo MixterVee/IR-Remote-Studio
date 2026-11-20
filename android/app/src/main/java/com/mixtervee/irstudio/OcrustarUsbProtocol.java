@@ -98,6 +98,22 @@ public final class OcrustarUsbProtocol {
     }
 
     /**
+     * Identify the exact 045C:0132 model using the two independently
+     * observed Android reply forms: FC×4 + D226/D552 identity or
+     * FA×4 + firmware/version bytes. This device's native Android driver
+     * does NOT send a second FA acknowledgement after identification.
+     * The older 02AA path remains on its established handshake.
+     */
+    public static String identifyForUsbPid(int pid, byte[] bytes, int count) {
+        if (pid == 0x0132) {
+            if (isFirmwareVersionReply(bytes, count))
+                return "0132 version " + firmwareVersionReply(bytes, count);
+            return identifyHello(bytes, count);
+        }
+        return identifyHello(bytes, count);
+    }
+
+    /**
      * Bounded stream assembly: accepts multiple USB bulk chunks. Does not
      * assume every USB transfer is an entire learn response.
      */
