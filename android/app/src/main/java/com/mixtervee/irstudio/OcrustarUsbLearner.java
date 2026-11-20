@@ -119,8 +119,11 @@ public final class OcrustarUsbLearner {
         private final int[] bytes = new int[4];
         private final StringBuilder events = new StringBuilder();
         private int eventCount;
+        volatile int phase;
 
-        void log(String event) {
+        void setPhase(int phase) { this.phase = phase; }
+
+        synchronized void log(String event) {
             if (eventCount++ < 45) {
                 events.append("  ").append(event).append('\n');
             } else if (eventCount == 46) {
@@ -128,12 +131,12 @@ public final class OcrustarUsbLearner {
             }
         }
 
-        void write(String label, byte[] data, int result) {
+        synchronized void write(String label, byte[] data, int result) {
             log("OUT " + label + ": " + result + "/" + data.length
                     + " bytes, command " + shortHex(data, data.length));
         }
 
-        void read(int phase, int result, byte[] data) {
+        synchronized void read(int phase, int result, byte[] data) {
             reads[phase]++;
             if (result <= 0) {
                 empty[phase]++;
@@ -147,7 +150,7 @@ public final class OcrustarUsbLearner {
                         + " bytes, first bytes " + shortHex(data, result));
         }
 
-        String report() {
+        synchronized String report() {
             StringBuilder result = new StringBuilder();
             for (int i = 0; i < PHASES.length; i++) {
                 result.append(PHASES[i]).append(": ")
@@ -172,14 +175,6 @@ public final class OcrustarUsbLearner {
             if (length > 16) result.append(" ...");
             return result.toString();
         }
-    }
-
-    private static int read(UsbDeviceConnection conn, UsbEndpoint endpoint,
-                            byte[] bytes, int timeoutMs,
-                            UsbTrace trace, int phase) {
-        int count = conn.bulkTransfer(endpoint, bytes, bytes.length, timeoutMs);
-        trace.read(phase, count, bytes);
-        return count;
     }
 
     public static String describeUsb(UsbManager manager) {
@@ -251,35 +246,38 @@ public final class OcrustarUsbLearner {
     }
 
     private static Handshake handshake(UsbDeviceConnection conn, Port port,
-                                       int productId, UsbTrace trace) {
-        // Stale IN data from a previous vendor app session must not be
-        // mistaken for a valid reply. Read only, bounded to five packets.
-        byte[] packet = new byte[512];
-        for (int i = 0; i < 5; i++) {
-            if (read(conn, port.in, packet, 15, trace, 0) <= 0) break;
-        }
+                                       int productId, UsbTrace trace,
+                                       OcrustarUsbReadPump receiver) {
+        trace.setPhase(1);
         for (int attempt = 0; attempt < 3; attempt++) {
             write(conn, port.out, OcrustarUsbProtocol.HELLO, "Identity", trace);
             long deadline = SystemClock.elapsedRealtime() + 1000;
             while (SystemClock.elapsedRealtime() < deadline) {
-                int received = read(conn, port.in, packet, 200, trace, 1);
-                if (received <= 0) continue;
-                // A real 045C:0132 dongle returned FC FC FC FC 70 01,
-                // identifying D552, but never entered FE learning when we
-                // omitted FA. Acknowledge *that FC model response* as the
-                // documented D552 handshake requires. A separate FA-version
-                // reply is metadata and MUST NOT be echoed (ACK loop).
+                int waitMs = (int) Math.min(200,
+                        deadline - SystemClock.elapsedRealtime());
+                if (waitMs <= 0) break;
+                byte[] packet = receiver.poll(waitMs);
+                if (packet == null) continue;
+                // The 0132 can emit the iAP2 detect token FF 55 02 00
+                // EE 10 at USB connect. It is NOT a model response.
+                if (packet.length < 6
+                        || !startsWith(packet, (byte) 0xFC)
+                        && !(productId == 0x0132 && startsWith(packet, (byte) 0xFA))) {
+                    trace.log("Ignoring non-identity USB startup packet ("
+                            + packet.length + " bytes)");
+                    continue;
+                }
                 String type = OcrustarUsbProtocol.identifyForUsbPid(
-                        productId, packet, received);
+                        productId, packet, packet.length);
                 boolean sendAck = OcrustarUsbProtocol.shouldAcknowledgeIdentity(
-                        productId, packet, received);
+                        productId, packet, packet.length);
                 trace.log("Identity classified as " + type + " for PID "
                         + String.format(Locale.ROOT, "%04X", productId));
                 if (sendAck) {
                     write(conn, port.out, OcrustarUsbProtocol.ACK,
                             "Identity acknowledgment after FC model", trace);
                 } else {
-                    trace.log("FA firmware-version identity: no FA echo (avoid ACK loop)");
+                    trace.log("FA firmware-version identity: no FA echo");
                 }
                 return new Handshake(type, sendAck);
             }
@@ -289,24 +287,29 @@ public final class OcrustarUsbLearner {
                 + "unplug/reinsert the dongle and try again.");
     }
 
+    private static boolean startsWith(byte[] packet, byte value) {
+        return packet.length >= 4 && packet[0] == value && packet[1] == value
+                && packet[2] == value && packet[3] == value;
+    }
+
     /**
-     * Drain the firmware/version response to AUTH_ACK *before* sending
-     * START_LEARN. The real 045C:0132 test returned FA FA FA FA 22 01
-     * during our learn window: this is firmware metadata, not a learn ACK.
-     * This bounded read-only settling period avoids overlapping AUTH_ACK
-     * processing with FE learn activation. No extra commands are sent.
+     * Read firmware metadata from the SAME continuously running USB worker.
+     * Never echo the FA reply; this is not an authorization challenge.
      */
-    private static String readPostAuthVersion(UsbDeviceConnection conn, Port port,
+    private static String readPostAuthVersion(OcrustarUsbReadPump receiver,
                                               UsbTrace trace) {
-        byte[] read = new byte[64];
+        trace.setPhase(2);
         byte[] prefix = new byte[32];
         int size = 0, packets = 0;
         long deadline = SystemClock.elapsedRealtime() + 450;
         while (SystemClock.elapsedRealtime() < deadline && packets < 8) {
-            int n = read(conn, port.in, read, 100, trace, 2);
-            if (n <= 0) continue;
+            int waitMs = (int) Math.min(100,
+                    deadline - SystemClock.elapsedRealtime());
+            if (waitMs <= 0) break;
+            byte[] read = receiver.poll(waitMs);
+            if (read == null) continue;
             packets++;
-            int add = Math.min(n, prefix.length - size);
+            int add = Math.min(read.length, prefix.length - size);
             if (add > 0) {
                 System.arraycopy(read, 0, prefix, size, add);
                 size += add;
@@ -351,6 +354,7 @@ public final class OcrustarUsbLearner {
             throw new IllegalStateException(
                     "Cannot open dongle. Close the official Ocrustar app first.");
         boolean claimed = false, armed = false;
+        OcrustarUsbReadPump receiver = null;
         String pronto = null;
         RuntimeException failure = null;
         UsbTrace trace = new UsbTrace();
@@ -360,22 +364,36 @@ public final class OcrustarUsbLearner {
                     device.getVendorId(), device.getProductId(),
                     port.usbInterface.getId(), port.out.getAddress(),
                     port.in.getAddress()));
-            claimed = connection.claimInterface(port.usbInterface, false);
-            trace.log("claimInterface(force=false): " + (claimed ? "SUCCESS" : "FAILED"));
+            // Match the official app's interface-claim behavior. A single
+            // receiver thread must own IN before any authentication writes.
+            claimed = connection.claimInterface(port.usbInterface, true);
+            trace.log("claimInterface(force=true): " + (claimed ? "SUCCESS" : "FAILED"));
             if (!claimed)
                 throw new IllegalStateException(
                         "USB interface busy. Close the Ocrustar app.");
             final boolean native0132 = device.getProductId() == 0x0132;
+            receiver = new OcrustarUsbReadPump(
+                    (buffer, timeoutMs) -> connection.bulkTransfer(
+                            port.in, buffer, buffer.length, timeoutMs),
+                    (count, buffer) -> trace.read(trace.phase, count, buffer));
+            receiver.start();
+            trace.log("Dedicated USB IN thread started: 16384-byte buffer, "
+                    + "500 ms read timeout, bounded packet queue");
+            // Allow the receiver to consume the device's unsolicited iAP2
+            // connect token before the FC identity request.
+            SystemClock.sleep(80);
+            trace.log("Pre-auth packets discarded: " + receiver.discardPending());
             Handshake identity = handshake(connection, port,
-                    device.getProductId(), trace);
+                    device.getProductId(), trace, receiver);
             String type = identity.model;
             // Let firmware settle after acknowledging the FC D552 identity
             // BEFORE starting FE learning. This response is metadata, not an
             // infrared packet and must not be answered with another FA.
             String authFollowUp = identity.acknowledged
-                    ? readPostAuthVersion(connection, port, trace)
+                    ? readPostAuthVersion(receiver, trace)
                     : "Already received FA firmware-version identity; no FA echo.";
             trace.log("AUTH FOLLOW-UP: " + authFollowUp);
+            trace.setPhase(3);
             write(connection, port.out, OcrustarUsbProtocol.START_LEARN,
                     "Start IR learning", trace);
             armed = true;
@@ -383,42 +401,25 @@ public final class OcrustarUsbLearner {
             OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
             byte[] buffer = new byte[512];
             try {
-                long startAt = SystemClock.elapsedRealtime();
-                long deadline = startAt + 15_000;
+                long deadline = SystemClock.elapsedRealtime() + 15_000;
                 boolean acknowledged = false;
-                boolean sawLearnReply = false;
-                int silentRetries = 0;
-                // One independent Android ElkSmart learner refreshes FE during
-                // silent listening. Experiment only on the reported 0132:
-                // three bounded retries, never after ANY USB learning reply.
-                // This is not a proven 0132 requirement; the trace tells us
-                // whether it causes an FF acknowledgement or FE capture.
+                int learningPackets = 0;
                 while (SystemClock.elapsedRealtime() < deadline && !capture.complete()) {
-                    int count = read(connection, port.in, buffer, 300, trace, 3);
-                    if (count > 0) {
-                        sawLearnReply = true;
-                        capture.accept(buffer, count);
-                        if (!acknowledged && capture.sawLearnAck()) {
-                            acknowledged = true;
-                            if (progress != null) progress.acknowledged(type);
-                        }
-                    }
-                    long elapsedMs = SystemClock.elapsedRealtime() - startAt;
-                    if (native0132
-                            && OcrustarUsbProtocol.silentLearnRetryDue(
-                                    elapsedMs, silentRetries, sawLearnReply)
-                            && !capture.complete()) {
-                        silentRetries++;
-                        trace.log("0132 silent learn: retry FE #" + silentRetries
-                                + " at " + elapsedMs + " ms (no USB learn reply)");
-                        write(connection, port.out,
-                                OcrustarUsbProtocol.START_LEARN,
-                                "Silent IR learning retry " + silentRetries, trace);
+                    int waitMs = (int) Math.min(300,
+                            deadline - SystemClock.elapsedRealtime());
+                    if (waitMs <= 0) break;
+                    byte[] packet = receiver.poll(waitMs);
+                    if (packet == null) continue;
+                    learningPackets++;
+                    capture.accept(packet, packet.length);
+                    if (!acknowledged && capture.sawLearnAck()) {
+                        acknowledged = true;
+                        if (progress != null) progress.acknowledged(type);
                     }
                 }
-                trace.log("Learn result: retries=" + silentRetries
-                        + ", sawAnyLearningReply=" + sawLearnReply
-                        + ", captured=" + capture.complete());
+                trace.log("Learn result: incomingPackets=" + learningPackets
+                        + ", captured=" + capture.complete()
+                        + ", FE retries=0 (removed)");
                 if (!capture.complete()) {
                     if (native0132) {
                         // Android's independently published 0132 driver
@@ -466,6 +467,10 @@ public final class OcrustarUsbLearner {
                 }
             } else {
                 trace.log("STOP not sent; START was not successfully written");
+            }
+            if (receiver != null) {
+                receiver.stopAndJoin();
+                trace.log("Dedicated USB IN thread stopped");
             }
             if (claimed) {
                 try {
