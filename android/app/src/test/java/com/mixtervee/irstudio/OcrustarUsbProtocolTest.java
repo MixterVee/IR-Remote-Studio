@@ -109,6 +109,45 @@ public class OcrustarUsbProtocolTest {
         assertTrue(decoded.carrierHz > 37500 && decoded.carrierHz < 38500);
     }
 
+    @Test public void diagnosticsDistinguishNoResponseFromLearnAckAndPayload() {
+        OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
+        assertTrue(capture.diagnostic().contains("USB receive packets: 0"));
+        assertTrue(capture.diagnostic().contains("First USB bytes: (none)"));
+        assertFalse(capture.sawLearnAck());
+
+        // The 0132 learning command first elicits an FF-FF-FF-FF ACK.
+        byte[] ack = {(byte) 0xFF, (byte) 0xFF, (byte) 0xFF, (byte) 0xFF};
+        capture.accept(ack, ack.length);
+        assertTrue(capture.sawLearnAck());
+        assertFalse(capture.complete());
+        assertTrue(capture.diagnostic().contains("Learn ACK (FF FF FF FF): SEEN"));
+        assertTrue(capture.diagnostic().contains("FE capture header: not observed"));
+
+        // An FE-framed response may arrive in separate USB transfers.
+        byte[] header = {(byte) 0xFE, (byte) 0xFE, (byte) 0xFE,
+                (byte) 0xFE, 0, 16, 32, 64, 96, 112};
+        capture.accept(header, header.length);
+        assertEquals(16, capture.expected());
+        assertEquals(4, capture.received());
+        assertFalse(capture.complete());
+        assertTrue(capture.diagnostic().contains("FE capture header: FOUND"));
+        assertTrue(capture.diagnostic().contains("Capture bytes collected: 4 / 16"));
+        assertTrue(capture.diagnostic().contains("USB receive packets: 2"));
+        assertTrue(capture.diagnostic().contains("USB bytes read: 14"));
+    }
+
+    @Test public void boundedReceivePrefixDoesNotExposeWholeIrCapture() {
+        OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
+        byte[] noise = new byte[64];
+        java.util.Arrays.fill(noise, (byte) 0x34);
+        capture.accept(noise, noise.length);
+        String report = capture.diagnostic();
+        assertTrue(report.contains("USB bytes read: 64"));
+        assertTrue(report.contains("FE capture header: not observed"));
+        String first = report.substring(report.indexOf("First USB bytes: "));
+        assertTrue(first.length() < 125);
+    }
+
     @Test public void ignoresIncompleteResponseAndRejectsMalformedTimings() {
         OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
         capture.accept(new byte[]{(byte) 0xFE,(byte) 0xFE,
