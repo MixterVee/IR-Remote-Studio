@@ -126,6 +126,19 @@ public final class OcrustarUsbProtocol {
     }
 
     /**
+     * Diagnostic-only silent learning probe for PID 0132.
+     * Schedule at 2.5, 5.5 and 9 seconds after entering learning mode.
+     * Stop on the first USB response (even if not a valid FE capture).
+     * Never retry indefinitely, never transmit unrelated commands.
+     */
+    public static boolean silentLearnRetryDue(long elapsedMs, int retries,
+                                              boolean sawUsbLearnReply) {
+        if (sawUsbLearnReply || retries < 0 || retries >= 3) return false;
+        final long[] checkpointsMs = {2500L, 5500L, 9000L};
+        return elapsedMs >= checkpointsMs[retries];
+    }
+
+    /**
      * Bounded stream assembly: accepts multiple USB bulk chunks. Does not
      * assume every USB transfer is an entire learn response.
      */
