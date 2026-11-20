@@ -1156,7 +1156,108 @@ public class MainActivity extends Activity {
         }
     }
 
-    /** Use U1 Bluetooth when connected, otherwise preserve Harmony USB learning. */
+    /**
+     * Ocrustar USB: reuse the existing named remote/button library and auto
+     * save workflow. No changes to U1 and Harmony learning protocols.
+     */
+    private void learnWithOcrustar(IrplusCodec.Remote remote,
+                                   IrplusCodec.Item button) {
+        if (remote == null || button == null) {
+            IrplusCodec.Remote chosen = current();
+            if (chosen == null) {
+                new AlertDialog.Builder(this).setTitle("Create a remote first")
+                        .setMessage("Create a remote and a named button, then "
+                                + "capture the command with Ocrustar USB.")
+                        .setPositiveButton("OK", null).show();
+                return;
+            }
+            boolean hasButtons = false;
+            for (IrplusCodec.Item item : chosen.items)
+                if (!item.space) { hasButtons = true; break; }
+            if (hasButtons) chooseExistingForLearning(chosen);
+            else createButton(true);
+            return;
+        }
+        UsbManager usb = (UsbManager) getSystemService(USB_SERVICE);
+        UsbDevice dongle = OcrustarUsbLearner.find(usb);
+        if (dongle == null || usb == null || !usb.hasPermission(dongle)) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Connect Ocrustar USB")
+                    .setMessage("Insert the Ocrustar USB-C dongle, then tap "
+                            + "USB Setup and grant access. Close the official "
+                            + "Ocrustar app before learning.")
+                    .setNegativeButton("Cancel", null)
+                    .setPositiveButton("USB Setup", (d, w) -> showOcrustarSetup())
+                    .show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Learn with Ocrustar USB")
+                .setMessage("IR Remote Studio will verify your dongle's USB "
+                        + "identity, then enable its learning receiver for up to "
+                        + "15 seconds. Aim the original remote at the dongle "
+                        + "and press one button when READY appears. The receiver "
+                        + "is stopped afterwards, including on failure.\n\n"
+                        + "The USB learning response does not report carrier "
+                        + "frequency; 38 kHz will be assumed for the exported "
+                        + "Pronto Hex. This experimental driver is not yet "
+                        + "validated on your specific dongle.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Start learning", (d, w) ->
+                        beginOcrustarCapture(usb, dongle, remote, button))
+                .show();
+    }
+
+    private void beginOcrustarCapture(UsbManager usb, UsbDevice dongle,
+                                     IrplusCodec.Remote remote,
+                                     IrplusCodec.Item button) {
+        if (ocrustarLearning || (u1Ble != null && u1Ble.isLearning())) {
+            toast("An infrared capture is already in progress.");
+            return;
+        }
+        ocrustarLearning = true;
+        learnButton.setEnabled(false);
+        learnButton.setText("Connecting to Ocrustar...");
+        setStatus("Verifying Ocrustar USB identity and opening its IR receiver.");
+        new Thread(() -> {
+            String pronto = null, problem = null;
+            try {
+                pronto = OcrustarUsbLearner.learn(usb, dongle, model ->
+                        runOnUiThread(() -> {
+                            if (isFinishing() || isDestroyed()) return;
+                            learnButton.setText("READY — Press source remote button");
+                            setStatus("Ocrustar " + model + " READY. Aim the source "
+                                    + "remote at the dongle and press one button.");
+                        }));
+            } catch (Exception error) {
+                problem = error.getMessage();
+                if (problem == null) problem = error.getClass().getSimpleName();
+            }
+            final String result = pronto, failure = problem;
+            runOnUiThread(() -> {
+                ocrustarLearning = false;
+                if (isFinishing() || isDestroyed()) return;
+                restoreLearnButton();
+                updateLearnerPanel();
+                if (result != null) {
+                    if (remote != null && button != null)
+                        saveExistingCapture(remote, button, result);
+                    else showCapturePreview(result,
+                            "Ocrustar USB IR learned; assumed 38 kHz carrier.");
+                } else {
+                    setStatus("Ocrustar learning failed: " + failure);
+                    new AlertDialog.Builder(this)
+                            .setTitle("Ocrustar USB learning")
+                            .setMessage(failure + "\n\nThe app did not save "
+                                    + "a command. Check USB ID/permission in "
+                                    + "USB Setup and try another IR button.")
+                            .setPositiveButton("Close", null).show();
+                }
+            });
+        }, "OcrustarUsbLearning").start();
+    }
+
+    /** The receiver dropdown, not attached hardware, determines capture. */
     private void startLearning() {
         startLearning(null, null);
     }
@@ -1174,6 +1275,10 @@ public class MainActivity extends Activity {
                     .setNegativeButton("Cancel", null)
                     .setPositiveButton("Connect U1",
                             (d, w) -> openU1Connection()).show();
+            return;
+        }
+        if (route == LearnerSource.Route.OCRUSTAR_USB) {
+            learnWithOcrustar(targetRemote, targetButton);
             return;
         }
         if (route == LearnerSource.Route.U1_BLUETOOTH) {
