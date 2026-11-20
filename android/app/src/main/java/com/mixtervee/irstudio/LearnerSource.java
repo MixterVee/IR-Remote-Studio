@@ -4,13 +4,15 @@ package com.mixtervee.irstudio;
 public final class LearnerSource {
     public static final int SOFABATON_U1 = 0;
     public static final int HARMONY_USB = 1;
+    public static final int OCRUSTAR_USB = 2;
 
-    public enum Route { U1_BLUETOOTH, CONNECT_U1_FIRST, HARMONY_USB }
+    public enum Route { U1_BLUETOOTH, CONNECT_U1_FIRST, HARMONY_USB, OCRUSTAR_USB }
 
     private LearnerSource() {}
 
     public static int normalize(int selected) {
-        return selected == HARMONY_USB ? HARMONY_USB : SOFABATON_U1;
+        return selected == HARMONY_USB || selected == OCRUSTAR_USB
+                ? selected : SOFABATON_U1;
     }
 
     /**
@@ -19,13 +21,14 @@ public final class LearnerSource {
      */
     public static Route captureRoute(int selected, boolean u1Connected) {
         if (normalize(selected) == HARMONY_USB) return Route.HARMONY_USB;
+        if (normalize(selected) == OCRUSTAR_USB) return Route.OCRUSTAR_USB;
         return u1Connected ? Route.U1_BLUETOOTH : Route.CONNECT_U1_FIRST;
     }
 
     public static String learnLabel(int selected) {
-        return normalize(selected) == HARMONY_USB
-                ? "◉  Learn IR • Harmony USB"
-                : "◉  Learn IR • SofaBaton U1";
+        if (normalize(selected) == HARMONY_USB) return "◉  Learn IR • Harmony USB";
+        if (normalize(selected) == OCRUSTAR_USB) return "◉  Learn IR • Ocrustar USB";
+        return "◉  Learn IR • SofaBaton U1";
     }
 
     /**
@@ -33,6 +36,13 @@ public final class LearnerSource {
      * the other learner's setup details off the main screen.
      */
     public static String connectionHint(int selected, boolean ready) {
+        if (normalize(selected) == OCRUSTAR_USB) {
+            return ready
+                    ? "Ocrustar USB access granted. Select a button and tap Learn."
+                    : "Insert your Ocrustar USB-C IR dongle. Tap USB Setup to "
+                      + "identify it and grant Android USB access. Close the "
+                      + "official Ocrustar app before learning.";
+        }
         if (normalize(selected) == HARMONY_USB) {
             return ready
                     ? "Harmony USB ready. Select a button and tap Learn."
@@ -46,7 +56,8 @@ public final class LearnerSource {
     }
 
     public static String connectionLabel(int selected, boolean u1Connected) {
-        if (normalize(selected) == HARMONY_USB) return "USB Setup";
+        if (normalize(selected) == HARMONY_USB
+                || normalize(selected) == OCRUSTAR_USB) return "USB Setup";
         return u1Connected ? "Connected" : "Connect U1";
     }
 }
