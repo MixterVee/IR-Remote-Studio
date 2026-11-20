@@ -270,11 +270,18 @@ public final class OcrustarUsbLearner {
                         }
                     }
                 }
-                if (!capture.complete())
+                if (!capture.complete()) {
+                    if (!capture.sawLearnAck()) {
+                        throw new IllegalStateException(
+                                "Ocrustar did not confirm the start-learning "
+                                + "command (FF FF FF FF). No complete IR "
+                                + "signal was received in 15 seconds.");
+                    }
                     throw new IllegalStateException(
-                            "No complete IR signal in 15 seconds. "
-                            + "Aim a separate physical remote at the dongle "
-                            + "and press once immediately after Listening appears.");
+                            "Ocrustar acknowledged learning, but no complete "
+                            + "IR signal arrived in 15 seconds. Aim the "
+                            + "physical source remote at the dongle's receiver.");
+                }
                 return capture.pronto();
             } catch (RuntimeException problem) {
                 // A timeout alone cannot distinguish missing IR, unacknowledged
