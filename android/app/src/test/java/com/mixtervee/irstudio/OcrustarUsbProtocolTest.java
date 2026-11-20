@@ -100,7 +100,7 @@ public class OcrustarUsbProtocolTest {
             fail("no signal should be returned");
         } catch (IllegalStateException expected) { }
 
-        byte[] tooShort = packet(rawTimings(9000, 4500, 560, 560));
+        byte[] tooShort = packet(rawTimings(9000, 4500, 560, 560, 560, 560));
         OcrustarUsbProtocol.Capture shortCapture = new OcrustarUsbProtocol.Capture();
         shortCapture.accept(tooShort, tooShort.length);
         try {
