@@ -140,6 +140,27 @@ public class OcrustarUsbProtocolTest {
         }
     }
 
+    @Test public void onlyFcModelIdentityReceivesOneFaAckOn0132() {
+        byte[] d552 = {(byte) 0xFC,(byte) 0xFC,(byte) 0xFC,
+                (byte) 0xFC,0x70,0x01};
+        byte[] firmware = {(byte) 0xFA,(byte) 0xFA,(byte) 0xFA,
+                (byte) 0xFA,0x22,0x01};
+        assertTrue("FC D552 model response needs FA acknowledgment",
+                OcrustarUsbProtocol.shouldAcknowledgeIdentity(
+                        0x0132, d552, d552.length));
+        assertTrue("Legacy D552 response still uses FA acknowledgment",
+                OcrustarUsbProtocol.shouldAcknowledgeIdentity(
+                        0x02AA, d552, d552.length));
+        assertFalse("FA-version reply must not start an ACK loop",
+                OcrustarUsbProtocol.shouldAcknowledgeIdentity(
+                        0x0132, firmware, firmware.length));
+        try {
+            OcrustarUsbProtocol.shouldAcknowledgeIdentity(0x0132,
+                    new byte[]{1,2,3,4,5,6}, 6);
+            fail("Unrecognized USB identity must not be acknowledged");
+        } catch (IllegalArgumentException expected) { }
+    }
+
     @Test public void native0132CapturesFeFrameWithoutSeparateFfAck() {
         byte[] raw = rawTimings(8992, 4496, 560, 560, 560, 1680,
                 560, 560, 560, 1680, 560, 560, 560, 40000);
