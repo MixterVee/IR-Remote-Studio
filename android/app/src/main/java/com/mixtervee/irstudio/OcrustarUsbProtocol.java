@@ -39,6 +39,28 @@ public final class OcrustarUsbProtocol {
         return false;
     }
 
+    /**
+     * Bulk endpoint addresses differ between the documented Ocrustar/ElkSmart
+     * hardware variants, even though their protocol commands are similar.
+     * 045C:0132 (USB-C / iAP-capable): OUT 0x02, IN 0x82.
+     * 045C:02AA (D226): OUT 0x01, IN 0x81.
+     *
+     * 0132 source: ariemeir/infrared-reverse-engineering-iphone-remote-app
+     * elksmart_ir_reverse_engineering.md §2 (actual USB descriptors).
+     * 02AA source: deadboy18/Ocrustar-USB-IR docs/PROTOCOL.md §1.
+     * Remaining candidate IDs have not been verified; the earlier D226
+     * default is retained only with identity-gated capture.
+     */
+    public static int expectedBulkOut(int vid, int pid) {
+        if (!isCandidate(vid, pid)) return -1;
+        return pid == 0x0132 ? 0x02 : 0x01;
+    }
+
+    public static int expectedBulkIn(int vid, int pid) {
+        int out = expectedBulkOut(vid, pid);
+        return out < 0 ? -1 : (0x80 | out);
+    }
+
     public static String usbId(int vid, int pid) {
         return String.format(Locale.ROOT, "%04X:%04X", vid, pid);
     }
