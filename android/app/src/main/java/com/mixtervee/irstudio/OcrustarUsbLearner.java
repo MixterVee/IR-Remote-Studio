@@ -159,7 +159,7 @@ public final class OcrustarUsbLearner {
                     + sent + "/" + bytes.length + ").");
     }
 
-    private static String handshake(UsbDeviceConnection conn, Port port) {
+    private static String handshake(UsbDeviceConnection conn, Port port, int productId) {
         // Stale IN data from a previous vendor app session must not be
         // mistaken for a valid reply. Read only, bounded to five packets.
         byte[] packet = new byte[512];
@@ -172,9 +172,15 @@ public final class OcrustarUsbLearner {
             while (SystemClock.elapsedRealtime() < deadline) {
                 int received = conn.bulkTransfer(port.in, packet, packet.length, 200);
                 if (received <= 0) continue;
-                // Do not acknowledge or arm an unrecognized reply.
-                String type = OcrustarUsbProtocol.identifyHello(packet, received);
-                write(conn, port.out, OcrustarUsbProtocol.ACK, "Identity acknowledgment");
+                // Do not arm an unrecognized reply. For the 0132 device,
+                // a verified independent Android implementation uses the
+                // identity request followed directly by LEARN, without
+                // sending a second FA token. Keep FA only for older models.
+                String type = OcrustarUsbProtocol.identifyForUsbPid(
+                        productId, packet, received);
+                if (productId != 0x0132)
+                    write(conn, port.out, OcrustarUsbProtocol.ACK,
+                            "Identity acknowledgment");
                 return type;
             }
         }
@@ -249,8 +255,13 @@ public final class OcrustarUsbLearner {
             if (!claimed)
                 throw new IllegalStateException(
                         "USB interface busy. Close the Ocrustar app.");
-            String type = handshake(connection, port);
-            String authFollowUp = readPostAuthVersion(connection, port);
+            final boolean native0132 = device.getProductId() == 0x0132;
+            String type = handshake(connection, port, device.getProductId());
+            // Only old D226/D552 protocol requires the FA follow-up ACK.
+            // Do not poll a nonexistent FA-after-ACK response on 0132.
+            String authFollowUp = native0132
+                    ? "045C:0132 native Android path: no extra FA ACK sent."
+                    : readPostAuthVersion(connection, port);
             write(connection, port.out, OcrustarUsbProtocol.START_LEARN,
                     "Start IR learning");
             armed = true;
@@ -271,6 +282,18 @@ public final class OcrustarUsbLearner {
                     }
                 }
                 if (!capture.complete()) {
+                    if (native0132) {
+                        // Android's independently published 0132 driver
+                        // waits for FE capture data, without a mandatory FF
+                        // acknowledgement packet. No FF alone is not failure.
+                        throw new IllegalStateException(
+                                "No FE infrared capture packet arrived from "
+                                + "Ocrustar 045C:0132 in 15 seconds. "
+                                + "Press a physical IR remote button as soon "
+                                + "as LISTENING appears. No separate FF "
+                                + "learn acknowledgement is required for "
+                                + "this Android hardware path.");
+                    }
                     if (!capture.sawLearnAck()) {
                         throw new IllegalStateException(
                                 "Ocrustar did not confirm the start-learning "
