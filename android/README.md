@@ -2,6 +2,46 @@
 
 **Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
+## v0.4.7-alpha: Fix real Ocrustar 045C:0132 USB endpoint mismatch
+
+On the user's OnePlus 15, **IR Remote Studio v0.4.6** successfully detected
+the Ocrustar dongle **045C:0132** and Android granted USB permission, but
+learning stopped safely with **"Ocrustar bulk endpoints 0x01 / 0x81 not
+present"**. That was a software assumption from documentation for a different
+device, **045C:02AA**, not a permission or OTG failure.
+
+v0.4.7 uses the independently documented USB interface descriptors for the
+**exact 045C:0132 variant**: bulk **OUT 0x02 / IN 0x82**. The **045C:02AA**
+reference remains **OUT 0x01 / IN 0x81**. The learner requires the
+correct bulk endpoint types and directions in the same USB interface and
+still verifies the D226/D552 protocol identity before starting IR learning.
+No firmware/configuration writes, forced interface claims, or changes
+to the U1/Harmony learner.
+
+**Retest:**
+1. Install the persistently signed v0.4.7 APK *over* v0.4.6 (do not uninstall).
+2. Close Ocrustar's own app and insert the dongle into the OnePlus.
+3. Select **Ocrustar → USB Setup** and verify that **Expected bulk OUT 0x02 /
+   IN 0x82: FOUND** is displayed, as well as the device's full USB interface/
+   endpoint descriptor report (class, direction, type and max packet size).
+4. Grant USB permission if requested, select the existing remote and button,
+   then use **Learn IR • Ocrustar USB**. If it fails again, take a screenshot
+   of the *new error* and of the USB Setup diagnostics. No captured command
+   is saved on a failure.
+5. An actual successful physical capture still requires hardware verification;
+   the tests validate the endpoint mapping, not physical device operation.
+
+The 0132 descriptor facts are based on a reverse-engineering report of a
+real USB-C IR dongle matching this exact VID/PID, with class FF/F0 and
+bulk 02/82:
+https://github.com/ariemeir/infrared-reverse-engineering-iphone-remote-app/blob/main/elksmart_ir_reverse_engineering.md
+
+The D226 USB-A reference with bulk 01/81 is different:
+https://github.com/deadboy18/Ocrustar-USB-IR/blob/main/docs/PROTOCOL.md
+
+This release increases Android versionCode to 30 and retains the same
+private permanent APK signing certificate for in-place installation.
+
 ## v0.4.6-alpha: Direct Ocrustar / ElkSmart USB learning (hardware test pending)
 
 The Android home screen now has **three equally visible IR learners**:
