@@ -109,6 +109,49 @@ public class OcrustarUsbProtocolTest {
         assertTrue(decoded.carrierHz > 37500 && decoded.carrierHz < 38500);
     }
 
+    @Test public void native0132AcceptsVersionIdentityWhileLegacyStillRejectsIt() {
+        // Published native Android implementation for 045C:0132 classifies
+        // both FC model and FA firmware/version replies as identity, and
+        // does not send the extra FA command before FE learning.
+        byte[] firmware = {(byte) 0xFA, (byte) 0xFA,
+                (byte) 0xFA, (byte) 0xFA, 0x22, 0x01};
+        assertTrue(OcrustarUsbProtocol.identifyForUsbPid(
+                0x0132, firmware, firmware.length).contains("0132 version"));
+        try {
+            OcrustarUsbProtocol.identifyForUsbPid(
+                    0x02AA, firmware, firmware.length);
+            fail("Legacy path must not accept firmware reply as model identity");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("Unrecognized"));
+        }
+        byte[] d552 = {(byte) 0xFC, (byte) 0xFC,
+                (byte) 0xFC, (byte) 0xFC, 0x70, 0x01};
+        assertEquals("D552", OcrustarUsbProtocol.identifyForUsbPid(
+                0x0132, d552, d552.length));
+        assertEquals("D552", OcrustarUsbProtocol.identifyForUsbPid(
+                0x02AA, d552, d552.length));
+        byte[] garbage = {1, 2, 3, 4, 5, 6};
+        try {
+            OcrustarUsbProtocol.identifyForUsbPid(
+                    0x0132, garbage, garbage.length);
+            fail("Native device must still reject unrecognized reply");
+        } catch (IllegalArgumentException expected) {
+            assertTrue(expected.getMessage().contains("Unrecognized"));
+        }
+    }
+
+    @Test public void native0132CapturesFeFrameWithoutSeparateFfAck() {
+        byte[] raw = rawTimings(8992, 4496, 560, 560, 560, 1680,
+                560, 560, 560, 1680, 560, 560, 560, 40000);
+        OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
+        byte[] frame = packet(raw);
+        capture.accept(frame, frame.length);
+        assertTrue(capture.complete());
+        assertFalse(capture.sawLearnAck());
+        assertTrue(capture.pronto().startsWith("0000"));
+        assertTrue(capture.diagnostic().contains("FE capture header: FOUND"));
+    }
+
     @Test public void real0132FirmwareReplyIsNotAnIrLearningAcknowledgement() {
         // Actual user USB capture after v0.4.8: FA FA FA FA 22 01.
         // Source SDK documents FA×4 + two bytes as firmware/version metadata.
