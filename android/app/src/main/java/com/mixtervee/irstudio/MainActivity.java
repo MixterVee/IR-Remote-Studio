@@ -678,6 +678,33 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Read-only device detection plus explicit Android USB permission. */
+    private void showOcrustarSetup() {
+        UsbManager usb = (UsbManager) getSystemService(USB_SERVICE);
+        String report = OcrustarUsbLearner.describeUsb(usb);
+        UsbDevice dongle = OcrustarUsbLearner.find(usb);
+        AlertDialog.Builder dialog = new AlertDialog.Builder(this)
+                .setTitle("Ocrustar USB • Setup")
+                .setMessage(report + "\n\nClose the official Ocrustar app before "
+                        + "learning, since only one app can use the dongle at a time.")
+                .setNegativeButton("Close", null);
+        if (usb != null && dongle != null && !usb.hasPermission(dongle)) {
+            dialog.setPositiveButton("Grant USB access", (d, w) -> {
+                try {
+                    OcrustarUsbLearner.requestPermission(this, usb, dongle);
+                } catch (RuntimeException error) {
+                    toast("Cannot request Ocrustar USB access: " + error.getMessage());
+                }
+            });
+        } else {
+            dialog.setPositiveButton("Refresh", (d, w) -> {
+                updateLearnerPanel();
+                showOcrustarSetup();
+            });
+        }
+        dialog.show();
+    }
+
     private String harmonyUsbStatus() {
         UsbManager usb = (UsbManager) getSystemService(USB_SERVICE);
         if (usb == null) return "HARMONY USB — Android USB service unavailable";
@@ -704,26 +731,36 @@ public class MainActivity extends Activity {
             u1SourceButton.setBackground(background(
                     u1Selected ? TEAL : Color.rgb(44, 61, 88), 9));
         }
+        boolean harmonySelected = selectedLearner == LearnerSource.HARMONY_USB;
+        boolean ocrustarSelected = selectedLearner == LearnerSource.OCRUSTAR_USB;
         if (harmonySourceButton != null) {
-            harmonySourceButton.setSelected(!u1Selected);
+            harmonySourceButton.setSelected(harmonySelected);
             harmonySourceButton.setBackground(background(
-                    u1Selected ? Color.rgb(44, 61, 88) : TEAL, 9));
+                    harmonySelected ? TEAL : Color.rgb(44, 61, 88), 9));
+        }
+        if (ocrustarSourceButton != null) {
+            ocrustarSourceButton.setSelected(ocrustarSelected);
+            ocrustarSourceButton.setBackground(background(
+                    ocrustarSelected ? TEAL : Color.rgb(44, 61, 88), 9));
         }
         if (u1ConnectionButton != null) {
             u1ConnectionButton.setText(LearnerSource.connectionLabel(
                     selectedLearner, connected));
         }
+        String selectedStatus;
+        if (u1Selected) selectedStatus = lastU1Status;
+        else if (harmonySelected) selectedStatus = harmonyUsbStatus();
+        else selectedStatus = OcrustarUsbLearner.status(
+                (UsbManager) getSystemService(USB_SERVICE));
+        boolean ready = u1Selected ? connected
+                : (harmonySelected
+                        ? selectedStatus.startsWith("USB ACCESS GRANTED")
+                        : selectedStatus.contains("USB ACCESS GRANTED"));
         if (u1Status != null) {
-            u1Status.setText(u1Selected ? lastU1Status : harmonyUsbStatus());
-            int color = u1Selected
-                    ? (connected ? TEAL : MUTED)
-                    : (harmonyUsbStatus().startsWith("USB ACCESS GRANTED")
-                            ? TEAL : MUTED);
-            u1Status.setTextColor(color);
+            u1Status.setText(selectedStatus);
+            u1Status.setTextColor(ready ? TEAL : MUTED);
         }
         if (receiverHelp != null) {
-            boolean ready = u1Selected
-                    ? connected : harmonyUsbStatus().startsWith("USB ACCESS GRANTED");
             receiverHelp.setText(LearnerSource.connectionHint(
                     selectedLearner, ready));
         }
