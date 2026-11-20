@@ -1225,9 +1225,10 @@ public class MainActivity extends Activity {
                 pronto = OcrustarUsbLearner.learn(usb, dongle, model ->
                         runOnUiThread(() -> {
                             if (isFinishing() || isDestroyed()) return;
-                            learnButton.setText("READY — Press source remote button");
-                            setStatus("Ocrustar " + model + " READY. Aim the source "
-                                    + "remote at the dongle and press one button.");
+                            learnButton.setText("LISTENING — Press source remote button");
+                            setStatus("Ocrustar " + model
+                                    + " learning request sent. Aim the separate physical "
+                                    + "remote at the dongle and press one button now.");
                         }));
             } catch (Exception error) {
                 problem = error.getMessage();
@@ -1247,10 +1248,24 @@ public class MainActivity extends Activity {
                 } else {
                     setStatus("Ocrustar learning failed: " + failure);
                     new AlertDialog.Builder(this)
-                            .setTitle("Ocrustar USB learning")
-                            .setMessage(failure + "\n\nThe app did not save "
-                                    + "a command. Check USB ID/permission in "
-                                    + "USB Setup and try another IR button.")
+                            .setTitle("Ocrustar USB learning diagnostics")
+                            .setMessage(failure + "\n\nNo IR command was saved. "
+                                    + "Use Copy report to share the USB receive "
+                                    + "details. USB Setup can also list interfaces.")
+                            .setNeutralButton("Copy report", (dialog, which) -> {
+                                android.content.ClipboardManager clipboard =
+                                        (android.content.ClipboardManager)
+                                        getSystemService(CLIPBOARD_SERVICE);
+                                if (clipboard != null) {
+                                    clipboard.setPrimaryClip(
+                                            android.content.ClipData.newPlainText(
+                                                    "IR Remote Studio Ocrustar report",
+                                                    "Ocrustar 045C:0132, v"
+                                                    + BuildConfig.VERSION_NAME
+                                                    + "\n" + failure));
+                                    toast("Ocrustar diagnostics copied.");
+                                }
+                            })
                             .setPositiveButton("Close", null).show();
                 }
             });
