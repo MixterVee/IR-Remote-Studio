@@ -1,0 +1,44 @@
+# IR Remote Studio v1.0.0 — Release Candidate 1
+
+**Windows x64, portable executable.** Prepared November 10, 2026.
+
+This is the proposed first stable Windows release. It remains a **release candidate** until final hands-on testing and acceptance; do not treat its GitHub Actions artifact as an officially tagged stable release.
+
+## Highlights
+
+- **Working SofaBaton U1 learning engine preserved** from v0.3.3, the version that learned four IR commands successfully on hardware and exported four working buttons to IRplus. No speculative profile-creation or configuration writes were added.
+- **Cleaner main window** focused on receiver connection, devices, named buttons, sample captures and IRplus export. Captures autosave; the redundant Save buttons are gone.
+- **Bluetooth connection made simpler.** Removed the obsolete disabled experimental Learn controls; ordinary learning happens directly from the main screen. Optional readback and logs remain in collapsed **Troubleshooting**.
+- **Clearer wording**: USB receiver buttons distinguish detection from connection; captured raw IR is shown as saved rather than “Not learned”; sample agreement and signal format are separated.
+- **Real About / Version window** with the actual application version, supported backends, license, data folder and GitHub project link.
+- **Layout Editor** owns button appearance (order and width), previews changes before saving and remembers its last position and size.
+- **Recovery-friendly learning**: undo the latest mismatched sample, clear all samples without deleting a button, or learn into any existing button after autosave.
+- **Backups and export**: maintain original Windows JSON library backups and import/export `.irplus` compatibility.
+
+## Limits and verification
+
+Hardware verification was completed for the original v0.3.3 SofaBaton learning engine, and v0.3.12 layout behavior was tested by the user. The new v1 main-window wording, About dialog and clean Bluetooth connection UI need a final physical U1/UI check before declaring this stable.
+
+USB hardware compatibility depends on the device and driver. The Ocrustar/ElkSmart adapter remains **experimental**. U1 slot-8 backups preserve the previous raw waveform only and **cannot restore the remote's full internal programming**.
+
+Automated checks include the complete protocol and GUI test modules in isolated processes on Windows and under a Linux virtual display. Both must pass before distributing the candidate.
+
+## Installation
+
+Download the successful `IR-Remote-Studio-v1.0.0-rc1-Windows-x64` GitHub Actions artifact, extract the ZIP and run `IR-Remote-Studio.exe`. No Python install is needed. Keep `library.json` backed up before updating.
+
+There is no installer or digital code signature yet; Windows may show a publisher warning. The ZIP includes `WINDOWS-SETUP.txt`, `README.md`, `LICENSE`, this document and a SHA-256 checksum for the EXE.
+
+[Project](https://github.com/MixterVee/IR-Remote-Studio) | [MIT License](LICENSE) | [Setup guide](WINDOWS-SETUP.txt)
+
+### Final acceptance checklist
+
+- [ ] Existing `library.json` opens unchanged with all devices/buttons and samples
+- [ ] U1 connects once and can learn at least one new signal from the main page
+- [ ] Captured signal autosaves and exports to working IRplus code
+- [ ] Existing / New / Finish follow-up works without extra reconnects
+- [ ] Layout Editor order/width and remembered position work
+- [ ] About shows v1.0.0-rc1 and expected supported hardware
+- [ ] File backup/restore and portable Windows startup are satisfactory
+
+After acceptance, the stable tag and GitHub Release can be issued as `v1.0.0` with the reviewed build and release notes.

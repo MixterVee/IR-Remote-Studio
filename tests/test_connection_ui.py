@@ -32,8 +32,8 @@ class ConnectionIndicatorTests(unittest.TestCase):
             self.load_mock.stop()
 
     def test_initial_state_is_red_and_connect_button_obvious(self):
-        self.assertEqual(self.app.probe_btn.cget("text"), "Connect / Retry")
-        self.assertEqual(self.app.detect_btn.cget("text"), "Refresh USB")
+        self.assertEqual(self.app.probe_btn.cget("text"), "Connect USB")
+        self.assertEqual(self.app.detect_btn.cget("text"), "Detect USB")
         self.assertEqual(self.app.connection_state_var.get(), "NOT CONNECTED")
         self.assertEqual(str(self.app.connection_heading.cget("foreground")),
                          "#bc2525")
@@ -81,7 +81,7 @@ class ConnectionIndicatorTests(unittest.TestCase):
         self.assertIn("Disconnect the receiver from USB", message)
         self.assertIn("working batteries", message)
         self.assertIn("different USB port", message)
-        self.assertIn("Refresh USB, then Connect / Retry", message)
+        self.assertIn("Detect USB, then Connect USB", message)
         self.assertIn("USB read timeout", message)
         self.assertIs(popup.call_args.kwargs["parent"], self.app)
         self.assertEqual(self.app.connection_state_var.get(),
