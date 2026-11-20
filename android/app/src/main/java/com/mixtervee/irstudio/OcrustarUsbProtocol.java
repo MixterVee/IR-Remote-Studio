@@ -61,6 +61,25 @@ public final class OcrustarUsbProtocol {
         return out < 0 ? -1 : (0x80 | out);
     }
 
+    /**
+     * On the 045C:0132 family, FA FA FA FA + 2 bytes is an identity/
+     * firmware-version response, not an IR-learning acknowledgement.
+     * Verified in independent reverse-engineering of the Android SDK.
+     */
+    public static boolean isFirmwareVersionReply(byte[] data, int count) {
+        if (data == null || count < 6 || count > data.length) return false;
+        for (int i = 0; i < 4; i++)
+            if ((data[i] & 0xFF) != 0xFA) return false;
+        return true;
+    }
+
+    public static String firmwareVersionReply(byte[] data, int count) {
+        if (!isFirmwareVersionReply(data, count))
+            throw new IllegalArgumentException("Not an Ocrustar firmware reply.");
+        return String.format(Locale.ROOT, "FA FA FA FA %02X %02X",
+                data[4] & 0xFF, data[5] & 0xFF);
+    }
+
     public static String usbId(int vid, int pid) {
         return String.format(Locale.ROOT, "%04X:%04X", vid, pid);
     }
@@ -90,6 +109,7 @@ public final class OcrustarUsbProtocol {
         private int usbPackets = 0;
         private int usbBytes = 0;
         private int learnAckCount = 0;
+        private int firmwareReplyCount = 0;
         private int rolling4 = 0;
         private final StringBuilder initialBytes = new StringBuilder();
 
@@ -101,6 +121,8 @@ public final class OcrustarUsbProtocol {
         public String diagnostic() {
             return "USB receive packets: " + usbPackets
                     + "\nUSB bytes read: " + usbBytes
+                    + "\nFirmware/version response (FA FA FA FA): "
+                    + (firmwareReplyCount > 0 ? "SEEN" : "not observed")
                     + "\nLearn ACK (FF FF FF FF): "
                     + (learnAckCount > 0 ? "SEEN" : "not observed")
                     + "\nFE capture header: "
@@ -126,7 +148,8 @@ public final class OcrustarUsbProtocol {
             for (int i = 0; i < length; i++) {
                 int value = chunk[i] & 0xFF;
                 rolling4 = (rolling4 << 8) | value;
-                if (rolling4 == 0xFFFFFFFF) learnAckCount++;
+                if (expected < 0 && rolling4 == 0xFFFFFFFF) learnAckCount++;
+                if (expected < 0 && rolling4 == 0xFAFAFAFA) firmwareReplyCount++;
                 if (usbBytes - length + i < 32) {
                     if (initialBytes.length() > 0) initialBytes.append(' ');
                     initialBytes.append(String.format(Locale.ROOT, "%02X", value));
