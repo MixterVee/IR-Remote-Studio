@@ -29,7 +29,10 @@ public final class OcrustarUsbLearner {
     private OcrustarUsbLearner() {}
 
     public interface Progress {
+        /** Start-learning request has been sent; hardware ACK pending. */
         void ready(String model);
+        /** Documented FF FF FF FF learn ACK has actually been received. */
+        default void acknowledged(String model) { }
     }
 
     public static UsbDevice find(UsbManager manager) {
@@ -181,6 +184,41 @@ public final class OcrustarUsbLearner {
     }
 
     /**
+     * Drain the firmware/version response to AUTH_ACK *before* sending
+     * START_LEARN. The real 045C:0132 test returned FA FA FA FA 22 01
+     * during our learn window: this is firmware metadata, not a learn ACK.
+     * This bounded read-only settling period avoids overlapping AUTH_ACK
+     * processing with FE learn activation. No extra commands are sent.
+     */
+    private static String readPostAuthVersion(UsbDeviceConnection conn, Port port) {
+        byte[] read = new byte[64];
+        byte[] prefix = new byte[32];
+        int size = 0, packets = 0;
+        long deadline = SystemClock.elapsedRealtime() + 450;
+        while (SystemClock.elapsedRealtime() < deadline && packets < 8) {
+            int n = conn.bulkTransfer(port.in, read, read.length, 100);
+            if (n <= 0) continue;
+            packets++;
+            int add = Math.min(n, prefix.length - size);
+            if (add > 0) {
+                System.arraycopy(read, 0, prefix, size, add);
+                size += add;
+            }
+        }
+        if (OcrustarUsbProtocol.isFirmwareVersionReply(prefix, size))
+            return "Firmware/version reply observed before learning: "
+                    + OcrustarUsbProtocol.firmwareVersionReply(prefix, size);
+        if (size == 0) return "No post-auth firmware reply before learning.";
+        StringBuilder result = new StringBuilder("Post-auth USB bytes (first ");
+        result.append(size).append("): ");
+        for (int i = 0; i < size; i++) {
+            if (i > 0) result.append(' ');
+            result.append(String.format(Locale.ROOT, "%02X", prefix[i] & 0xFF));
+        }
+        return result.toString();
+    }
+
+    /**
      * Call on a worker thread only. Always sends STOP_LEARN in finally when
      * START_LEARN was successfully written, even after signal errors/timeouts.
      */
@@ -212,6 +250,7 @@ public final class OcrustarUsbLearner {
                 throw new IllegalStateException(
                         "USB interface busy. Close the Ocrustar app.");
             String type = handshake(connection, port);
+            String authFollowUp = readPostAuthVersion(connection, port);
             write(connection, port.out, OcrustarUsbProtocol.START_LEARN,
                     "Start IR learning");
             armed = true;
@@ -220,9 +259,16 @@ public final class OcrustarUsbLearner {
             byte[] buffer = new byte[512];
             try {
                 long deadline = SystemClock.elapsedRealtime() + 15_000;
+                boolean acknowledged = false;
                 while (SystemClock.elapsedRealtime() < deadline && !capture.complete()) {
                     int count = connection.bulkTransfer(port.in, buffer, buffer.length, 300);
-                    if (count > 0) capture.accept(buffer, count);
+                    if (count > 0) {
+                        capture.accept(buffer, count);
+                        if (!acknowledged && capture.sawLearnAck()) {
+                            acknowledged = true;
+                            if (progress != null) progress.acknowledged(type);
+                        }
+                    }
                 }
                 if (!capture.complete())
                     throw new IllegalStateException(
@@ -234,7 +280,9 @@ public final class OcrustarUsbLearner {
                 // A timeout alone cannot distinguish missing IR, unacknowledged
                 // learn mode or a payload framing mismatch. Surface the evidence.
                 throw new IllegalStateException(
-                        problem.getMessage() + "\n\nUSB RECEIVE DIAGNOSTICS\n"
+                        problem.getMessage()
+                        + "\n\nAUTH FOLLOW-UP\n" + authFollowUp
+                        + "\n\nUSB RECEIVE DIAGNOSTICS\n"
                         + capture.diagnostic(), problem);
             }
         } finally {
