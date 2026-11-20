@@ -2,6 +2,45 @@
 
 **Android companion to IR Remote Studio for Windows.** This is a test APK, not a Play Store or stable release. It is designed to build remotes, capture through a compatible Harmony USB learner and share `.irplus` files with Windows and the IRplus Android app.
 
+## v0.4.8-alpha: Diagnose 045C:0132 IR learning timeout
+
+Physical testing established that the **045C:0132** Ocrustar USB-C dongle
+is detected, permission is granted, and the v0.4.7 driver gets past USB
+interface probing and authentication but **does not receive a complete
+IR signal within 15 seconds**. An IR press or receiver reply has not yet
+been independently observed.
+
+This version improves the evidence we get from the *same* documented
+USB protocol, rather than guessing additional device commands:
+
+- Shows **LISTENING — Press source remote button** after a learn request,
+  instead of incorrectly claiming the dongle's ACK has been verified.
+- Records counts of **successful nonempty USB read packets**, **total
+  bytes read**, whether a **FF FF FF FF learn acknowledgement** appeared,
+  whether a **FE FE FE FE IR capture header** appeared, and the **captured
+  versus expected payload byte count**.
+- Displays only the **first 32 incoming USB bytes** (hex) in the diagnostic
+  report to assist with protocol analysis, not an entire learned waveform.
+- On failure, tap **Copy report** in the learning results dialog and paste
+  it into the conversation. No IR data or device settings are modified on
+  an unsuccessful capture.
+- Offline unit tests exercise an empty response, a standalone FF ACK,
+  a separate FE payload header, incomplete data, and bounded hex preview.
+
+**To retest:** Install the signed v0.4.8 APK *over* v0.4.7. Insert the
+dongle and close the official Ocrustar app. Select your existing remote
+and button; choose Ocrustar → Learn IR. When **LISTENING** appears, aim
+a separate physical IR remote at the dongle's IR receiver window and
+press one key. If the capture fails, use **Copy report**; the packet
+counters will help distinguish a missing acknowledgement from a parsing
+problem. Retesting on the same phone with Ocrustar's official learning
+screen also provides a hardware baseline.
+
+**Important:** No change is made to the IR capture command sequence,
+HID/USB interface claims, permanent APK signing certificate, or
+SofaBaton/Harmony learning engines. Learn is still experimental on the
+user's exact dongle. versionCode **31**; in-place upgrade.
+
 ## v0.4.7-alpha: Fix real Ocrustar 045C:0132 USB endpoint mismatch
 
 On the user's OnePlus 15, **IR Remote Studio v0.4.6** successfully detected
