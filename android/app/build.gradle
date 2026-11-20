@@ -20,8 +20,8 @@ android {
         applicationId 'com.mixtervee.irstudio'
         minSdk 26
         targetSdk 34
-        versionCode 28
-        versionName '0.4.5-alpha'
+        versionCode 29
+        versionName '0.4.6-alpha'
     }
 
     // This dedicated test signing key must never be committed to Git.
