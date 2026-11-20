@@ -127,6 +127,9 @@ public final class OcrustarUsbProtocol {
         private int learnAckCount = 0;
         private int firmwareReplyCount = 0;
         private int rolling4 = 0;
+        // Once an FE×4 capture header begins, FF raw timing-overflow
+        // bytes are DATA, not standalone learn acknowledgements.
+        private boolean irHeaderSeen = false;
         private final StringBuilder initialBytes = new StringBuilder();
 
         /**
@@ -164,8 +167,11 @@ public final class OcrustarUsbProtocol {
             for (int i = 0; i < length; i++) {
                 int value = chunk[i] & 0xFF;
                 rolling4 = (rolling4 << 8) | value;
-                if (expected < 0 && rolling4 == 0xFFFFFFFF) learnAckCount++;
-                if (expected < 0 && rolling4 == 0xFAFAFAFA) firmwareReplyCount++;
+                if (rolling4 == 0xFEFEFEFE) irHeaderSeen = true;
+                if (!irHeaderSeen && expected < 0
+                        && rolling4 == 0xFFFFFFFF) learnAckCount++;
+                if (!irHeaderSeen && expected < 0
+                        && rolling4 == 0xFAFAFAFA) firmwareReplyCount++;
                 if (usbBytes - length + i < 32) {
                     if (initialBytes.length() > 0) initialBytes.append(' ');
                     initialBytes.append(String.format(Locale.ROOT, "%02X", value));
