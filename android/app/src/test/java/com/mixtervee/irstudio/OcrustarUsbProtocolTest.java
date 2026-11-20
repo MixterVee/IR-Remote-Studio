@@ -109,6 +109,31 @@ public class OcrustarUsbProtocolTest {
         assertTrue(decoded.carrierHz > 37500 && decoded.carrierHz < 38500);
     }
 
+    @Test public void real0132FirmwareReplyIsNotAnIrLearningAcknowledgement() {
+        // Actual user USB capture after v0.4.8: FA FA FA FA 22 01.
+        // Source SDK documents FA×4 + two bytes as firmware/version metadata.
+        byte[] observed = {(byte) 0xFA, (byte) 0xFA,
+                (byte) 0xFA, (byte) 0xFA, 0x22, 0x01};
+        assertTrue(OcrustarUsbProtocol.isFirmwareVersionReply(observed, 6));
+        assertEquals("FA FA FA FA 22 01",
+                OcrustarUsbProtocol.firmwareVersionReply(observed, 6));
+        byte[] ack = {(byte) 0xFF, (byte) 0xFF,
+                (byte) 0xFF, (byte) 0xFF};
+        assertFalse(OcrustarUsbProtocol.isFirmwareVersionReply(ack, 4));
+
+        OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
+        capture.accept(observed, observed.length);
+        assertFalse(capture.sawLearnAck());
+        assertFalse(capture.complete());
+        assertTrue(capture.diagnostic().contains(
+                "Firmware/version response (FA FA FA FA): SEEN"));
+        assertTrue(capture.diagnostic().contains(
+                "Learn ACK (FF FF FF FF): not observed"));
+        capture.accept(ack, ack.length);
+        assertTrue(capture.sawLearnAck());
+        assertFalse(capture.complete());
+    }
+
     @Test public void diagnosticsDistinguishNoResponseFromLearnAckAndPayload() {
         OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
         assertTrue(capture.diagnostic().contains("USB receive packets: 0"));
