@@ -218,16 +218,25 @@ public final class OcrustarUsbLearner {
             if (progress != null) progress.ready(type);
             OcrustarUsbProtocol.Capture capture = new OcrustarUsbProtocol.Capture();
             byte[] buffer = new byte[512];
-            long deadline = SystemClock.elapsedRealtime() + 15_000;
-            while (SystemClock.elapsedRealtime() < deadline && !capture.complete()) {
-                int count = connection.bulkTransfer(port.in, buffer, buffer.length, 300);
-                if (count > 0) capture.accept(buffer, count);
-            }
-            if (!capture.complete())
+            try {
+                long deadline = SystemClock.elapsedRealtime() + 15_000;
+                while (SystemClock.elapsedRealtime() < deadline && !capture.complete()) {
+                    int count = connection.bulkTransfer(port.in, buffer, buffer.length, 300);
+                    if (count > 0) capture.accept(buffer, count);
+                }
+                if (!capture.complete())
+                    throw new IllegalStateException(
+                            "No complete IR signal in 15 seconds. "
+                            + "Aim a separate physical remote at the dongle "
+                            + "and press once immediately after Listening appears.");
+                return capture.pronto();
+            } catch (RuntimeException problem) {
+                // A timeout alone cannot distinguish missing IR, unacknowledged
+                // learn mode or a payload framing mismatch. Surface the evidence.
                 throw new IllegalStateException(
-                        "No complete IR signal in 15 seconds. "
-                        + "Aim the source remote at Ocrustar and press once.");
-            return capture.pronto();
+                        problem.getMessage() + "\n\nUSB RECEIVE DIAGNOSTICS\n"
+                        + capture.diagnostic(), problem);
+            }
         } finally {
             if (armed) {
                 try {
