@@ -241,8 +241,17 @@ public final class OcrustarUsbLearner {
                     + sent + "/" + bytes.length + ").");
     }
 
-    private static String handshake(UsbDeviceConnection conn, Port port,
-                                    int productId, UsbTrace trace) {
+    private static final class Handshake {
+        final String model;
+        final boolean acknowledged;
+        Handshake(String model, boolean acknowledged) {
+            this.model = model;
+            this.acknowledged = acknowledged;
+        }
+    }
+
+    private static Handshake handshake(UsbDeviceConnection conn, Port port,
+                                       int productId, UsbTrace trace) {
         // Stale IN data from a previous vendor app session must not be
         // mistaken for a valid reply. Read only, bounded to five packets.
         byte[] packet = new byte[512];
@@ -255,19 +264,24 @@ public final class OcrustarUsbLearner {
             while (SystemClock.elapsedRealtime() < deadline) {
                 int received = read(conn, port.in, packet, 200, trace, 1);
                 if (received <= 0) continue;
-                // Do not arm an unrecognized reply. For the 0132 device,
-                // a verified independent Android implementation uses the
-                // identity request followed directly by LEARN, without
-                // sending a second FA token. Keep FA only for older models.
+                // A real 045C:0132 dongle returned FC FC FC FC 70 01,
+                // identifying D552, but never entered FE learning when we
+                // omitted FA. Acknowledge *that FC model response* as the
+                // documented D552 handshake requires. A separate FA-version
+                // reply is metadata and MUST NOT be echoed (ACK loop).
                 String type = OcrustarUsbProtocol.identifyForUsbPid(
+                        productId, packet, received);
+                boolean sendAck = OcrustarUsbProtocol.shouldAcknowledgeIdentity(
                         productId, packet, received);
                 trace.log("Identity classified as " + type + " for PID "
                         + String.format(Locale.ROOT, "%04X", productId));
-                if (productId != 0x0132)
+                if (sendAck) {
                     write(conn, port.out, OcrustarUsbProtocol.ACK,
-                            "Identity acknowledgment", trace);
-                else trace.log("0132: no extra FA acknowledgement sent");
-                return type;
+                            "Identity acknowledgment after FC model", trace);
+                } else {
+                    trace.log("FA firmware-version identity: no FA echo (avoid ACK loop)");
+                }
+                return new Handshake(type, sendAck);
             }
         }
         throw new IllegalStateException(
@@ -352,12 +366,16 @@ public final class OcrustarUsbLearner {
                 throw new IllegalStateException(
                         "USB interface busy. Close the Ocrustar app.");
             final boolean native0132 = device.getProductId() == 0x0132;
-            String type = handshake(connection, port, device.getProductId(), trace);
-            // Only old D226/D552 protocol requires the FA follow-up ACK.
-            // Do not poll a nonexistent FA-after-ACK response on 0132.
-            String authFollowUp = native0132
-                    ? "045C:0132 native Android path: no extra FA ACK sent."
-                    : readPostAuthVersion(connection, port, trace);
+            Handshake identity = handshake(connection, port,
+                    device.getProductId(), trace);
+            String type = identity.model;
+            // Let firmware settle after acknowledging the FC D552 identity
+            // BEFORE starting FE learning. This response is metadata, not an
+            // infrared packet and must not be answered with another FA.
+            String authFollowUp = identity.acknowledged
+                    ? readPostAuthVersion(connection, port, trace)
+                    : "Already received FA firmware-version identity; no FA echo.";
+            trace.log("AUTH FOLLOW-UP: " + authFollowUp);
             write(connection, port.out, OcrustarUsbProtocol.START_LEARN,
                     "Start IR learning", trace);
             armed = true;
