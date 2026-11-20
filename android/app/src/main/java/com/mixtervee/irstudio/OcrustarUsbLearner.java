@@ -46,9 +46,11 @@ public final class OcrustarUsbLearner {
         if (device == null) return "NOT CONNECTED — Insert Ocrustar USB-C dongle";
         String label = "OCRUSTAR " + OcrustarUsbProtocol.usbId(
                 device.getVendorId(), device.getProductId());
-        return manager.hasPermission(device)
+        if (!manager.hasPermission(device))
+            return label + " — Tap USB Setup for permission";
+        return bulkPort(device) != null
                 ? label + " — USB ACCESS GRANTED"
-                : label + " — Tap USB Setup for permission";
+                : label + " — Unsupported endpoint layout; open USB Setup";
     }
 
     /** This is a user-initiated Android permission request, not a protocol write. */
@@ -73,15 +75,21 @@ public final class OcrustarUsbLearner {
     }
 
     private static Port bulkPort(UsbDevice device) {
+        final int expectedIn = OcrustarUsbProtocol.expectedBulkIn(
+                device.getVendorId(), device.getProductId());
+        final int expectedOut = OcrustarUsbProtocol.expectedBulkOut(
+                device.getVendorId(), device.getProductId());
+        if (expectedIn < 0 || expectedOut < 0) return null;
         for (int i = 0; i < device.getInterfaceCount(); i++) {
             UsbInterface iface = device.getInterface(i);
             UsbEndpoint in = null, out = null;
             for (int j = 0; j < iface.getEndpointCount(); j++) {
                 UsbEndpoint ep = iface.getEndpoint(j);
                 if (ep.getType() != UsbConstants.USB_ENDPOINT_XFER_BULK) continue;
-                if (ep.getAddress() == 0x81 && ep.getDirection() == UsbConstants.USB_DIR_IN)
+                if (ep.getAddress() == expectedIn
+                        && ep.getDirection() == UsbConstants.USB_DIR_IN)
                     in = ep;
-                else if (ep.getAddress() == 0x01
+                else if (ep.getAddress() == expectedOut
                         && ep.getDirection() == UsbConstants.USB_DIR_OUT)
                     out = ep;
             }
@@ -98,17 +106,46 @@ public final class OcrustarUsbLearner {
                     + "Some hardware revisions use different USB IDs.";
         }
         Port port = bulkPort(device);
-        String result = "USB ID: " + OcrustarUsbProtocol.usbId(
-                device.getVendorId(), device.getProductId())
-                + "\nAndroid USB permission: "
-                + (manager.hasPermission(device) ? "GRANTED" : "NOT GRANTED")
-                + "\nBulk IN 0x81 / OUT 0x01: "
-                + (port != null ? "FOUND" : "NOT FOUND");
-        if (port == null) result += "\nThis hardware variant is not compatible "
-                + "with the implemented D226/D552 USB transport. No commands will be sent.";
-        else result += "\n\nThe first learning attempt verifies the device "
-                + "identity before sending any IR-learning command.";
-        return result;
+        final int expectedIn = OcrustarUsbProtocol.expectedBulkIn(
+                device.getVendorId(), device.getProductId());
+        final int expectedOut = OcrustarUsbProtocol.expectedBulkOut(
+                device.getVendorId(), device.getProductId());
+        StringBuilder result = new StringBuilder("USB ID: ")
+                .append(OcrustarUsbProtocol.usbId(
+                        device.getVendorId(), device.getProductId()))
+                .append("\nAndroid USB permission: ")
+                .append(manager.hasPermission(device) ? "GRANTED" : "NOT GRANTED")
+                .append(String.format(Locale.ROOT,
+                        "\nExpected bulk OUT 0x%02X / IN 0x%02X: ",
+                        expectedOut, expectedIn))
+                .append(port != null ? "FOUND" : "NOT FOUND");
+        result.append("\nUSB interfaces: ").append(device.getInterfaceCount());
+        for (int i = 0; i < device.getInterfaceCount(); i++) {
+            UsbInterface iface = device.getInterface(i);
+            result.append(String.format(Locale.ROOT,
+                    "\n  Interface %d: class 0x%02X, subclass 0x%02X",
+                    iface.getId(), iface.getInterfaceClass(),
+                    iface.getInterfaceSubclass()));
+            for (int j = 0; j < iface.getEndpointCount(); j++) {
+                UsbEndpoint ep = iface.getEndpoint(j);
+                result.append(String.format(Locale.ROOT,
+                        "\n    Endpoint 0x%02X (%s, type %s, packet %d)",
+                        ep.getAddress(),
+                        ep.getDirection() == UsbConstants.USB_DIR_IN ? "IN" : "OUT",
+                        ep.getType() == UsbConstants.USB_ENDPOINT_XFER_BULK
+                                ? "BULK" : ep.getType() ==
+                                        UsbConstants.USB_ENDPOINT_XFER_INT
+                                ? "INTERRUPT" : "OTHER",
+                        ep.getMaxPacketSize()));
+            }
+        }
+        if (port == null) result.append("\n\nEndpoint layout does not match "
+                + "this driver. No learning commands will be sent. "
+                + "Please copy or screenshot this diagnostic report.");
+        else result.append("\n\nBulk interface matches this hardware model. "
+                + "The first learning attempt must still verify its "
+                + "identity before entering learning mode.");
+        return result.toString();
     }
 
     private static void write(UsbDeviceConnection conn, UsbEndpoint out,
@@ -157,8 +194,13 @@ public final class OcrustarUsbLearner {
             throw new IllegalStateException("Grant USB permission in USB Setup first.");
         Port port = bulkPort(device);
         if (port == null)
-            throw new IllegalStateException(
-                    "Ocrustar bulk endpoints 0x01 / 0x81 not present.");
+            throw new IllegalStateException(String.format(Locale.ROOT,
+                    "Ocrustar expected bulk OUT 0x%02X / IN 0x%02X not present. "
+                    + "Open USB Setup and capture its endpoint list.",
+                    OcrustarUsbProtocol.expectedBulkOut(device.getVendorId(),
+                            device.getProductId()),
+                    OcrustarUsbProtocol.expectedBulkIn(device.getVendorId(),
+                            device.getProductId())));
         UsbDeviceConnection connection = manager.openDevice(device);
         if (connection == null)
             throw new IllegalStateException(
