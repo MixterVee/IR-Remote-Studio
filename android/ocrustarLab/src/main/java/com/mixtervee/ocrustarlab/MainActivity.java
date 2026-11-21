@@ -1,6 +1,7 @@
 package com.mixtervee.ocrustarlab;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
 import android.content.ClipData;
@@ -26,6 +27,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.Locale;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -56,6 +58,8 @@ public final class MainActivity extends Activity {
     private Button withHandshakeButton;
     private Button withoutHandshakeButton;
     private Button stopButton;
+    private Button replayButton;
+    private volatile int[] lastTimings;
 
     private final StringBuilder report = new StringBuilder(8192);
     private final AtomicBoolean busy = new AtomicBoolean(false);
@@ -110,7 +114,7 @@ public final class MainActivity extends Activity {
         }
         makeUi();
         resetReport();
-        log("Ocrustar IR Lab v0.2 — capture reassembly");
+        log("Ocrustar IR Lab v0.3 — guarded D552 replay");
         log("Expected hardware 045C:0132, bulk OUT 0x02 / IN 0x82.");
         log("Press Scan first. Start Learning is an explicit USB command test.");
         scan();
@@ -137,7 +141,7 @@ public final class MainActivity extends Activity {
         root.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Read raw USB responses; no firmware or remote modifications.");
+        sub.setText("Isolated learn and test replay; no firmware or saved remote changes.");
         sub.setTextSize(13);
         root.addView(sub);
 
@@ -149,6 +153,18 @@ public final class MainActivity extends Activity {
 
         withoutHandshakeButton = button("Alternative: Learn IR — no handshake", root);
         withoutHandshakeButton.setOnClickListener(view -> startTest(false));
+
+        replayButton = button("3  Test playback — 38 kHz (only valid captures)", root);
+        replayButton.setEnabled(false);
+        replayButton.setOnClickListener(view -> {
+            if (lastTimings == null || busy.get()) return;
+            new AlertDialog.Builder(this)
+                .setTitle("Transmit learned IR command?")
+                .setMessage("Send this capture ONCE through the Ocrustar dongle, assuming a 38 kHz carrier. Aim it at a device you own. The carrier frequency was not measured.")
+                .setNegativeButton("Cancel", null)
+                .setPositiveButton("Transmit once", (dialog, choice) -> startReplay())
+                .show();
+        });
 
         stopButton = button("STOP learning", root);
         stopButton.setEnabled(false);
@@ -287,11 +303,14 @@ public final class MainActivity extends Activity {
         withHandshakeButton.setEnabled(true);
         withoutHandshakeButton.setEnabled(true);
         stopButton.setEnabled(false);
+        replayButton.setEnabled(lastTimings != null);
     }
 
     private void runTest(UsbDevice device, boolean handshake) {
         if (!busy.compareAndSet(false, true)) return;
         stopRequested.set(false);
+        lastTimings = null;
+        replayButton.setEnabled(false);
         withHandshakeButton.setEnabled(false);
         withoutHandshakeButton.setEnabled(false);
         stopButton.setEnabled(true);
@@ -437,6 +456,15 @@ public final class MainActivity extends Activity {
                                 + hex(OcrustarCaptureAssembler.lastBytes(raw, 32),
                                 Math.min(32, raw.length)));
                         log(OcrustarCaptureAssembler.timingSummary(raw));
+                        try {
+                            int[] valid = OcrustarD552Encoder.decodeStrict(raw);
+                            lastTimings = valid;
+                            log("REPLAY READY: " + valid.length
+                                + " strictly validated mark/space durations.");
+                        } catch (IllegalArgumentException reject) {
+                            log("REPLAY DISABLED: " + reject.getMessage()
+                                + " Learn again with a short, clean button press.");
+                        }
                         log("Captured USB data successfully; stopping learning early.");
                         break;
                     }
@@ -476,6 +504,116 @@ public final class MainActivity extends Activity {
                 connection.close();
             }
             log("USB session closed; no commands stored on the dongle.");
+            runOnUiThread(this::setIdle);
+        }
+    }
+
+
+    /**
+     * Controlled single playback of the last strictly valid capture.
+     * Requires successful FC 70 01 handshake; no learning commands sent.
+     */
+    private void startReplay() {
+        if (busy.get() || permissionPending || lastTimings == null) {
+            log("Replay not ready; capture a valid signal first.");
+            return;
+        }
+        UsbDevice device = findTarget();
+        if (device == null || findPort(device) == null) {
+            log("Replay blocked: matching 045C:0132 bulk device is missing.");
+            return;
+        }
+        if (!usbManager.hasPermission(device)) {
+            log("Replay blocked: USB permission missing. Run a capture and approve permission.");
+            return;
+        }
+        if (!busy.compareAndSet(false, true)) return;
+        final int[] copy = lastTimings.clone();
+        withHandshakeButton.setEnabled(false);
+        withoutHandshakeButton.setEnabled(false);
+        replayButton.setEnabled(false);
+        stopButton.setEnabled(false);
+        log("REPLAY requested explicitly: one D552 command at assumed 38000 Hz.");
+        new Thread(() -> replayOnUsb(device, copy), "OcrustarD552Replay").start();
+    }
+
+    private void replayOnUsb(UsbDevice device, int[] timings) {
+        UsbDeviceConnection connection = null;
+        Port port = null;
+        boolean claimed = false;
+        try {
+            // Encode and validate BEFORE any USB transmission.
+            List<byte[]> frames = OcrustarD552Encoder.encode(
+                    timings, OcrustarD552Encoder.DEFAULT_CARRIER_HZ);
+            if (frames.isEmpty() || frames.size() > 64) {
+                log("Replay aborted: unexpected frame count.");
+                return;
+            }
+            int totalBytes = 0;
+            for (byte[] frame : frames) {
+                if (frame.length == 0 || frame.length > 63) {
+                    log("Replay aborted: invalid USB frame length.");
+                    return;
+                }
+                totalBytes += frame.length;
+            }
+            log("D552 encoded command: " + frames.size()
+                    + " frame(s), " + totalBytes + " USB bytes.");
+            port = findPort(device);
+            if (port == null) {
+                log("Replay blocked: bulk interface not found.");
+                return;
+            }
+            connection = usbManager.openDevice(device);
+            if (connection == null) {
+                log("Replay blocked: openDevice failed.");
+                return;
+            }
+            claimed = connection.claimInterface(port.usbInterface, false);
+            if (!claimed) {
+                log("Replay blocked: USB interface busy.");
+                return;
+            }
+            send(connection, port.output, HELLO, "REPLAY HELLO");
+            byte[] greeting = read(connection, port.input, 1500, "REPLAY HELLO reply");
+            if (!prefix(greeting, 0xFC) ||
+                greeting.length < 6 ||
+                (greeting[4] & 0xFF) != 0x70 ||
+                (greeting[5] & 0xFF) != 0x01) {
+                log("REPLAY BLOCKED: firmware identity not FC FC FC FC 70 01.");
+                return;
+            }
+            send(connection, port.output, HELLO_ACK, "REPLAY HELLO ACK");
+            for (int i = 0; i < frames.size(); i++) {
+                byte[] frame = frames.get(i);
+                int sent = connection.bulkTransfer(port.output, frame, frame.length, 1500);
+                if (sent != frame.length) {
+                    throw new IllegalStateException("Replay packet " + (i + 1)
+                            + " incomplete (" + sent + "/" + frame.length + ")");
+                }
+                log("TX D552 frame " + (i + 1) + "/" + frames.size()
+                        + ", bytes=" + frame.length);
+                SystemClock.sleep(2);
+            }
+            byte[] acknowledgement = read(connection, port.input, 300, "REPLAY ACK");
+            if (prefix(acknowledgement, 0xFF)) {
+                log("Firmware acknowledged FF FF FF FF; confirm actual device reaction.");
+            } else {
+                log("No recognized FF ACK. Observe target device; transmission unverified.");
+            }
+            log("Single replay attempt finished. No command stored in the dongle.");
+        } catch (Exception error) {
+            log("REPLAY FAILED: " + error.getClass().getSimpleName()
+                    + ": " + error.getMessage());
+        } finally {
+            if (connection != null) {
+                if (claimed && port != null) {
+                    try { connection.releaseInterface(port.usbInterface); }
+                    catch (Exception ignored) { log("Replay interface release error."); }
+                }
+                connection.close();
+            }
+            log("Replay USB session closed.");
             runOnUiThread(this::setIdle);
         }
     }
