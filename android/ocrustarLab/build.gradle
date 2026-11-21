@@ -10,8 +10,8 @@ android {
         applicationId 'com.mixtervee.ocrustarlab'
         minSdk 26
         targetSdk 34
-        versionCode 2
-        versionName '0.2-diagnostic'
+        versionCode 3
+        versionName '0.3-diagnostic'
     }
 
     compileOptions {
