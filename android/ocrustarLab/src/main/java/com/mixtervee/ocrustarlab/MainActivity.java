@@ -110,7 +110,7 @@ public final class MainActivity extends Activity {
         }
         makeUi();
         resetReport();
-        log("Ocrustar IR Lab v0.1 — isolated diagnostic only");
+        log("Ocrustar IR Lab v0.2 — capture reassembly");
         log("Expected hardware 045C:0132, bulk OUT 0x02 / IN 0x82.");
         log("Press Scan first. Start Learning is an explicit USB command test.");
         scan();
@@ -408,7 +408,9 @@ public final class MainActivity extends Activity {
             send(connection, port.output, LEARN_START, "LEARN START");
             log("Point another IR remote toward the dongle and press a button.");
 
+            OcrustarCaptureAssembler assembler = new OcrustarCaptureAssembler();
             long deadline = SystemClock.elapsedRealtime() + CAPTURE_MS;
+            int firstExpected = -1;
             while (!stopRequested.get() && SystemClock.elapsedRealtime() < deadline) {
                 long remaining = deadline - SystemClock.elapsedRealtime();
                 byte[] packet = read(connection, port.input,
@@ -418,12 +420,39 @@ public final class MainActivity extends Activity {
                     rxPackets++;
                     rxBytes += packet.length;
                     describe(packet);
+                    assembler.accept(packet);
+                    if (firstExpected < 0 && assembler.hasHeader()) {
+                        firstExpected = assembler.getExpectedLength();
+                        log("Detected complete FE header: big-endian payload length = "
+                                + firstExpected + " bytes.");
+                    }
+                    if (assembler.isComplete()) {
+                        log("COMPLETE IR PAYLOAD: " + assembler.getReceivedLength()
+                                + " / " + assembler.getExpectedLength() + " bytes.");
+                        byte[] raw = assembler.getPayload();
+                        log("Payload first 32 bytes: "
+                                + hex(OcrustarCaptureAssembler.firstBytes(raw, 32),
+                                Math.min(32, raw.length)));
+                        log("Payload last 32 bytes: "
+                                + hex(OcrustarCaptureAssembler.lastBytes(raw, 32),
+                                Math.min(32, raw.length)));
+                        log(OcrustarCaptureAssembler.timingSummary(raw));
+                        log("Captured USB data successfully; stopping learning early.");
+                        break;
+                    }
                 }
             }
             log("Learning window ended. Received " + rxPackets +
                     " USB packet(s), " + rxBytes + " byte(s).");
-            if (rxPackets == 0) {
-                log("No USB reply observed. This does NOT prove the IR receiver is broken.");
+            log("Reassembly: header=" + assembler.hasHeader()
+                    + ", expected=" + assembler.getExpectedLength()
+                    + ", collected=" + assembler.getReceivedLength()
+                    + ", complete=" + assembler.isComplete()
+                    + ", ignored prefix=" + assembler.getIgnoredBeforeHeader()
+                    + ", extra bytes=" + assembler.getTrailingBytes()
+                    + ", payload chunks=" + assembler.getDataChunks() + ".");
+            if (!assembler.isComplete()) {
+                log("No complete payload yet. This does NOT mean the receiver is broken.");
             }
         } catch (Exception error) {
             log("USB exception " + error.getClass().getSimpleName() +
