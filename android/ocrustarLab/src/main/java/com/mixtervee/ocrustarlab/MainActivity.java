@@ -114,7 +114,7 @@ public final class MainActivity extends Activity {
         }
         makeUi();
         resetReport();
-        log("Ocrustar IR Lab v0.3 — guarded D552 replay");
+        log("Ocrustar IR Lab — replay suspended pending hardware investigation");
         log("Expected hardware 045C:0132, bulk OUT 0x02 / IN 0x82.");
         log("Press Scan first. Start Learning is an explicit USB command test.");
         scan();
@@ -154,9 +154,11 @@ public final class MainActivity extends Activity {
         withoutHandshakeButton = button("Alternative: Learn IR — no handshake", root);
         withoutHandshakeButton.setOnClickListener(view -> startTest(false));
 
-        replayButton = button("3  Test playback — 38 kHz (only valid captures)", root);
+        replayButton = button("3  Replay SUSPENDED — receiver investigation", root);
         replayButton.setEnabled(false);
         replayButton.setOnClickListener(view -> {
+            log("Replay is suspended pending receiver fault investigation.");
+            if (true) return;
             if (lastTimings == null || busy.get()) return;
             new AlertDialog.Builder(this)
                 .setTitle("Transmit learned IR command?")
@@ -303,7 +305,7 @@ public final class MainActivity extends Activity {
         withHandshakeButton.setEnabled(true);
         withoutHandshakeButton.setEnabled(true);
         stopButton.setEnabled(false);
-        replayButton.setEnabled(lastTimings != null);
+        replayButton.setEnabled(false); // Deliberately disabled after receiver failures.
     }
 
     private void runTest(UsbDevice device, boolean handshake) {
@@ -514,6 +516,10 @@ public final class MainActivity extends Activity {
      * Requires successful FC 70 01 handshake; no learning commands sent.
      */
     private void startReplay() {
+        if (true) {
+            log("Replay suspended pending receiver hardware investigation.");
+            return;
+        }
         if (busy.get() || permissionPending || lastTimings == null) {
             log("Replay not ready; capture a valid signal first.");
             return;
