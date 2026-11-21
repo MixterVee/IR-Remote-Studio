@@ -1,6 +1,6 @@
 # Ocrustar IR Lab (separate diagnostic APK)
 
-**Status: untested on hardware, source-only.** The Android module has been added
+**Status: v0.1 has successfully captured a 552-byte IR payload on a real OnePlus 15. v0.2 decoder remains to be verified on hardware.** The Android module has been added
 on branch "ocrustar-v054-recovery". It must be built in Android Studio before use.
 
 This is a **separate Android application** with package ID
@@ -15,7 +15,7 @@ v0.5.4 app ("com.mixtervee.irstudio") or read its saved remotes.
   FA x4 (reply acknowledgement when an FC/FA greeting is received), FE x4
   (learn start), and FD x4 (learn stop).
 - "Alternative: Learn IR — no handshake" sends only FE x4 and FD x4.
-- Stops after a maximum of 15 seconds. STOP is attempted in a finally block
+- Stops after a maximum of 15 seconds or when a complete FE capture arrives, whichever occurs first. STOP is attempted in a finally block
   even if capture fails. No firmware, configuration, or transmission commands.
 - All USB activity is isolated to a worker thread; the UI presents timestamps
   and **exact raw incoming USB bytes in hex**.
@@ -57,7 +57,23 @@ this lab shares the existing Android Gradle Plugin 8.13.2 build setup.
 ## Limitations
 
 The official Ocrustar SDK has an internal read loop and framing rules not
-fully verified against v0.5.4. This diagnostic logs raw USB packets; it does
-not yet reconstruct full IR waveforms or replace production learning code.
+fully verified against v0.5.4. This diagnostic logs raw USB packets; it now reassembles complete FE-framed IR payloads and reports tentative 16-us timings, but does
+not yet verify their carrier or waveform against playback or replace production learning code.
 The handshake is experimental and is deliberately limited to the small
 known FC/FA/FE/FD command family.
+
+
+## v0.2: Successful hardware test and reassembly
+
+The user's 045C:0132 orange-insert dongle, connected to a OnePlus 15, returned:
+
+- HELLO: `FC FC FC FC` => `FC FC FC FC 70 01`.
+- HELLO ACK: `FA FA FA FA`.
+- LEARN START: `FE FE FE FE`.
+- `FA FA FA FA 22 01` status packet.
+- IR frame header: `FE FE FE FE 02 28` => 552-byte big-endian payload.
+- Nine IR USB reads totaling 558 bytes, including the 6-byte frame header.
+- A separate 6-byte status packet, resulting in ten reads and 564 total USB bytes.
+- Final LEARN STOP `FD FD FD FD`.
+
+v0.2 verifies the declared payload size, joins fragments, reports tentative timing statistics, and stops as soon as all 552 bytes have been received. This is a host-side parsing experiment, not an automatic replay implementation.
