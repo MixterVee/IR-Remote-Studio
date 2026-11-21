@@ -91,3 +91,17 @@ Screenshot verified the **handshake + capture** test with the orange-insert 045C
 - Automatic STOP `FD FD FD FD` sent at ~7.67 s; USB interface closed.
 
 **Next evidence needed:** complete copyable hex report from the lab app to independently validate format, repetitions, and carrier assumptions, then demonstrate replay against a real device. The 16-μs timing model is provisional; successful capture does not yet prove correct IR playback.
+
+## v0.3 guarded replay experiment
+
+Based on the FC FC FC FC 70 01 response, the lab now provides an optional **single** transmission through the documented D552 (no-Huffman) protocol. The USB product ID 045C:0132 remains the only supported device.
+
+- It assumes 38 kHz carrier because the captured stream contains no measured carrier.
+- A capture must pass strict checks (even mark/space count, 16..200000 µs per duration, no zeros, total under 1 second) before the playback button becomes available.
+- The November 21 example with a 446-byte payload is deliberately **not** replayable: only 346 of 422 nominal timings satisfied the validity checks and some durations were zero.
+- A clean capture like the previously observed 552-byte signal with 520 plausible timings may enable replay, depending on the entire strict validation.
+- Pressing **Test playback** opens a confirmation dialog, sends just one command, and reports the USB acknowledgement. It does not save codes or change firmware.
+- Test with an appliance you own, and verify the target action yourself; a USB acknowledgement alone does not prove optical transmission or successful decoding.
+- Implementation uses the corrected D552 two-regime duration encoder, 62-byte USB data frames plus checksum, and mandatory handshake acknowledgement documented by deadboy18/Ocrustar-USB-IR (MIT): https://github.com/deadboy18/Ocrustar-USB-IR
+
+This replay functionality is **experimental, not yet tested on real hardware**. No replay changes are merged into production IR Remote Studio.
