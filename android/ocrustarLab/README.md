@@ -77,3 +77,17 @@ The user's 045C:0132 orange-insert dongle, connected to a OnePlus 15, returned:
 - Final LEARN STOP `FD FD FD FD`.
 
 v0.2 verifies the declared payload size, joins fragments, reports tentative timing statistics, and stops as soon as all 552 bytes have been received. This is a host-side parsing experiment, not an automatic replay implementation.
+
+## v0.2 field test — OnePlus 15, November 21, 2026
+
+Screenshot verified the **handshake + capture** test with the orange-insert 045C:0132 dongle:
+
+- HELLO reply `FC FC FC FC 70 01`, then acknowledged with `FA FA FA FA`.
+- LEARN START sent, then status `FA FA FA FA 22 01` received.
+- First data packet `FE FE FE FE 02 28 ...` (552-byte declared payload).
+- Reassembler reported `COMPLETE IR PAYLOAD: 552 / 552 bytes` and `extra bytes=0`.
+- Observed ten USB read packets totaling 564 bytes: 6-byte status plus 558-byte framed capture.
+- Tentative timing interpretation: **520 durations**, 32 overflow bytes (`FF`), 0 trailing overflow bytes, all 520 durations within 16–200000 μs, maximum 58992 μs, aggregate timing 691920 μs.
+- Automatic STOP `FD FD FD FD` sent at ~7.67 s; USB interface closed.
+
+**Next evidence needed:** complete copyable hex report from the lab app to independently validate format, repetitions, and carrier assumptions, then demonstrate replay against a real device. The 16-μs timing model is provisional; successful capture does not yet prove correct IR playback.
