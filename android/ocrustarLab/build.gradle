@@ -1,0 +1,21 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.mixtervee.ocrustarlab'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.mixtervee.ocrustarlab'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '0.1-diagnostic'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
