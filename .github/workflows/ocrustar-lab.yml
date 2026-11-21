@@ -32,6 +32,6 @@ jobs:
       - name: Upload diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: Ocrustar-IR-Lab-v0.2-debug
+          name: Ocrustar-IR-Lab-v0.3-debug
           path: android/ocrustarLab/build/outputs/apk/debug/ocrustarLab-debug.apk
           retention-days: 30
