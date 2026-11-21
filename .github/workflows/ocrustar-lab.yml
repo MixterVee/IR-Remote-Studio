@@ -1,0 +1,37 @@
+name: Ocrustar IR Lab debug APK
+
+on:
+  push:
+    branches: [ocrustar-v054-recovery]
+    paths:
+      - 'android/ocrustarLab/**'
+      - 'android/settings.gradle'
+      - '.github/workflows/ocrustar-lab.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-ocrustar-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v4
+      - name: Install Android SDK platform
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.13'
+      - name: Build isolated diagnostic APK
+        run: gradle -p android --no-daemon :ocrustarLab:assembleDebug
+      - name: Upload diagnostic APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Ocrustar-IR-Lab-v0.1-debug
+          path: android/ocrustarLab/build/outputs/apk/debug/ocrustarLab-debug.apk
+          retention-days: 30
