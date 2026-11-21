@@ -28,10 +28,10 @@ jobs:
         with:
           gradle-version: '8.13'
       - name: Build isolated diagnostic APK
-        run: gradle -p android --no-daemon :ocrustarLab:assembleDebug
+        run: gradle -p android --no-daemon :ocrustarLab:testDebugUnitTest :ocrustarLab:assembleDebug
       - name: Upload diagnostic APK
         uses: actions/upload-artifact@v4
         with:
-          name: Ocrustar-IR-Lab-v0.1-debug
+          name: Ocrustar-IR-Lab-v0.2-debug
           path: android/ocrustarLab/build/outputs/apk/debug/ocrustarLab-debug.apk
           retention-days: 30
