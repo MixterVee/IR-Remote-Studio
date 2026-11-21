@@ -105,3 +105,9 @@ Based on the FC FC FC FC 70 01 response, the lab now provides an optional **sing
 - Implementation uses the corrected D552 two-regime duration encoder, 62-byte USB data frames plus checksum, and mandatory handshake acknowledgement documented by deadboy18/Ocrustar-USB-IR (MIT): https://github.com/deadboy18/Ocrustar-USB-IR
 
 This replay functionality is **experimental, not yet tested on real hardware**. No replay changes are merged into production IR Remote Studio.
+
+## November 21 safety halt — persistent failure after experimental replay
+
+After one successful experimental D552 replay (which caused several TCL volume increments), the dongle stopped returning IR learning payloads. USB enumeration, FC identity (`70 01`) and FA acknowledgement (`22 01`) continued to work. Learning timed out repeatedly in **both** IR Lab and the official Ocrustar Android app, even after unplug/replug, a full phone shutdown and power cycle, and retrying at the official app's 1 cm distance. There is no evidence yet proving whether the failure is firmware state, receiver circuit damage, or an unrelated coincident hardware problem.
+
+**Do not run further replay attempts** on this hardware. The lab's replay interface and USB replay implementation have been disabled/removed on this recovery branch as of commit 1d1542528466d92cdaeef4444270ef296bbebbbe. Previously distributed v0.3 APKs still contain experimental replay code and must not be used for further transmission. A USB power cycle is documented as a fix for handshake failures, but does not establish a recovery for this situation. Avoid speculative firmware resets or undocumented USB commands. Seek manufacturer diagnosis/replacement guidance.
